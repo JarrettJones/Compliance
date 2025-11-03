@@ -1,0 +1,523 @@
+{% extends "base.html" %}
+
+{% block title %}Check Progress - {{ system.name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-clock-history"></i> Check Progress</h1>
+                <p class="lead">System: <strong>{{ system.name }}</strong> ({{ system.rscm_ip }}:{{ system.rscm_port }})</p>
+            </div>
+            <div>
+                <a href="{{ url_for('check_firmware', system_id=system.id) }}" class="btn btn-success me-2">
+                    <i class="bi bi-plus"></i> New Check
+                </a>
+                <a href="{{ url_for('system_detail', system_id=system.id) }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to System
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DEBUG: recent_check exists: {{ recent_check is not none }} -->
+<!-- DEBUG: firmware_data exists: {{ firmware_data is not none }} -->
+{% if recent_check %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-{{ 'check-circle text-success' if recent_check.status == 'success' else 'x-circle text-danger' if recent_check.status == 'error' else 'clock text-warning' }}"></i>
+                    Most Recent Check - {{ recent_check.check_date[:19] }}
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Check Information</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Status:</strong> 
+                                <span class="badge bg-{{ 'success' if recent_check.status == 'success' else 'danger' if recent_check.status == 'error' else 'warning' }}">
+                                    {{ recent_check.status.title() }}
+                                </span>
+                            </li>
+                            <li><strong>Date:</strong> {{ recent_check.check_date[:19] }}</li>
+                            {% if recent_check.error_message %}
+                            <li><strong>Error:</strong> <span class="text-danger">{{ recent_check.error_message }}</span></li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Quick Actions</h6>
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('check_firmware', system_id=system.id) }}" class="btn btn-success">
+                                <i class="bi bi-arrow-clockwise"></i> Run New Check
+                            </a>
+                            {% if firmware_data %}
+                            <button class="btn btn-primary" onclick="showFullResults()">
+                                <i class="bi bi-eye"></i> View Full Results
+                            </button>
+                            <button class="btn btn-outline-primary" onclick="exportResults()">
+                                <i class="bi bi-download"></i> Export Results
+                            </button>
+                            {% else %}
+                            <div class="alert alert-warning">
+                                <strong>No firmware data available</strong><br>
+                                firmware_data is: {{ firmware_data }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {% if firmware_data %}
+                <!-- Results Summary -->
+                <div id="resultsSummary">
+                    <h6>Results Summary <small class="text-success">(Data Available)</small></h6>
+                    <div class="row text-center mb-3">
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h5 class="text-primary" id="dcScmCount">-</h5>
+                                    <small>DC-SCM Types</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h5 class="text-info" id="ovl2Count">-</h5>
+                                    <small>OVL2 Types</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h5 class="text-warning" id="otherCount">-</h5>
+                                    <small>Other Platform</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h5 class="text-success" id="totalCount">-</h5>
+                                    <small>Total Checked</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detailed Results (collapsible) -->
+                <div class="accordion" id="resultsAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                    data-bs-target="#detailedResults">
+                                <strong>Detailed Firmware Results</strong>
+                            </button>
+                        </h2>
+                        <div id="detailedResults" class="accordion-collapse collapse" 
+                             data-bs-parent="#resultsAccordion">
+                            <div class="accordion-body">
+                                <div id="detailedResultsContent">
+                                    <!-- Content will be populated by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-clock-history fs-1 text-muted mb-3"></i>
+                <h4 class="text-muted">No Firmware Checks Found</h4>
+                <p class="text-muted">This system hasn't had any firmware checks yet.</p>
+                <a href="{{ url_for('check_firmware', system_id=system.id) }}" class="btn btn-success">
+                    <i class="bi bi-check-circle"></i> Run First Check
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Full Results Modal -->
+<div class="modal fade" id="fullResultsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Complete Firmware Check Results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" id="categoryTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="dc-scm-tab" data-bs-toggle="tab" data-bs-target="#dc-scm" 
+                                type="button" role="tab">DC-SCM</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="other-platform-tab" data-bs-toggle="tab" data-bs-target="#other-platform" 
+                                type="button" role="tab">Other Platform</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="ovl2-tab" data-bs-toggle="tab" data-bs-target="#ovl2" 
+                                type="button" role="tab">OVL2</button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content" id="categoryTabContent">
+                    <div class="tab-pane fade show active" id="dc-scm" role="tabpanel">
+                        <div id="dcScmResults"></div>
+                    </div>
+                    <div class="tab-pane fade" id="other-platform" role="tabpanel">
+                        <div id="otherPlatformResults"></div>
+                    </div>
+                    <div class="tab-pane fade" id="ovl2" role="tabpanel">
+                        <div id="ovl2Results"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="exportResults()">
+                    <i class="bi bi-download"></i> Export Results
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if firmware_data %}
+<!-- Pass firmware data to JavaScript via JSON script tag -->
+<script type="application/json" id="firmware-data">{{ firmware_data|tojson }}</script>
+<!-- Debug: Firmware data keys available -->
+<div style="display:none" id="debug-info">Firmware data has {{ firmware_data.keys()|list|length }} keys: {{ firmware_data.keys()|list }}</div>
+{% else %}
+<!-- Debug: No firmware data -->
+<div style="display:none" id="debug-info">No firmware data available</div>
+{% endif %}
+
+<script>
+let checkResults = null;
+
+// Initialize firmware data if available
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('JavaScript DOMContentLoaded fired');
+    
+    const firmwareDataElement = document.getElementById('firmware-data');
+    console.log('firmwareDataElement found:', firmwareDataElement !== null);
+    
+    if (firmwareDataElement) {
+        console.log('Raw firmwareDataElement content length:', firmwareDataElement.textContent.length);
+        try {
+            checkResults = JSON.parse(firmwareDataElement.textContent);
+            
+            // Debug: Log the structure we actually have
+            console.log('Firmware data structure:', checkResults);
+            console.log('Top-level keys:', Object.keys(checkResults));
+            
+            if (checkResults.dc_scm) {
+                console.log('DC-SCM structure:', checkResults.dc_scm);
+                console.log('DC-SCM keys:', Object.keys(checkResults.dc_scm));
+                console.log('DC-SCM firmware_versions:', checkResults.dc_scm.firmware_versions);
+                console.log('DC-SCM firmware_versions keys:', Object.keys(checkResults.dc_scm.firmware_versions || {}));
+            }
+            
+            // Update summary counts if data exists and has expected structure
+            if (checkResults && checkResults.dc_scm && checkResults.dc_scm.firmware_versions) {
+                const count = Object.keys(checkResults.dc_scm.firmware_versions).length;
+                console.log('DC-SCM count:', count);
+                const dcScmElement = document.getElementById('dcScmCount');
+                console.log('dcScmCount element found:', dcScmElement !== null);
+                if (dcScmElement) {
+                    dcScmElement.textContent = count;
+                    console.log('DC-SCM element content set to:', dcScmElement.textContent);
+                    console.log('DC-SCM element innerHTML:', dcScmElement.innerHTML);
+                } else {
+                    console.log('dcScmCount element not found in DOM');
+                }
+            } else {
+                console.log('DC-SCM firmware_versions not found');
+                // Try alternative structure
+                if (checkResults && checkResults.dc_scm) {
+                    const dcScmFirmware = checkResults.dc_scm.firmware_versions || checkResults.dc_scm;
+                    if (typeof dcScmFirmware === 'object') {
+                        const count = Object.keys(dcScmFirmware).length;
+                        console.log('DC-SCM fallback count:', count);
+                        document.getElementById('dcScmCount').textContent = count;
+                    }
+                }
+            }
+            if (checkResults && checkResults.ovl2 && checkResults.ovl2.firmware_versions) {
+                const count = Object.keys(checkResults.ovl2.firmware_versions).length;
+                console.log('OVL2 count:', count);
+                const ovl2Element = document.getElementById('ovl2Count');
+                console.log('ovl2Count element found:', ovl2Element !== null);
+                if (ovl2Element) {
+                    ovl2Element.textContent = count;
+                    console.log('OVL2 element content set to:', ovl2Element.textContent);
+                } else {
+                    console.log('ovl2Count element not found in DOM');
+                }
+            } else {
+                console.log('OVL2 firmware_versions not found');
+                // Try alternative structure
+                if (checkResults && checkResults.ovl2) {
+                    const ovl2Firmware = checkResults.ovl2.firmware_versions || checkResults.ovl2;
+                    if (typeof ovl2Firmware === 'object') {
+                        const count = Object.keys(ovl2Firmware).length;
+                        console.log('OVL2 fallback count:', count);
+                        document.getElementById('ovl2Count').textContent = count;
+                    }
+                }
+            }
+            if (checkResults && checkResults.other_platform && checkResults.other_platform.firmware_versions) {
+                const count = Object.keys(checkResults.other_platform.firmware_versions).length;
+                console.log('Other Platform count:', count);
+                const otherElement = document.getElementById('otherCount');
+                console.log('otherCount element found:', otherElement !== null);
+                if (otherElement) {
+                    otherElement.textContent = count;
+                    console.log('Other Platform element content set to:', otherElement.textContent);
+                } else {
+                    console.log('otherCount element not found in DOM');
+                }
+            } else {
+                console.log('Other Platform firmware_versions not found');
+                // Try alternative structure
+                if (checkResults && checkResults.other_platform) {
+                    const otherFirmware = checkResults.other_platform.firmware_versions || checkResults.other_platform;
+                    if (typeof otherFirmware === 'object') {
+                        const count = Object.keys(otherFirmware).length;
+                        console.log('Other Platform fallback count:', count);
+                        document.getElementById('otherCount').textContent = count;
+                    }
+                }
+            }
+
+            // Calculate total count with fallback logic
+            let totalCount = 0;
+            
+            // Count DC-SCM
+            if (checkResults && checkResults.dc_scm) {
+                const dcScmFirmware = checkResults.dc_scm.firmware_versions || checkResults.dc_scm;
+                if (typeof dcScmFirmware === 'object' && dcScmFirmware !== null) {
+                    totalCount += Object.keys(dcScmFirmware).filter(key => key !== 'category').length;
+                }
+            }
+            
+            // Count OVL2
+            if (checkResults && checkResults.ovl2) {
+                const ovl2Firmware = checkResults.ovl2.firmware_versions || checkResults.ovl2;
+                if (typeof ovl2Firmware === 'object' && ovl2Firmware !== null) {
+                    totalCount += Object.keys(ovl2Firmware).filter(key => key !== 'category').length;
+                }
+            }
+            
+            // Count Other Platform
+            if (checkResults && checkResults.other_platform) {
+                const otherFirmware = checkResults.other_platform.firmware_versions || checkResults.other_platform;
+                if (typeof otherFirmware === 'object' && otherFirmware !== null) {
+                    totalCount += Object.keys(otherFirmware).filter(key => key !== 'category').length;
+                }
+            }
+            
+            document.getElementById('totalCount').textContent = totalCount;
+            
+            // Populate the detailed results in the accordion
+            populateDetailedResults();
+        } catch (e) {
+            console.error('Error parsing firmware data:', e);
+            console.error('Raw content that failed to parse:', firmwareDataElement.textContent.substring(0, 500));
+        }
+    } else {
+        console.log('No firmware-data element found in DOM');
+        
+        // Check if there's debug info
+        const debugInfo = document.getElementById('debug-info');
+        if (debugInfo) {
+            console.log('Debug info:', debugInfo.textContent);
+        }
+    }
+});
+
+function populateDetailedResults() {
+    if (!checkResults) return;
+    
+    console.log('Populating detailed results in accordion');
+    
+    let html = '<div class="row">';
+    
+    // DC-SCM Column
+    html += '<div class="col-md-4"><h6>DC-SCM</h6>';
+    if (checkResults.dc_scm && checkResults.dc_scm.firmware_versions) {
+        html += '<ul class="list-unstyled small">';
+        for (const [fwType, fwData] of Object.entries(checkResults.dc_scm.firmware_versions)) {
+            const status = fwData.status || 'unknown';
+            const statusClass = status === 'success' ? 'text-success' : status === 'error' ? 'text-danger' : 'text-warning';
+            html += `<li><span class="${statusClass}">●</span> ${fwType}: <code>${fwData.version || 'N/A'}</code></li>`;
+        }
+        html += '</ul>';
+    }
+    html += '</div>';
+    
+    // OVL2 Column
+    html += '<div class="col-md-4"><h6>OVL2</h6>';
+    if (checkResults.ovl2 && checkResults.ovl2.firmware_versions) {
+        html += '<ul class="list-unstyled small">';
+        for (const [fwType, fwData] of Object.entries(checkResults.ovl2.firmware_versions)) {
+            const status = fwData.status || 'unknown';
+            const statusClass = status === 'success' ? 'text-success' : status === 'error' ? 'text-danger' : 'text-warning';
+            html += `<li><span class="${statusClass}">●</span> ${fwType}: <code>${fwData.version || 'N/A'}</code></li>`;
+        }
+        html += '</ul>';
+    }
+    html += '</div>';
+    
+    // Other Platform Column
+    html += '<div class="col-md-4"><h6>Other Platform</h6>';
+    if (checkResults.other_platform && checkResults.other_platform.firmware_versions) {
+        html += '<ul class="list-unstyled small">';
+        for (const [fwType, fwData] of Object.entries(checkResults.other_platform.firmware_versions)) {
+            const status = fwData.status || 'unknown';
+            const statusClass = status === 'success' ? 'text-success' : status === 'error' ? 'text-danger' : 'text-warning';
+            html += `<li><span class="${statusClass}">●</span> ${fwType}: <code>${fwData.version || 'N/A'}</code></li>`;
+        }
+        html += '</ul>';
+    }
+    html += '</div>';
+    
+    html += '</div>';
+    
+    const detailedResultsContent = document.getElementById('detailedResultsContent');
+    if (detailedResultsContent) {
+        detailedResultsContent.innerHTML = html;
+        console.log('Detailed results populated');
+    } else {
+        console.log('detailedResultsContent element not found');
+    }
+}
+
+function showFullResults() {
+    if (!checkResults) {
+        console.log('No checkResults available');
+        return;
+    }
+    
+    console.log('showFullResults called with data:', checkResults);
+    console.log('DC-SCM data:', checkResults.dc_scm);
+    console.log('OVL2 data:', checkResults.ovl2);
+    console.log('Other Platform data:', checkResults.other_platform);
+    
+    // Populate detailed results
+    document.getElementById('dcScmResults').innerHTML = createCategoryTable(checkResults.dc_scm, 'DC-SCM');
+    document.getElementById('otherPlatformResults').innerHTML = createCategoryTable(checkResults.other_platform, 'Other Platform');
+    document.getElementById('ovl2Results').innerHTML = createCategoryTable(checkResults.ovl2, 'OVL2');
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('fullResultsModal'));
+    modal.show();
+}
+
+function createCategoryTable(categoryData, categoryName) {
+    console.log(`Creating table for ${categoryName}:`, categoryData);
+    
+    if (!categoryData) {
+        return `<div class="alert alert-warning">No ${categoryName} data available</div>`;
+    }
+    
+    // Handle different data structures
+    let firmwareVersions = categoryData.firmware_versions || categoryData;
+    let displayCategoryName = categoryData.category || categoryName;
+    
+    console.log(`${categoryName} firmware versions:`, firmwareVersions);
+    
+    let html = `
+        <div class="mt-3">
+            <h6>${displayCategoryName} Firmware Versions</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Firmware Type</th>
+                            <th>Version</th>
+                            <th>Status</th>
+                            <th>Method</th>
+                            <th>Checked At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+    
+    // Filter out non-firmware entries like 'category'
+    const firmwareEntries = Object.entries(firmwareVersions).filter(([key, value]) => 
+        key !== 'category' && typeof value === 'object' && value !== null
+    );
+    
+    console.log(`${categoryName} firmware entries:`, firmwareEntries);
+    
+    for (const [fwType, fwData] of firmwareEntries) {
+        console.log(`${categoryName} ${fwType} data:`, fwData);
+        console.log(`${categoryName} ${fwType} status field:`, fwData.status);
+        console.log(`${categoryName} ${fwType} version field:`, fwData.version);
+        
+        let statusBadge;
+        if (fwData.status === 'success') {
+            statusBadge = '<span class="badge bg-success">Success</span>';
+        } else if (fwData.status === 'error') {
+            statusBadge = '<span class="badge bg-danger">Error</span>';
+        } else if (fwData.status === 'not_implemented') {
+            statusBadge = '<span class="badge bg-warning">Not Implemented</span>';
+        } else {
+            statusBadge = `<span class="badge bg-secondary">${fwData.status || 'Unknown'}</span>`;
+        }
+            
+        html += `
+            <tr>
+                <td><strong>${fwType}</strong></td>
+                <td><code>${fwData.version || 'N/A'}</code></td>
+                <td>${statusBadge}</td>
+                <td><small class="text-muted">${fwData.method || 'N/A'}</small></td>
+                <td><small class="text-muted">${fwData.checked_at ? new Date(fwData.checked_at).toLocaleString() : 'N/A'}</small></td>
+            </tr>
+        `;
+    }
+    
+    html += `
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    return html;
+}
+
+function exportResults() {
+    if (!checkResults) return;
+    
+    const dataStr = JSON.stringify(checkResults, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `firmware-check-${checkResults.system_name}-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+}
+</script>
+{% endblock %}

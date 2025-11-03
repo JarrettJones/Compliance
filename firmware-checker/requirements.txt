@@ -1,0 +1,28 @@
+# Flask web application requirements
+Flask==2.3.3
+Werkzeug==2.3.7
+
+# HTTP requests for Redfish API calls
+requests==2.31.0
+urllib3==2.0.4
+
+# Database (SQLite is built into Python)
+# No additional database requirements needed for SQLite
+
+# Development and testing
+pytest==7.4.2
+pytest-flask==1.2.0
+
+# Optional: For production deployment
+gunicorn==21.2.0
+waitress==2.1.2
+
+# Optional: For SSH connections (when implementing actual firmware checks)
+paramiko==3.3.1
+pexpect==4.8.0
+
+# WinRM for Windows remote management (storage firmware checks)
+pywinrm==0.4.3
+
+# Optional: For enhanced logging and monitoring
+python-dotenv==1.0.0

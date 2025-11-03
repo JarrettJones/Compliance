@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Create Firmware Recipe{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-file-earmark-plus"></i> Create Firmware Recipe</h1>
+                <p class="lead">Define expected firmware versions for validation</p>
+            </div>
+            <a href="{{ url_for('recipes') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Recipes
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        <form method="POST">
+            <!-- Basic Information -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Recipe Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="name" class="form-label">Recipe Name *</label>
+                            <input type="text" class="form-control" id="name" name="name" required
+                                   placeholder="e.g., Production Config v2.1">
+                            <div class="form-text">Unique name for this firmware recipe</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <input type="text" class="form-control" id="description" name="description"
+                                   placeholder="e.g., Q4 2025 production firmware baseline">
+                            <div class="form-text">Optional description of this recipe</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Firmware Versions by Category -->
+            {% for category, types in firmware_types.items() %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-cpu"></i> {{ category }}
+                        <span class="badge bg-secondary ms-2">{{ types|length }} types</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for fw_type in types %}
+                        <div class="col-md-6 mb-3">
+                            <label for="fw_{{ category }}_{{ fw_type }}" class="form-label">
+                                {{ fw_type }}
+                            </label>
+                            <input type="text" class="form-control" 
+                                   id="fw_{{ category }}_{{ fw_type }}" 
+                                   name="fw_{{ category }}_{{ fw_type }}"
+                                   placeholder="Expected version (leave blank to skip)">
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <!-- Submit Button -->
+            <div class="card">
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> <strong>Note:</strong> 
+                        You only need to specify versions for firmware types you want to validate. 
+                        Leave fields blank for firmware types that should be skipped during validation.
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('recipes') }}" class="btn btn-secondary">
+                            <i class="bi bi-x"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="bi bi-check-circle"></i> Create Recipe
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Form validation and helpers
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    
+    // Add "Fill All in Category" buttons
+    document.querySelectorAll('.card-header h5').forEach(header => {
+        if (header.textContent.includes('DC-SCM') || 
+            header.textContent.includes('Other Platform') || 
+            header.textContent.includes('OVL2')) {
+            
+            const fillBtn = document.createElement('button');
+            fillBtn.type = 'button';
+            fillBtn.className = 'btn btn-sm btn-outline-primary float-end';
+            fillBtn.innerHTML = '<i class="bi bi-lightning"></i> Quick Fill';
+            fillBtn.onclick = function() {
+                const card = this.closest('.card');
+                const inputs = card.querySelectorAll('input[type="text"]');
+                const sampleVersion = prompt('Enter version to use for all fields in this category:');
+                if (sampleVersion) {
+                    inputs.forEach(input => input.value = sampleVersion);
+                }
+            };
+            header.appendChild(fillBtn);
+        }
+    });
+    
+    // Form submission validation
+    form.addEventListener('submit', function(e) {
+        const name = document.getElementById('name').value.trim();
+        if (!name) {
+            e.preventDefault();
+            alert('Please enter a recipe name');
+            return;
+        }
+        
+        // Check if at least one firmware version is specified
+        const allInputs = form.querySelectorAll('input[name^="fw_"]');
+        const hasVersion = Array.from(allInputs).some(input => input.value.trim());
+        
+        if (!hasVersion) {
+            e.preventDefault();
+            alert('Please specify at least one firmware version for this recipe');
+            return;
+        }
+    });
+});
+</script>
+{% endblock %}

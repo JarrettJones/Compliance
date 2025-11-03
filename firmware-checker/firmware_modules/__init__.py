@@ -1,0 +1,1 @@
+# Empty __init__.py file to make firmware_modules a Python package

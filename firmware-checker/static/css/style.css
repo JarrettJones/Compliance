@@ -1,0 +1,275 @@
+/* Custom CSS for Firmware Version Checker */
+
+/* Base styles */
+body {
+    background-color: #f8f9fa;
+}
+
+/* Navigation */
+.navbar-brand {
+    font-weight: 600;
+}
+
+/* Card styles */
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    transition: box-shadow 0.15s ease-in-out;
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+/* Stats cards */
+.stat-item {
+    padding: 1rem 0;
+    text-align: center;
+}
+
+.stat-item h3 {
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+    font-size: 2rem;
+}
+
+.stat-item p {
+    margin-bottom: 0;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Button styles */
+.btn {
+    border-radius: 0.375rem;
+    font-weight: 500;
+}
+
+.btn-group .btn {
+    border-radius: 0.25rem;
+}
+
+/* Table styles */
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+    background-color: #f8f9fa;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+/* Progress bar */
+.progress {
+    height: 1.5rem;
+    background-color: #e9ecef;
+    border-radius: 0.5rem;
+}
+
+.progress-bar {
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+/* Alert styles */
+.alert {
+    border: none;
+    border-radius: 0.5rem;
+}
+
+/* Badge styles */
+.badge {
+    font-size: 0.75em;
+    font-weight: 500;
+    padding: 0.35em 0.65em;
+}
+
+/* List group */
+.list-group-item {
+    border: none;
+    border-bottom: 1px solid #dee2e6;
+    padding: 0.75rem 1rem;
+}
+
+.list-group-item:last-child {
+    border-bottom: none;
+}
+
+/* Clickable list items */
+.list-group-item-action {
+    color: #495057;
+    text-decoration: none;
+    transition: all 0.15s ease-in-out;
+}
+
+.list-group-item-action:hover {
+    color: #495057;
+    background-color: #f8f9fa;
+    text-decoration: none;
+    transform: translateX(4px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.list-group-item-action:focus {
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Recent checks specific styling */
+.recent-checks .list-group-item-action::after {
+    content: '→';
+    opacity: 0;
+    margin-left: 8px;
+    transition: opacity 0.15s ease-in-out;
+    float: right;
+    color: #0d6efd;
+    font-weight: bold;
+}
+
+.recent-checks .list-group-item-action:hover::after {
+    opacity: 1;
+}
+
+/* Code blocks */
+code {
+    color: #e83e8c;
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+}
+
+pre {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+/* Loading states */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Custom utilities */
+.text-monospace {
+    font-family: 'Courier New', monospace;
+}
+
+.border-start-primary {
+    border-left: 3px solid #0d6efd !important;
+}
+
+.border-start-success {
+    border-left: 3px solid #198754 !important;
+}
+
+.border-start-danger {
+    border-left: 3px solid #dc3545 !important;
+}
+
+.border-start-warning {
+    border-left: 3px solid #ffc107 !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .btn-group {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .btn-group .btn {
+        margin-bottom: 0.25rem;
+    }
+    
+    .btn-group .btn:last-child {
+        margin-bottom: 0;
+    }
+    
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+}
+
+/* Animation for loading states */
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
+
+/* System status indicators */
+.status-online {
+    color: #198754;
+}
+
+.status-offline {
+    color: #dc3545;
+}
+
+.status-unknown {
+    color: #6c757d;
+}
+
+/* Firmware type icons */
+.fw-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-right: 0.5rem;
+}
+
+.fw-icon-dc-scm {
+    background-color: #0d6efd;
+    color: white;
+}
+
+.fw-icon-other {
+    background-color: #198754;
+    color: white;
+}
+
+.fw-icon-ovl2 {
+    background-color: #fd7e14;
+    color: white;
+}
+
+/* Custom scrollbar for modals */
+.modal-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}

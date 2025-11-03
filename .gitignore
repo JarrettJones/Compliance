@@ -1,0 +1,38 @@
+# Compliance Project - Git Ignore
+
+# Database files (never commit databases with sensitive data)
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment files (contain secrets)
+.env
+.env.*
+!.env.example
+config.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Logs
+*.log
+logs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+firmware_env/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Firmware Version Checker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="bi bi-speedometer2"></i> Dashboard</h1>
+        <p class="lead">Monitor and check firmware versions across your systems</p>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <!-- Stats Cards -->
+    <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ stats.total_systems }}</h4>
+                        <p class="card-text">Total Systems</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-server fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ stats.total_checks }}</h4>
+                        <p class="card-text">Total Checks</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-check-circle fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">33</h4>
+                        <p class="card-text">Firmware Types</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-cpu fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">3</h4>
+                        <p class="card-text">Categories</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-tags fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Recent Systems -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-server"></i> Recent Systems</h5>
+                <a href="{{ url_for('add_system') }}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus"></i> Add System
+                </a>
+            </div>
+            <div class="card-body">
+                {% if stats.recent_systems %}
+                    <div class="list-group list-group-flush">
+                        {% for system in stats.recent_systems %}
+                            <div class="list-group-item d-flex justify-content-between align-items-start">
+                                <div class="ms-2 me-auto">
+                                    <div class="fw-bold">
+                                        {{ system.name }}
+                                        {% if system.description and 'Host:' in system.description %}
+                                            {% set host_part = system.description.split('Host:')[1].split('|')[0].strip() %}
+                                            <span class="text-muted fw-normal">({{ host_part }})</span>
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted">{{ system.rscm_ip }}:{{ system.rscm_port }}</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-secondary">{{ system.check_count }} checks</span>
+                                    <div class="small text-muted">
+                                        {% if system.last_check %}
+                                            Last: {{ system.last_check[:19] }}
+                                        {% else %}
+                                            Never checked
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <div class="text-center mt-3">
+                        <a href="{{ url_for('systems') }}" class="btn btn-outline-primary">View All Systems</a>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-server fs-1"></i>
+                        <p class="mt-2">No systems configured yet</p>
+                        <a href="{{ url_for('add_system') }}" class="btn btn-primary">Add Your First System</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Checks -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Firmware Checks</h5>
+            </div>
+            <div class="card-body recent-checks">
+                {% if stats.recent_checks %}
+                    <div class="list-group list-group-flush">
+                        {% for check in stats.recent_checks %}
+                            <a href="{{ url_for('check_result', check_id=check.id) }}" class="list-group-item list-group-item-action">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">{{ check.system_name }}</h6>
+                                    <small class="text-muted">{{ check.check_date[:19] }}</small>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="badge bg-{{ 'success' if check.status == 'success' else 'danger' }}">
+                                        {{ check.status.title() }}
+                                    </span>
+                                    {% if check.error_message %}
+                                        <small class="text-danger">{{ check.error_message[:50] }}...</small>
+                                    {% endif %}
+                                </div>
+                            </a>
+                        {% endfor %}
+                    </div>
+                    <div class="text-center mt-3">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i> Click any check above to view detailed results
+                        </small>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-clock-history fs-1"></i>
+                        <p class="mt-2">No firmware checks performed yet</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-lightning"></i> Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <i class="bi bi-robot fs-1 text-success"></i>
+                                <h6 class="mt-2">Auto-Register System</h6>
+                                <span class="badge bg-success mb-2">Beta</span>
+                                <p class="text-muted small">Connect & discover system automatically</p>
+                                <a href="{{ url_for('add_system_automated') }}" class="btn btn-success btn-sm">Auto Register</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <i class="bi bi-plus-circle fs-1 text-primary"></i>
+                                <h6 class="mt-2">Add System Manually</h6>
+                                <p class="text-muted small">Configure a new system manually</p>
+                                <a href="{{ url_for('add_system') }}" class="btn btn-primary btn-sm">Add System</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <i class="bi bi-server fs-1 text-secondary"></i>
+                                <h6 class="mt-2">Manage Systems</h6>
+                                <p class="text-muted small">View and manage your systems</p>
+                                <a href="{{ url_for('systems') }}" class="btn btn-secondary btn-sm">Manage</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <i class="bi bi-question-circle fs-1 text-info"></i>
+                                <h6 class="mt-2">Help & Docs</h6>
+                                <p class="text-muted small">Learn how to use the system</p>
+                                <a href="{{ url_for('help') }}" class="btn btn-info btn-sm">View Help</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

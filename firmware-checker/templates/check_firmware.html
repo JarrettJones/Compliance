@@ -1,0 +1,851 @@
+{% extends "base.html" %}
+
+{% block title %}Check Firmware - {{ system.name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-check-circle"></i> Check Firmware</h1>
+                <p class="lead">System: <strong>{{ system.name }}</strong> ({{ system.rscm_ip }}:{{ system.rscm_port }})</p>
+            </div>
+            <div>
+                {% if active_check %}
+                <a href="{{ url_for('check_active', system_id=system.id) }}" class="btn btn-warning me-2">
+                    <i class="bi bi-clock"></i> View Active Check
+                </a>
+                {% else %}
+                <a href="{{ url_for('check_progress', system_id=system.id) }}" class="btn btn-info me-2">
+                    <i class="bi bi-clock-history"></i> View Last Check
+                </a>
+                {% endif %}
+                <a href="{{ url_for('system_detail', system_id=system.id) }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to System
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if active_check %}
+<div class="row">
+    <div class="col-12">
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle"></i>
+            <strong>Active Check Running!</strong> 
+            A firmware check is currently in progress for this system (started {{ active_check.check_date[:19] }}).
+            <a href="{{ url_for('check_active', system_id=system.id) }}" class="alert-link">View active check progress</a>
+            or wait for it to complete before starting a new one.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-cpu"></i> Firmware Check Configuration</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-server"></i> System Information</h6>
+                        <dl class="row">
+                            <dt class="col-sm-4">Name:</dt>
+                            <dd class="col-sm-8">{{ system.name }}</dd>
+                            <dt class="col-sm-4">RSCM IP:</dt>
+                            <dd class="col-sm-8"><code>{{ system.rscm_ip }}</code></dd>
+                            <dt class="col-sm-4">Port:</dt>
+                            <dd class="col-sm-8"><span class="badge bg-secondary">{{ system.rscm_port }}</span></dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-list-check"></i> Firmware Categories</h6>
+                        <ul class="list-unstyled">
+                            <li><i class="bi bi-check text-success"></i> DC-SCM (15 firmware types)</li>
+                            <li><i class="bi bi-check text-success"></i> Other Platform (6 firmware types)</li>
+                            <li><i class="bi bi-check text-success"></i> OVL2 (18 firmware types)</li>
+                        </ul>
+                        <p class="text-muted small">Total: 39 firmware types will be checked</p>
+                    </div>
+                </div>
+                
+                <!-- Credentials Section -->
+                <div class="row mb-4">
+                    <!-- RSCM/Redfish Credentials -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6><i class="bi bi-key"></i> Authentication Credentials</h6>
+                                <p class="text-muted small">Enter the same credentials you use for Redfish API access</p>
+                                <div class="mb-3">
+                                    <label for="username" class="form-label">Username</label>
+                                    <input type="text" class="form-control" id="username" placeholder="Enter username" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="password" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="password" placeholder="Enter password" required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Windows OS Credentials -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6><i class="bi bi-pc-display"></i> Windows OS Credentials <span class="badge bg-secondary">Optional</span></h6>
+                                <p class="text-muted small">Required for M.2 and E.1s storage firmware checks via WinRM. Leave blank to skip in-band storage checks.</p>
+                                <div class="mb-3">
+                                    <label for="os_username" class="form-label">OS Username</label>
+                                    <input type="text" class="form-control" id="os_username" placeholder="Windows OS username">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="os_password" class="form-label">OS Password</label>
+                                    <input type="password" class="form-control" id="os_password" placeholder="Windows OS password">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="computer_name" class="form-label">Target Computer/IP</label>
+                                    <input type="text" class="form-control" id="computer_name" 
+                                           placeholder="Computer name or IP address"
+                                           {% if system_hostname %}value="{{ system_hostname }}"{% endif %}>
+                                    <div class="form-text">Specify target system for storage checks (required if OS credentials provided)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Selective Firmware Check Section -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card border-info">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0"><i class="bi bi-toggles"></i> Select Firmware Types to Check <span class="badge bg-info">Advanced</span></h6>
+                                    <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#selectiveFirmwareCollapse">
+                                        <i class="bi bi-chevron-down"></i> Show Options
+                                    </button>
+                                </div>
+                                <div class="collapse" id="selectiveFirmwareCollapse">
+                                    <p class="text-muted small mb-3">By default, all firmware types are checked. Uncheck specific types below to skip them (useful for debugging or quick rechecks).</p>
+                                    
+                                    <!-- Quick Selection Buttons -->
+                                    <div class="btn-group mb-3" role="group">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllFirmware()">
+                                            <i class="bi bi-check-all"></i> Select All
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllFirmware()">
+                                            <i class="bi bi-x"></i> Deselect All
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="selectCategory('dc_scm')">
+                                            DC-SCM Only
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-success" onclick="selectCategory('ovl2')">
+                                            OVL2 Only
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-warning" onclick="selectCategory('other_platform')">
+                                            Other Platform Only
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Firmware Type Selection -->
+                                    <div class="row">
+                                        <!-- DC-SCM -->
+                                        <div class="col-md-4">
+                                            <h6 class="text-primary">DC-SCM (16 types)</h6>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="BMC FW" id="fw_bmc" checked>
+                                                <label class="form-check-label small" for="fw_bmc">BMC FW</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="BMC FW Alternate" id="fw_bmc_alt" checked>
+                                                <label class="form-check-label small" for="fw_bmc_alt">BMC FW Alternate</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="CPLD" id="fw_cpld" checked>
+                                                <label class="form-check-label small" for="fw_cpld">CPLD</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="BIOS" id="fw_bios" checked>
+                                                <label class="form-check-label small" for="fw_bios">BIOS</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="BIOS Alternate" id="fw_bios_alt" checked>
+                                                <label class="form-check-label small" for="fw_bios_alt">BIOS Alternate</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="Retimer FW" id="fw_retimer" checked>
+                                                <label class="form-check-label small" for="fw_retimer">Retimer FW</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="PLDM FW" id="fw_pldm" checked>
+                                                <label class="form-check-label small" for="fw_pldm">PLDM FW</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="PSU1 Model ID / FW" id="fw_psu1" checked>
+                                                <label class="form-check-label small" for="fw_psu1">PSU1 Model ID / FW</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="PSU2 Model ID / FW" id="fw_psu2" checked>
+                                                <label class="form-check-label small" for="fw_psu2">PSU2 Model ID / FW</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="M.2 FW (OS Visible)" id="fw_m2" checked>
+                                                <label class="form-check-label small" for="fw_m2">M.2 FW (OS Visible)</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="E.1s FW (OS Visible)" id="fw_e1s" checked>
+                                                <label class="form-check-label small" for="fw_e1s">E.1s FW (OS Visible)</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="FPGA Bitstream" id="fw_fpga_bit" checked>
+                                                <label class="form-check-label small" for="fw_fpga_bit">FPGA Bitstream</label>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- OVL2 -->
+                                        <div class="col-md-4">
+                                            <h6 class="text-success">OVL2 (12 types)</h6>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category ovl2" type="checkbox" value="FPGA Agilex (App Image w/ OpRom)" id="fw_agilex" checked>
+                                                <label class="form-check-label small" for="fw_agilex">FPGA Agilex</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category ovl2" type="checkbox" value="Cyclone V Image" id="fw_cyclone" checked>
+                                                <label class="form-check-label small" for="fw_cyclone">Cyclone V Image</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category ovl2" type="checkbox" value="Cyclone V PFMID" id="fw_cyclone_pfmid" checked>
+                                                <label class="form-check-label small" for="fw_cyclone_pfmid">Cyclone V PFMID</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category ovl2" type="checkbox" value="OVL SOC FIP" id="fw_soc_fip" checked>
+                                                <label class="form-check-label small" for="fw_soc_fip">OVL SOC FIP</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category ovl2" type="checkbox" value="OVL SOC FIP PFMID" id="fw_soc_fip_pfmid" checked>
+                                                <label class="form-check-label small" for="fw_soc_fip_pfmid">OVL SOC FIP PFMID</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category ovl2" type="checkbox" value="SOC Test OS (STOS)" id="fw_stos" checked>
+                                                <label class="form-check-label small" for="fw_stos">SOC Test OS (STOS)</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category ovl2" type="checkbox" value="Host FPGA Driver & Tools" id="fw_host_fpga" checked>
+                                                <label class="form-check-label small" for="fw_host_fpga">Host FPGA Driver & Tools</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category ovl2" type="checkbox" value="SOC FPGA Driver" id="fw_soc_fpga" checked>
+                                                <label class="form-check-label small" for="fw_soc_fpga">SOC FPGA Driver</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category ovl2" type="checkbox" value="MANA Driver (Windows)" id="fw_mana" checked>
+                                                <label class="form-check-label small" for="fw_mana">MANA Driver (Windows)</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category ovl2" type="checkbox" value="Glacier Cerberus FW" id="fw_cerberus" checked>
+                                                <label class="form-check-label small" for="fw_cerberus">Glacier Cerberus FW</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category ovl2" type="checkbox" value="Glacier Cerberus Utility" id="fw_cerberus_util" checked>
+                                                <label class="form-check-label small" for="fw_cerberus_util">Glacier Cerberus Utility</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category ovl2" type="checkbox" value="Glacier Peak CFM" id="fw_cfm" checked>
+                                                <label class="form-check-label small" for="fw_cfm">Glacier Peak CFM</label>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Other Platform -->
+                                        <div class="col-md-4">
+                                            <h6 class="text-warning">Other Platform (6 types)</h6>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="CFM Platform ID" id="fw_cfm_platform" checked>
+                                                <label class="form-check-label small" for="fw_cfm_platform">CFM Platform ID</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="CFM Build Version" id="fw_cfm_build" checked>
+                                                <label class="form-check-label small" for="fw_cfm_build">CFM Build Version</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="CFM Active PFM" id="fw_cfm_pfm" checked>
+                                                <label class="form-check-label small" for="fw_cfm_pfm">CFM Active PFM</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="CFM ROT FW" id="fw_cfm_rot" checked>
+                                                <label class="form-check-label small" for="fw_cfm_rot">CFM ROT FW</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="M.2 FW (WinRM)" id="fw_m2_winrm" checked>
+                                                <label class="form-check-label small" for="fw_m2_winrm">M.2 FW (WinRM)</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="E.1s FW (WinRM)" id="fw_e1s_winrm" checked>
+                                                <label class="form-check-label small" for="fw_e1s_winrm">E.1s FW (WinRM)</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mt-3">
+                                        <p class="text-muted small mb-0">
+                                            <i class="bi bi-info-circle"></i> <span id="selectedCount">39 firmware types</span> will be checked
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Recipe Selection -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card border-success">
+                            <div class="card-body">
+                                <h6><i class="bi bi-file-earmark-check"></i> Firmware Recipe Validation <span class="badge bg-success">Optional</span></h6>
+                                <p class="text-muted small">Select a firmware recipe to validate the detected versions against expected configurations</p>
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <select class="form-select" id="recipe_id" name="recipe_id">
+                                            <option value="">No recipe - Just check versions</option>
+                                            {% if recipes %}
+                                                {% for recipe in recipes %}
+                                                <option value="{{ recipe.id }}">{{ recipe.name }}</option>
+                                                {% endfor %}
+                                            {% endif %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <a href="{{ url_for('recipes') }}" class="btn btn-outline-primary w-100" target="_blank">
+                                            <i class="bi bi-box-arrow-up-right"></i> Manage Recipes
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-center">
+                    <button id="startCheckBtn" class="btn btn-success btn-lg" 
+                            data-system-id="{{ system.id }}" onclick="startFirmwareCheck()">
+                        <i class="bi bi-play-circle"></i> Start Firmware Check
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Section -->
+<div id="progressSection" class="row mt-4" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock"></i> Check Progress</h5>
+            </div>
+            <div class="card-body">
+                <div class="progress mb-3">
+                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%"></div>
+                </div>
+                <div id="progressStatus" class="text-center text-muted">
+                    Initializing firmware check...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Results Section -->
+<div id="resultsSection" class="row mt-4" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-clipboard-data"></i> Firmware Check Results</h5>
+                <button id="exportBtn" class="btn btn-outline-primary btn-sm" onclick="exportResults()">
+                    <i class="bi bi-download"></i> Export Results
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="resultsContent">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- Hidden data for JavaScript -->
+<div id="jsConfig" 
+     data-has-active-check="{% if active_check %}true{% else %}false{% endif %}"
+     {% if active_check %}data-active-check-url="{{ url_for('check_active', system_id=system.id) }}"{% endif %}
+     style="display: none;"></div>
+
+<script>
+let checkResults = null;
+
+// Firmware Selection Functions
+function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('.fw-category:checked');
+    const count = checkboxes.length;
+    document.getElementById('selectedCount').textContent = `${count} firmware type${count !== 1 ? 's' : ''}`;
+}
+
+function selectAllFirmware() {
+    document.querySelectorAll('.fw-category').forEach(cb => cb.checked = true);
+    updateSelectedCount();
+}
+
+function deselectAllFirmware() {
+    document.querySelectorAll('.fw-category').forEach(cb => cb.checked = false);
+    updateSelectedCount();
+}
+
+function selectCategory(category) {
+    // Deselect all first
+    document.querySelectorAll('.fw-category').forEach(cb => cb.checked = false);
+    // Select only the specified category
+    document.querySelectorAll(`.fw-category.${category}`).forEach(cb => cb.checked = true);
+    updateSelectedCount();
+}
+
+function getSelectedFirmwareTypes() {
+    const selected = {
+        dc_scm: [],
+        ovl2: [],
+        other_platform: []
+    };
+    
+    document.querySelectorAll('.fw-category:checked').forEach(cb => {
+        const category = Array.from(cb.classList).find(c => ['dc_scm', 'ovl2', 'other_platform'].includes(c));
+        if (category) {
+            selected[category].push(cb.value);
+        }
+    });
+    
+    return selected;
+}
+
+// Add event listeners to update count when checkboxes change
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.fw-category').forEach(cb => {
+        cb.addEventListener('change', updateSelectedCount);
+    });
+});
+
+function startFirmwareCheck() {
+    const startBtn = document.getElementById('startCheckBtn');
+    const progressSection = document.getElementById('progressSection');
+    const progressBar = document.getElementById('progressBar');
+    const progressStatus = document.getElementById('progressStatus');
+    
+    // Get system ID from data attribute
+    const systemId = parseInt(startBtn.getAttribute('data-system-id'));
+    
+    // Check if there's already an active check
+    const jsConfig = document.getElementById('jsConfig');
+    const hasActiveCheck = jsConfig.getAttribute('data-has-active-check') === 'true';
+    const activeCheckUrl = jsConfig.getAttribute('data-active-check-url');
+    
+    if (hasActiveCheck) {
+        if (confirm('There is already a firmware check running for this system. Do you want to view the active check instead?')) {
+            window.location.href = activeCheckUrl;
+        }
+        return;
+    }
+    
+    // Get credentials from form
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+    const osUsername = document.getElementById('os_username').value.trim();
+    const osPassword = document.getElementById('os_password').value.trim();
+    const computerName = document.getElementById('computer_name').value.trim();
+    const recipeId = document.getElementById('recipe_id').value;
+    
+    // Validate credentials
+    if (!username || !password) {
+        alert('Username and password are required!');
+        return;
+    }
+    
+    // Validate OS credentials - if any OS credential is provided, all are required
+    if ((osUsername || osPassword || computerName) && (!osUsername || !osPassword || !computerName)) {
+        alert('For storage firmware checks, all three fields are required: OS Username, OS Password, and Target Computer/IP');
+        return;
+    }
+    
+    // Disable start button and show progress
+    startBtn.disabled = true;
+    startBtn.innerHTML = '<i class="bi bi-clock"></i> Checking...';
+    progressSection.style.display = 'block';
+    
+    // Start with basic progress indication
+    progressBar.style.width = '10%';
+    progressStatus.textContent = 'Initializing firmware check...';
+    
+    // Start realistic progress simulation
+    let progressValue = 10;
+    const progressSteps = [
+        { msg: 'Connecting to system...', progress: 15, delay: 3000 },
+        { msg: 'Checking DC-SCM firmware (16 types)...', progress: 35, delay: 8000 },
+        { msg: 'Checking OVL2 firmware via SSH sessions (16 types)...', progress: 75, delay: 25000 },
+        { msg: 'Checking Other Platform firmware (6 types)...', progress: 90, delay: 5000 },
+        { msg: 'Processing results...', progress: 95, delay: 2000 }
+    ];
+    
+    let stepIndex = 0;
+    let progressInterval;
+    
+    function updateRealisticProgress() {
+        if (stepIndex < progressSteps.length) {
+            const step = progressSteps[stepIndex];
+            progressBar.style.width = step.progress + '%';
+            progressStatus.textContent = step.msg;
+            stepIndex++;
+            
+            progressInterval = setTimeout(updateRealisticProgress, step.delay);
+        }
+    }
+    
+    updateRealisticProgress();
+    
+    // Get selected firmware types
+    const selectedFirmware = getSelectedFirmwareTypes();
+    console.log('Selected firmware types:', selectedFirmware);
+    
+    // Make API call
+    fetch('/api/check-firmware', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            system_id: systemId,
+            username: username,
+            password: password,
+            os_username: osUsername || null,
+            os_password: osPassword || null,
+            computer_name: computerName || null,
+            recipe_id: recipeId || null,
+            selected_firmware: selectedFirmware
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        // Clear any remaining progress timeouts
+        clearTimeout(progressInterval);
+        
+        // Check if this is the new threaded response (HTTP 202)
+        if (data.status === 'started' && data.check_id) {
+            // New threaded response - start monitoring the background check
+            progressBar.style.width = '20%';
+            progressStatus.textContent = 'Firmware check started in background thread...';
+            
+            // Start monitoring the threaded check
+            monitorThreadedCheck(data.check_id, systemId, startBtn, progressBar, progressStatus);
+        } else {
+            // Old synchronous response (shouldn't happen anymore, but fallback)
+            completeCheck(data, startBtn, progressBar, progressStatus, systemId);
+        }
+    })
+    .catch(error => {
+        clearTimeout(progressInterval);
+        
+        // Show error
+        progressBar.classList.remove('progress-bar-animated');
+        progressBar.classList.add('bg-danger');
+        progressStatus.innerHTML = '<i class="bi bi-x-circle text-danger"></i> Firmware check failed: ' + error.message;
+        
+        // Reset button
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<i class="bi bi-play-circle"></i> Retry Check';
+        
+        console.error('Error:', error);
+    });
+}
+
+function monitorThreadedCheck(checkId, systemId, startBtn, progressBar, progressStatus) {
+    let pollCount = 0;
+    const maxPolls = 300; // 10 minutes max polling (2-second intervals)
+    
+    function pollProgress() {
+        pollCount++;
+        
+        // Poll the check status
+        fetch(`/api/check-status/${systemId}`)
+        .then(response => response.json())
+        .then(statusData => {
+            console.log('Status update:', statusData);
+            
+            if (statusData.status === 'running') {
+                // Update progress based on thread info
+                let progressPercent = 30; // Base progress
+                let statusMessage = 'Firmware check in progress...';
+                
+                if (statusData.thread_info) {
+                    const runtime = statusData.thread_info.runtime_minutes || 0;
+                    const category = statusData.thread_info.current_category || 'unknown';
+                    
+                    // Estimate progress based on category and runtime
+                    if (category === 'DC-SCM') {
+                        progressPercent = 20 + (runtime * 2); // DC-SCM takes ~5 minutes
+                    } else if (category === 'OVL2') {
+                        progressPercent = 40 + (runtime * 3); // OVL2 takes longer
+                    } else if (category === 'Other Platform') {
+                        progressPercent = 80 + (runtime * 5); // Final category
+                    }
+                    
+                    progressPercent = Math.min(progressPercent, 95); // Cap at 95%
+                    statusMessage = `Checking ${category} firmware... (${runtime.toFixed(1)} min)`;
+                }
+                
+                progressBar.style.width = progressPercent + '%';
+                progressStatus.textContent = statusMessage;
+                
+                // Continue polling
+                if (pollCount < maxPolls) {
+                    setTimeout(pollProgress, 2000); // Poll every 2 seconds
+                } else {
+                    // Timeout - show warning but keep checking
+                    progressStatus.innerHTML = '<i class="bi bi-exclamation-triangle text-warning"></i> Check is taking longer than expected... <a href="/check/result/' + checkId + '" class="btn btn-sm btn-outline-primary ms-2">View Progress Page</a>';
+                }
+                
+            } else if (statusData.status === 'completed') {
+                // Check completed successfully
+                fetchCompletedResults(checkId, startBtn, progressBar, progressStatus, systemId);
+                
+            } else if (statusData.status === 'error') {
+                // Check failed
+                progressBar.classList.remove('progress-bar-animated');
+                progressBar.classList.add('bg-danger');
+                progressStatus.innerHTML = '<i class="bi bi-x-circle text-danger"></i> Firmware check failed: ' + (statusData.error || 'Unknown error');
+                
+                startBtn.disabled = false;
+                startBtn.innerHTML = '<i class="bi bi-play-circle"></i> Retry Check';
+                
+            } else {
+                // Unknown status
+                progressStatus.textContent = 'Check status: ' + statusData.status;
+                if (pollCount < maxPolls) {
+                    setTimeout(pollProgress, 2000);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error polling progress:', error);
+            if (pollCount < maxPolls) {
+                setTimeout(pollProgress, 5000); // Retry with longer delay
+            } else {
+                progressStatus.innerHTML = '<i class="bi bi-exclamation-triangle text-warning"></i> Lost connection to server. <a href="/check/result/' + checkId + '" class="btn btn-sm btn-outline-primary ms-2">Check Results</a>';
+            }
+        });
+    }
+    
+    // Start polling
+    setTimeout(pollProgress, 2000); // Initial delay before first poll
+}
+
+function fetchCompletedResults(checkId, startBtn, progressBar, progressStatus, systemId) {
+    // Fetch the completed results
+    fetch(`/api/check/${checkId}/firmware-data`)
+    .then(response => response.json())
+    .then(data => {
+        completeCheck(data, startBtn, progressBar, progressStatus, systemId);
+    })
+    .catch(error => {
+        // Fallback - direct user to results page
+        progressBar.style.width = '100%';
+        progressBar.classList.remove('progress-bar-animated');
+        progressBar.classList.add('bg-success');
+        progressStatus.innerHTML = `<i class="bi bi-check-circle text-success"></i> Firmware check completed! <a href="/check/result/${checkId}" class="btn btn-sm btn-outline-primary ms-2"><i class="bi bi-eye"></i> View Results</a>`;
+        
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Run Another Check';
+    });
+}
+
+function completeCheck(data, startBtn, progressBar, progressStatus, systemId) {
+    // Complete progress
+    progressBar.style.width = '100%';
+    progressBar.classList.remove('progress-bar-animated');
+    progressBar.classList.add('bg-success');
+    progressStatus.innerHTML = '<i class="bi bi-check-circle text-success"></i> Firmware check completed successfully! <a href="/check/' + systemId + '/progress" class="btn btn-sm btn-outline-primary ms-2"><i class="bi bi-eye"></i> View Results</a>';
+    
+    // Show results if we have the data
+    if (data && data.dc_scm && data.ovl2 && data.other_platform) {
+        checkResults = data;
+        displayResults(data);
+    }
+    
+    // Reset button with additional navigation options
+    startBtn.disabled = false;
+    startBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Run Another Check';
+    
+    // Add a "View Results" button next to the start button
+    if (!document.querySelector('.view-results-btn')) {
+        const viewResultsBtn = document.createElement('a');
+        viewResultsBtn.href = '/check/' + systemId + '/progress';
+        viewResultsBtn.className = 'btn btn-primary ms-2 view-results-btn';
+        viewResultsBtn.innerHTML = '<i class="bi bi-eye"></i> View Full Results';
+        startBtn.parentNode.appendChild(viewResultsBtn);
+    }
+}
+
+function displayResults(data) {
+    const resultsSection = document.getElementById('resultsSection');
+    const resultsContent = document.getElementById('resultsContent');
+    
+    // Validate that we have the expected data structure
+    if (!data || !data.dc_scm || !data.ovl2 || !data.other_platform) {
+        console.error('Invalid data structure for results:', data);
+        return;
+    }
+    
+    // Safe access to firmware_versions with fallbacks
+    const dcScmCount = data.dc_scm.firmware_versions ? Object.keys(data.dc_scm.firmware_versions).length : 0;
+    const otherPlatformCount = data.other_platform.firmware_versions ? Object.keys(data.other_platform.firmware_versions).length : 0;
+    const ovl2Count = data.ovl2.firmware_versions ? Object.keys(data.ovl2.firmware_versions).length : 0;
+    
+    let html = `
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <h6>Check Summary</h6>
+                <ul class="list-unstyled">
+                    <li><strong>System:</strong> ${data.system_name || 'Unknown'}</li>
+                    <li><strong>RSCM IP:</strong> <code>${data.rscm_ip || 'Unknown'}:${data.rscm_port || 'Unknown'}</code></li>
+                    <li><strong>Check Date:</strong> ${data.check_date ? new Date(data.check_date).toLocaleString() : 'Unknown'}</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6>Categories Checked</h6>
+                <ul class="list-unstyled">
+                    <li><i class="bi bi-check-circle text-success"></i> DC-SCM: ${dcScmCount} types</li>
+                    <li><i class="bi bi-check-circle text-success"></i> Other Platform: ${otherPlatformCount} types</li>
+                    <li><i class="bi bi-check-circle text-success"></i> OVL2: ${ovl2Count} types</li>
+                </ul>
+            </div>
+        </div>
+    `;
+    
+    // Create tabs for each category
+    html += `
+        <ul class="nav nav-tabs" id="categoryTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="dc-scm-tab" data-bs-toggle="tab" data-bs-target="#dc-scm" 
+                        type="button" role="tab">DC-SCM</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="other-platform-tab" data-bs-toggle="tab" data-bs-target="#other-platform" 
+                        type="button" role="tab">Other Platform</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="ovl2-tab" data-bs-toggle="tab" data-bs-target="#ovl2" 
+                        type="button" role="tab">OVL2</button>
+            </li>
+        </ul>
+        
+        <div class="tab-content" id="categoryTabContent">
+            <div class="tab-pane fade show active" id="dc-scm" role="tabpanel">
+                ${createCategoryTable(data.dc_scm)}
+            </div>
+            <div class="tab-pane fade" id="other-platform" role="tabpanel">
+                ${createCategoryTable(data.other_platform)}
+            </div>
+            <div class="tab-pane fade" id="ovl2" role="tabpanel">
+                ${createCategoryTable(data.ovl2)}
+            </div>
+        </div>
+    `;
+    
+    resultsContent.innerHTML = html;
+    resultsSection.style.display = 'block';
+}
+
+function createCategoryTable(categoryData) {
+    if (!categoryData || !categoryData.firmware_versions) {
+        return `<div class="mt-3"><p class="text-muted">No firmware data available for this category.</p></div>`;
+    }
+    
+    let html = `
+        <div class="mt-3">
+            <h6>${categoryData.category || 'Unknown Category'} Firmware Versions</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Firmware Type</th>
+                            <th>Version</th>
+                            <th>Status</th>
+                            <th>Checked At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+    
+    for (const [fwType, fwData] of Object.entries(categoryData.firmware_versions || {})) {
+        let statusBadge;
+        switch(fwData.status) {
+            case 'success':
+                statusBadge = '<span class="badge bg-success">Success</span>';
+                break;
+            case 'not_implemented':
+                statusBadge = '<span class="badge bg-warning">Not Implemented</span>';
+                break;
+            case 'error':
+                statusBadge = '<span class="badge bg-danger">Error</span>';
+                break;
+            case 'not_found':
+                statusBadge = '<span class="badge bg-info">Not Found</span>';
+                break;
+            default:
+                statusBadge = `<span class="badge bg-light text-dark">Unknown (${fwData.status})</span>`;
+        }
+            
+        const version = fwData.version || 'N/A';
+        const checkedAt = fwData.checked_at ? new Date(fwData.checked_at).toLocaleString() : 'Unknown';
+        
+        html += `
+            <tr>
+                <td><strong>${fwType}</strong></td>
+                <td><code>${version}</code></td>
+                <td>${statusBadge}</td>
+                <td><small class="text-muted">${checkedAt}</small></td>
+            </tr>
+        `;
+    }
+    
+    html += `
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    return html;
+}
+
+function exportResults() {
+    if (!checkResults) return;
+    
+    const dataStr = JSON.stringify(checkResults, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `firmware-check-${checkResults.system_name}-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Edit System - {{ system.name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-pencil-square"></i> Edit System</h1>
+                <p class="lead">Update system configuration for "{{ system.name }}"</p>
+            </div>
+            <a href="{{ url_for('system_detail', system_id=system.id) }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to System
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">System Information</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="name" class="form-label">System Name *</label>
+                            <input type="text" class="form-control" id="name" name="name" required
+                                   value="{{ system.name }}" placeholder="e.g., Production-Server-01">
+                            <div class="form-text">Unique identifier for this system</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="rscm_ip" class="form-label">RSCM IP Address *</label>
+                            <input type="text" class="form-control" id="rscm_ip" name="rscm_ip" required
+                                   value="{{ system.rscm_ip }}" placeholder="e.g., 192.168.1.100" 
+                                   pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$">
+                            <div class="form-text">IP address for RSCM connection</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="rscm_port" class="form-label">RSCM Port</label>
+                        <input type="number" class="form-control" id="rscm_port" name="rscm_port" 
+                               value="{{ system.rscm_port }}" min="1" max="65535">
+                        <div class="form-text">Port number for RSCM connection (default: 22)</div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    <h6><i class="bi bi-hdd-network"></i> System Details</h6>
+                    
+                    <div class="mb-3">
+                        <label for="system_hostname" class="form-label">
+                            <i class="bi bi-hdd-network"></i> System Hostname or IP Address
+                        </label>
+                        <input type="text" class="form-control" id="system_hostname" name="system_hostname"
+                               value="{{ system_hostname or '' }}"
+                               placeholder="e.g., server01.contoso.com or 10.18.64.94">
+                        <div class="form-text">The hostname or IP address used to access this system</div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    <h6><i class="bi bi-geo-alt"></i> Location Information</h6>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="geo_location" class="form-label">Geographic Location</label>
+                            <input type="text" class="form-control" id="geo_location" name="geo_location"
+                                   value="{{ geo_location or '' }}"
+                                   placeholder="e.g., Seattle, WA">
+                            <div class="form-text">City, region, or datacenter location</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="building" class="form-label">Building / Datacenter</label>
+                            <input type="text" class="form-control" id="building" name="building"
+                                   value="{{ building or '' }}"
+                                   placeholder="e.g., Building 99">
+                            <div class="form-text">Building name or datacenter identifier</div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="room" class="form-label">Room / Floor</label>
+                            <input type="text" class="form-control" id="room" name="room"
+                                   value="{{ room or '' }}"
+                                   placeholder="e.g., Room 2045">
+                            <div class="form-text">Room number or floor</div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="rack" class="form-label">Rack / Bench</label>
+                            <input type="text" class="form-control" id="rack" name="rack"
+                                   value="{{ rack or '' }}"
+                                   placeholder="e.g., Rack A12">
+                            <div class="form-text">Rack identifier or bench location</div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="u_height" class="form-label">U Position</label>
+                            <input type="text" class="form-control" id="u_height" name="u_height"
+                                   value="{{ u_height or '' }}"
+                                   placeholder="e.g., U12-U14">
+                            <div class="form-text">Rack unit position</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="additional_notes" class="form-label">Additional Notes</label>
+                        <textarea class="form-control" id="additional_notes" name="additional_notes" rows="3"
+                                  placeholder="Any additional information about this system">{{ additional_notes or '' }}</textarea>
+                        <div class="form-text">Optional additional information</div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="bi bi-info-circle"></i> System History</h6>
+                                <dl class="row mb-0">
+                                    <dt class="col-sm-3">Created:</dt>
+                                    <dd class="col-sm-9">{{ system.created_at[:19] if system.created_at else 'Unknown' }}</dd>
+                                    <dt class="col-sm-3">Last Updated:</dt>
+                                    <dd class="col-sm-9">{{ system.updated_at[:19] if system.updated_at else 'Unknown' }}</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('system_detail', system_id=system.id) }}" class="btn btn-secondary">
+                            <i class="bi bi-x"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Update System
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Form validation
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const ipInput = document.getElementById('rscm_ip');
+    
+    // IP address validation
+    ipInput.addEventListener('input', function() {
+        const ipPattern = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+        if (this.value && !ipPattern.test(this.value)) {
+            this.setCustomValidity('Please enter a valid IP address');
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+    
+    // Form submission
+    form.addEventListener('submit', function(e) {
+        const name = document.getElementById('name').value.trim();
+        const ip = document.getElementById('rscm_ip').value.trim();
+        
+        if (!name || !ip) {
+            e.preventDefault();
+            alert('Please fill in all required fields');
+        }
+    });
+});
+</script>
+{% endblock %}

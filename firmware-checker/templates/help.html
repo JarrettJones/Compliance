@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+
+{% block title %}How to Use - Firmware Checker{% endblock %}
+
+{% block extra_head %}
+<style>
+        .help-section {
+            margin-bottom: 2rem;
+        }
+        .help-section h3 {
+            color: #2c3e50;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 0.5rem;
+        }
+        .step-number {
+            background-color: #3498db;
+            color: white;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        .credential-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        .example-box {
+            background-color: #e8f4f8;
+            border: 1px solid #b8d4e0;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 5px;
+        }
+        .firmware-category {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 0.75rem;
+            margin: 0.5rem 0;
+        }
+        .note-box {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 5px;
+        }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">How to Use the Firmware Checker</h1>
+        
+        <!-- Quick Start -->
+        <div class="help-section">
+            <h3>🚀 Quick Start</h3>
+            <p>The Firmware Checker helps you verify firmware versions across multiple system components including DC-SCM, OVL2, and other platform components.</p>
+            
+            <div class="example-box">
+        <strong>Basic Steps:</strong>
+        <ol>
+            <li>Enter your system's RSCM IP address (e.g., 172.29.89.27)</li>
+            <li>Provide RSCM credentials (default: root/password)</li>
+            <li>Optionally provide OS credentials for storage and driver checks</li>
+            <li>Click "Start Firmware Check"</li>
+            <li>Wait for results (typically 2-5 minutes)</li>
+        </ol>
+            </div>
+        </div>
+
+        <!-- Credentials Section -->
+        <div class="help-section">
+            <h3>🔑 Required Credentials</h3>
+            
+            <div class="credential-box">
+        <h5>RSCM Credentials (Required)</h5>
+        <p><strong>Used for:</strong> DC-SCM and OVL2 firmware checks via Redfish API and SSH</p>
+        <ul>
+            <li><strong>Username:</strong> Typically "root"</li>
+            <li><strong>Password:</strong> Your RSCM root password</li>
+        </ul>
+            </div>
+
+            <div class="credential-box">
+        <h5>Windows OS Credentials (Optional)</h5>
+        <p><strong>Used for:</strong> M.2/E.1s storage firmware and MANA driver checks</p>
+        <ul>
+            <li><strong>Computer Name:</strong> Target Windows computer name or IP (e.g., SERVER01 or 192.168.1.100)</li>
+            <li><strong>Username:</strong> Windows administrator account</li>
+            <li><strong>Password:</strong> Windows administrator password</li>
+        </ul>
+        <p class="mb-0"><em>Note: If OS credentials are not provided, storage and driver checks will be skipped.</em></p>
+            </div>
+        </div>
+
+        <!-- Firmware Categories -->
+        <div class="help-section">
+            <h3>📦 Firmware Categories</h3>
+            
+            <div class="firmware-category">
+        <h5>DC-SCM (Data Center Server Control Module)</h5>
+        <p>Checks firmware for server management components:</p>
+        <ul class="mb-0">
+            <li>BMC (Baseboard Management Controller)</li>
+            <li>BIOS</li>
+            <li>CPLD (Complex Programmable Logic Device)</li>
+            <li>Various configuration firmware</li>
+        </ul>
+            </div>
+
+            <div class="firmware-category">
+        <h5>OVL2 (Offload Card)</h5>
+        <p>Checks firmware for FPGA and offload components:</p>
+        <ul class="mb-0">
+            <li>FPGA Agilex Application Image</li>
+            <li>Cyclone V Image and PFMID</li>
+            <li>SOC Test OS (STOS)</li>
+            <li>SOC FIP and drivers</li>
+            <li>MANA Driver (Windows) - requires OS credentials</li>
+            <li>Glacier Cerberus firmware</li>
+        </ul>
+            </div>
+
+            <div class="firmware-category">
+        <h5>Other Platform</h5>
+        <p>Checks additional platform components:</p>
+        <ul class="mb-0">
+            <li>HPM CPLD</li>
+            <li>SOC VR Configs</li>
+            <li>M.2 Storage - requires OS credentials (shows drive number and version)</li>
+            <li>E.1s Storage - requires OS credentials (shows all drives with versions)</li>
+        </ul>
+            </div>
+        </div>
+
+        <!-- Step by Step Guide -->
+        <div class="help-section">
+            <h3>📝 Step-by-Step Guide</h3>
+            
+            <div class="mb-3">
+        <span class="step-number">1</span>
+        <strong>Navigate to Check Firmware</strong>
+        <p class="ms-5">Click "Check Firmware" from the home page or navigation menu.</p>
+            </div>
+
+            <div class="mb-3">
+        <span class="step-number">2</span>
+        <strong>Fill in System Information</strong>
+        <p class="ms-5">Enter the following required fields:</p>
+        <ul class="ms-5">
+            <li><strong>System Name:</strong> A friendly name for your system (e.g., "Production Server 01")</li>
+            <li><strong>RSCM IP Address:</strong> The IP address of your RSCM (e.g., 172.29.89.27)</li>
+            <li><strong>RSCM Port:</strong> System port/slot number</li>
+        </ul>
+            </div>
+
+            <div class="mb-3">
+        <span class="step-number">3</span>
+        <strong>Provide RSCM Credentials</strong>
+        <p class="ms-5">Enter your RSCM username and password (typically root/password).</p>
+            </div>
+
+            <div class="mb-3">
+        <span class="step-number">4</span>
+        <strong>Add OS Credentials (Optional)</strong>
+        <p class="ms-5">If you want to check storage (M.2/E.1s) and MANA driver firmware:</p>
+        <ul class="ms-5">
+            <li>Enter the target Windows computer name or IP</li>
+            <li>Provide Windows administrator credentials</li>
+            <li>Ensure WinRM is enabled on the target computer</li>
+        </ul>
+            </div>
+
+            <div class="mb-3">
+        <span class="step-number">5</span>
+        <strong>Start the Check</strong>
+        <p class="ms-5">Click "Start Firmware Check" button. The check will run in the background.</p>
+            </div>
+
+            <div class="mb-3">
+        <span class="step-number">6</span>
+        <strong>Monitor Progress</strong>
+        <p class="ms-5">You'll be redirected to a progress page showing real-time updates as each firmware component is checked.</p>
+            </div>
+
+            <div class="mb-3">
+        <span class="step-number">7</span>
+        <strong>View Results</strong>
+        <p class="ms-5">Once complete, you'll see all firmware versions organized by category. Green indicates success, yellow indicates warnings, and red indicates errors.</p>
+            </div>
+        </div>
+
+        <!-- Understanding Results -->
+        <div class="help-section">
+            <h3>📊 Understanding Results</h3>
+            
+            <div class="example-box">
+        <h5>Status Indicators:</h5>
+        <ul>
+            <li><span class="badge bg-success">Success</span> - Firmware version retrieved successfully</li>
+            <li><span class="badge bg-warning">Not Found</span> - Component not detected or not applicable</li>
+            <li><span class="badge bg-info">Not Checked</span> - Skipped (usually due to missing credentials)</li>
+            <li><span class="badge bg-danger">Error</span> - Connection or execution error</li>
+        </ul>
+            </div>
+
+            <div class="note-box">
+        <h5>Storage Firmware Display:</h5>
+        <p><strong>M.2:</strong> Shows as "Drive X: VERSION" (e.g., "Drive 4: LDBD1M4Q")</p>
+        <p><strong>E.1s:</strong> Shows multiple drives separated by " | " (e.g., "Drive 1: 61080A50 | Drive 2: 61080A50 | Drive 3: 61080A50")</p>
+        <p class="mb-0"><em>Each drive number corresponds to its physical disk number in the system.</em></p>
+            </div>
+        </div>
+
+        <!-- Troubleshooting -->
+        <div class="help-section">
+            <h3>🔧 Troubleshooting</h3>
+            
+            <h5>Common Issues:</h5>
+            
+            <div class="note-box">
+        <strong>Connection Failed / Timeout Errors:</strong>
+        <ul>
+            <li>Verify the RSCM IP address is correct</li>
+            <li>Ensure the server is powered on and accessible</li>
+            <li>Check network connectivity</li>
+            <li>Verify RSCM credentials are correct</li>
+        </ul>
+            </div>
+
+            <div class="note-box">
+        <strong>Storage/Driver Checks Show "NOT_CHECKED":</strong>
+        <ul>
+            <li>Ensure OS credentials were provided</li>
+            <li>Verify the computer name or IP is correct</li>
+            <li>Confirm WinRM is enabled on the target computer</li>
+            <li>Check that the Windows account has administrator privileges</li>
+        </ul>
+            </div>
+
+            <div class="note-box">
+        <strong>SSH Authentication Failed:</strong>
+        <ul>
+            <li>Verify RSCM username and password</li>
+            <li>Check if SSH is enabled on the RSCM</li>
+            <li>Ensure port 22 is accessible</li>
+        </ul>
+            </div>
+
+            <div class="note-box">
+        <strong>Check Takes Longer Than 10 Minutes:</strong>
+        <ul>
+            <li>The system will timeout after 10 minutes</li>
+            <li>Check console output for specific component delays</li>
+            <li>SSH serial sessions may take longer on slow connections</li>
+            <li>You can retry individual components if needed</li>
+        </ul>
+            </div>
+        </div>
+
+        <!-- Additional Information -->
+        <div class="help-section">
+            <h3>ℹ️ Additional Information</h3>
+            
+            <div class="note-box">
+        <h5>WinRM Requirements for Storage/Driver Checks:</h5>
+        <p>To enable storage and MANA driver checks, WinRM must be configured on target Windows computers:</p>
+        <pre class="bg-dark text-light p-2 rounded">
+# Enable WinRM (run in PowerShell as Administrator)
+Enable-PSRemoting -Force
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "*" -Force
+Restart-Service WinRM</pre>
+            </div>
+
+            <div class="note-box">
+        <h5>Viewing History:</h5>
+        <p>From the home page, you can:</p>
+        <ul>
+            <li>View all previous firmware checks</li>
+            <li>Filter by system name or date</li>
+            <li>Click any check to view detailed results</li>
+            <li>Compare firmware versions across different checks</li>
+        </ul>
+            </div>
+        </div>
+
+            <!-- Back Button -->
+            <div class="text-center mt-4 mb-4">
+        <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg">Back to Home</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}{{ system.name }} - System Details{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-server"></i> {{ system.name }}</h1>
+                <p class="lead">{{ system.description or 'System firmware monitoring' }}</p>
+            </div>
+            <div>
+                {% if active_check %}
+                <a href="{{ url_for('check_active', system_id=system.id) }}" class="btn btn-warning me-2">
+                    <i class="bi bi-clock"></i> View Active Check
+                </a>
+                {% elif checks %}
+                <a href="{{ url_for('check_progress', system_id=system.id) }}" class="btn btn-info me-2">
+                    <i class="bi bi-clock-history"></i> View Last Check
+                </a>
+                {% endif %}
+                {% if not active_check %}
+                <a href="{{ url_for('check_firmware', system_id=system.id) }}" class="btn btn-success me-2">
+                    <i class="bi bi-check-circle"></i> Check Firmware
+                </a>
+                {% else %}
+                <button class="btn btn-success me-2" disabled title="Firmware check already running">
+                    <i class="bi bi-clock"></i> Check Running...
+                </button>
+                {% endif %}
+                <a href="{{ url_for('edit_system', system_id=system.id) }}" class="btn btn-primary me-2">
+                    <i class="bi bi-pencil-square"></i> Edit System
+                </a>
+                <a href="{{ url_for('systems') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Systems
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <!-- System Information -->
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> System Information</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-5">Name:</dt>
+                    <dd class="col-sm-7">{{ system.name }}</dd>
+                    
+                    <dt class="col-sm-5">RSCM IP:</dt>
+                    <dd class="col-sm-7"><code>{{ system.rscm_ip }}</code></dd>
+                    
+                    <dt class="col-sm-5">RSCM Port:</dt>
+                    <dd class="col-sm-7"><span class="badge bg-secondary">{{ system.rscm_port }}</span></dd>
+                    
+                    <dt class="col-sm-5">Description:</dt>
+                    <dd class="col-sm-7">{{ system.description or 'No description' }}</dd>
+                    
+                    <dt class="col-sm-5">Created:</dt>
+                    <dd class="col-sm-7">{{ system.created_at[:19] if system.created_at else 'Unknown' }}</dd>
+                    
+                    <dt class="col-sm-5">Updated:</dt>
+                    <dd class="col-sm-7">{{ system.updated_at[:19] if system.updated_at else 'Unknown' }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Stats -->
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up"></i> Check Statistics</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <h3 class="text-primary">{{ checks|length }}</h3>
+                            <p class="text-muted">Total Checks</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <h3 class="text-success">{{ checks|selectattr('status', 'equalto', 'success')|list|length }}</h3>
+                            <p class="text-muted">Successful</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <h3 class="text-danger">{{ checks|selectattr('status', 'equalto', 'error')|list|length }}</h3>
+                            <p class="text-muted">Failed</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <h3 class="text-info">39</h3>
+                            <p class="text-muted">Firmware Types</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Firmware Check History -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Firmware Check History</h5>
+                <a href="{{ url_for('check_firmware', system_id=system.id) }}" class="btn btn-success btn-sm">
+                    <i class="bi bi-plus"></i> New Check
+                </a>
+            </div>
+            <div class="card-body">
+                {% if checks %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Check Date</th>
+                                    <th>Status</th>
+                                    <th>Firmware Data</th>
+                                    <th>Error Message</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for check in checks %}
+                                <tr>
+                                    <td>{{ check.check_date[:19] }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if check.status == 'success' else 'danger' }}">
+                                            {{ check.status.title() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if check.firmware_data and check.firmware_data != '{}' %}
+                                            <button class="btn btn-outline-info btn-sm" 
+                                                    data-check-id="{{ check.id }}" 
+                                                    data-firmware-data="{{ check.firmware_data|escape }}"
+                                                    onclick="showFirmwareData(this)">
+                                                <i class="bi bi-eye"></i> View Data
+                                            </button>
+                                        {% else %}
+                                            <span class="text-muted">No data</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if check.error_message %}
+                                            <span class="text-danger small">{{ check.error_message[:100] }}{% if check.error_message|length > 100 %}...{% endif %}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            {% if check.firmware_data and check.firmware_data != '{}' %}
+                                                <button class="btn btn-outline-primary btn-sm" 
+                                                        data-check-id="{{ check.id }}" 
+                                                        data-firmware-data="{{ check.firmware_data|escape }}"
+                                                        onclick="showFirmwareData(this)">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                            {% endif %}
+                                            <button class="btn btn-outline-danger btn-sm" 
+                                                    data-check-id="{{ check.id }}"
+                                                    onclick="deleteCheck(this)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-clock-history fs-1 text-muted"></i>
+                        <h4 class="mt-3 text-muted">No Firmware Checks Yet</h4>
+                        <p class="text-muted">Run your first firmware check to see the results here</p>
+                        <a href="{{ url_for('check_firmware', system_id=system.id) }}" class="btn btn-success">
+                            <i class="bi bi-check-circle"></i> Run First Check
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Firmware Data Modal -->
+<div class="modal fade" id="firmwareDataModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Firmware Check Results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="firmwareDataContent" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="copyFirmwareData()">
+                    <i class="bi bi-clipboard"></i> Copy Data
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function showFirmwareData(button) {
+    const checkId = button.getAttribute('data-check-id');
+    const data = button.getAttribute('data-firmware-data');
+    
+    try {
+        const parsedData = JSON.parse(data);
+        document.getElementById('firmwareDataContent').textContent = JSON.stringify(parsedData, null, 2);
+        
+        const modal = new bootstrap.Modal(document.getElementById('firmwareDataModal'));
+        modal.show();
+    } catch (e) {
+        document.getElementById('firmwareDataContent').textContent = data;
+        
+        const modal = new bootstrap.Modal(document.getElementById('firmwareDataModal'));
+        modal.show();
+    }
+}
+
+function copyFirmwareData() {
+    const content = document.getElementById('firmwareDataContent').textContent;
+    navigator.clipboard.writeText(content).then(function() {
+        // Show success message
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check"></i> Copied!';
+        btn.classList.add('btn-success');
+        btn.classList.remove('btn-primary');
+        
+        setTimeout(function() {
+            btn.innerHTML = originalText;
+            btn.classList.add('btn-primary');
+            btn.classList.remove('btn-success');
+        }, 2000);
+    });
+}
+
+function deleteCheck(button) {
+    const checkId = button.getAttribute('data-check-id');
+    
+    if (confirm('Are you sure you want to delete this firmware check?')) {
+        // TODO: Implement check deletion
+        alert('Check deletion not implemented yet');
+    }
+}
+</script>
+
+<style>
+.stat-item {
+    padding: 1rem 0;
+}
+.stat-item h3 {
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+}
+</style>
+{% endblock %}

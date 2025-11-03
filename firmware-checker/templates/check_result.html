@@ -1,0 +1,532 @@
+{% extends "base.html" %}
+
+{% block title %}Check Result - {{ check.system_name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-file-text"></i> Firmware Check Result</h1>
+                <p class="lead">System: <strong>{{ check.system_name }}</strong> ({{ check.rscm_ip }}:{{ check.rscm_port }})</p>
+            </div>
+            <div>
+                <a href="{{ url_for('check_firmware', system_id=check.system_id) }}" class="btn btn-success me-2">
+                    <i class="bi bi-plus"></i> New Check
+                </a>
+                <a href="{{ url_for('system_detail', system_id=check.system_id) }}" class="btn btn-outline-secondary me-2">
+                    <i class="bi bi-server"></i> Back to System
+                </a>
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-house"></i> Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-{{ 'check-circle text-success' if check.status == 'success' else 'x-circle text-danger' if check.status == 'error' else 'clock text-warning' }}"></i>
+                    Check #{{ check.id }} - {{ check.check_date[:19] }}
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Check Information</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Check ID:</strong> <code>#{{ check.id }}</code></li>
+                            <li><strong>Status:</strong> 
+                                <span class="badge bg-{{ 'success' if check.status == 'success' else 'danger' if check.status == 'error' else 'warning' }}">
+                                    {{ check.status.title() }}
+                                </span>
+                            </li>
+                            <li><strong>Date:</strong> {{ check.check_date[:19] }}</li>
+                            {% if check.error_message %}
+                            <li><strong>Error:</strong> <span class="text-danger">{{ check.error_message }}</span></li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Quick Actions</h6>
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('check_firmware', system_id=check.system_id) }}" class="btn btn-success">
+                                <i class="bi bi-arrow-clockwise"></i> Run New Check
+                            </a>
+                            {% if firmware_data %}
+                            <button class="btn btn-primary" onclick="showFullResults()">
+                                <i class="bi bi-eye"></i> View Full Results
+                            </button>
+                            <button class="btn btn-outline-primary" onclick="exportResults()">
+                                <i class="bi bi-download"></i> Export Results
+                            </button>
+                            {% else %}
+                            <div class="text-muted">
+                                <i class="bi bi-info-circle"></i> No firmware data available
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {% if firmware_data %}
+                <!-- Summary Section -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <h6><i class="bi bi-bar-chart"></i> Firmware Check Summary</h6>
+                        <div class="row">
+                            {% if firmware_data.dc_scm %}
+                            <div class="col-md-4">
+                                <div class="card border-primary">
+                                    <div class="card-body text-center">
+                                        <h5 class="card-title text-primary">DC-SCM</h5>
+                                        <p class="card-text">
+                                            <span class="fs-3">{{ firmware_data.dc_scm.firmware_versions|length }}</span><br>
+                                            <small class="text-muted">Types Checked</small>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if firmware_data.other_platform %}
+                            <div class="col-md-4">
+                                <div class="card border-info">
+                                    <div class="card-body text-center">
+                                        <h5 class="card-title text-info">Other Platform</h5>
+                                        <p class="card-text">
+                                            <span class="fs-3">{{ firmware_data.other_platform.firmware_versions|length }}</span><br>
+                                            <small class="text-muted">Types Checked</small>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if firmware_data.ovl2 %}
+                            <div class="col-md-4">
+                                <div class="card border-success">
+                                    <div class="card-body text-center">
+                                        <h5 class="card-title text-success">OVL2</h5>
+                                        <p class="card-text">
+                                            <span class="fs-3">{{ firmware_data.ovl2.firmware_versions|length }}</span><br>
+                                            <small class="text-muted">Types Checked</small>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detailed Results -->
+                <div class="accordion" id="resultsAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" 
+                                    data-bs-target="#detailedResultsCollapse">
+                                <i class="bi bi-list-ul me-2"></i> Detailed Firmware Results
+                            </button>
+                        </h2>
+                        <div id="detailedResultsCollapse" class="accordion-collapse collapse show" 
+                             data-bs-parent="#resultsAccordion">
+                            <div class="accordion-body">
+                                <div id="detailedResultsContent">
+                                    <!-- Content will be populated by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if not firmware_data %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-exclamation-triangle fs-1 text-muted mb-3"></i>
+                <h4 class="text-muted">No Firmware Data Available</h4>
+                <p class="text-muted">
+                    {% if check.status == 'error' %}
+                        This check encountered an error and did not complete successfully.
+                    {% elif check.status == 'running' %}
+                        This check is still in progress.
+                    {% else %}
+                        No firmware data was recorded for this check.
+                    {% endif %}
+                </p>
+                {% if check.error_message %}
+                <div class="alert alert-danger">
+                    <strong>Error Message:</strong> {{ check.error_message }}
+                </div>
+                {% endif %}
+                <a href="{{ url_for('check_firmware', system_id=check.system_id) }}" class="btn btn-success">
+                    <i class="bi bi-arrow-clockwise"></i> Try New Check
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Full Results Modal -->
+<div class="modal fade" id="fullResultsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Complete Firmware Check Results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="fullResultsContent" class="bg-light p-3 rounded" style="max-height: 500px; overflow-y: auto;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="copyToClipboard()">
+                    <i class="bi bi-clipboard"></i> Copy to Clipboard
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+.card-text .fs-3 {
+    font-weight: bold;
+}
+</style>
+{% endblock %}
+
+<!-- Firmware data loaded via API call -->
+
+{% block extra_scripts %}
+<script>
+// Initialize firmware data variable
+let firmwareData = null;
+
+// Extract check ID from URL
+function getCheckIdFromUrl() {
+    const pathParts = window.location.pathname.split('/');
+    const resultIndex = pathParts.indexOf('result');
+    if (resultIndex !== -1 && resultIndex + 1 < pathParts.length) {
+        return parseInt(pathParts[resultIndex + 1]);
+    }
+    return null;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM Content Loaded - starting firmware data fetch');
+    
+    const checkId = getCheckIdFromUrl();
+    console.log('Extracted check ID:', checkId);
+    
+    if (!checkId) {
+        console.log('Could not extract check ID from URL');
+        return;
+    }
+    
+    // Fetch firmware data from API
+    fetch(`/api/check/${checkId}/firmware-data`)
+        .then(response => {
+            console.log('API response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Successfully fetched firmware data from API');
+            console.log('Firmware data keys:', Object.keys(data));
+            firmwareData = data;
+            displayDetailedResults();
+        })
+        .catch(error => {
+            console.error('Error fetching firmware data:', error);
+            console.log('No firmware data available');
+        });
+});
+
+function displayDetailedResults() {
+    const container = document.getElementById('detailedResultsContent');
+    if (!container || !firmwareData) {
+        console.log('Container or firmwareData missing');
+        return;
+    }
+
+    let html = '';
+    console.log('Starting displayDetailedResults with firmwareData:', firmwareData);
+
+    // Process only the firmware category keys
+    const firmwareCategories = ['dc_scm', 'ovl2', 'other_platform'];
+    
+    for (const categoryKey of firmwareCategories) {
+        const categoryData = firmwareData[categoryKey];
+        
+        if (!categoryData || !categoryData.firmware_versions) {
+            console.log(`Skipping ${categoryKey}: no data or no firmware_versions`);
+            continue;
+        }
+        
+        console.log(`Processing ${categoryKey}:`, categoryData);
+
+        const displayCategoryName = categoryData.category || categoryKey.toUpperCase().replace('_', '-');
+        
+        html += `
+            <div class="mt-3">
+                <h6>${displayCategoryName} Firmware Versions</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Firmware Type</th>
+                                <th>Version</th>
+                                <th>Status</th>
+                                <th>Method</th>
+                                <th>Checked At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        // Filter out non-firmware entries like 'category'
+        const firmwareEntries = Object.entries(categoryData.firmware_versions).filter(([key, value]) => 
+            key !== 'category' && typeof value === 'object' && value !== null
+        );
+        
+        console.log(`${categoryKey} firmware entries:`, firmwareEntries.length, firmwareEntries);
+        
+        for (const [fwType, fwData] of firmwareEntries) {
+            console.log(`Processing firmware type: ${fwType}`, fwData);
+            console.log(`  Raw status value: "${fwData.status}" (type: ${typeof fwData.status})`);
+            const statusBadge = getStatusBadge(fwData.status);
+            const methodText = fwData.method || 'N/A';
+            
+            html += `
+                <tr id="fw-row-${categoryKey}-${fwType.replace(/[^a-zA-Z0-9]/g, '_')}">
+                    <td><strong>${fwType}</strong></td>
+                    <td><code>${fwData.version || 'N/A'}</code></td>
+                    <td>${statusBadge}</td>
+                    <td><small class="text-muted">${methodText}</small></td>
+                    <td><small class="text-muted">${new Date(fwData.checked_at).toLocaleString()}</small></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" 
+                                onclick="recheckFirmware('${fwType}', '${categoryKey}')"
+                                title="Recheck this firmware type">
+                            <i class="bi bi-arrow-clockwise"></i> Recheck
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+        
+        html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+
+    console.log('Final HTML length:', html.length);
+    console.log('Final HTML preview:', html.substring(0, 500));
+    container.innerHTML = html;
+    console.log('HTML set to container');
+}
+
+function getStatusBadge(status) {
+    console.log(`getStatusBadge called with status: "${status}" (type: ${typeof status})`);
+    switch(status) {
+        case 'success':
+            return '<span class="badge bg-success">Success</span>';
+        case 'not_implemented':
+            return '<span class="badge bg-warning">Not Implemented</span>';
+        case 'error':
+            return '<span class="badge bg-danger">Error</span>';
+        case 'placeholder':
+            return '<span class="badge bg-secondary">Placeholder</span>';
+        default:
+            console.log(`WARNING: Unknown status "${status}" - using default badge`);
+            return `<span class="badge bg-light text-dark">Unknown (${status})</span>`;
+    }
+}
+
+function showFullResults() {
+    if (firmwareData) {
+        const modal = new bootstrap.Modal(document.getElementById('fullResultsModal'));
+        document.getElementById('fullResultsContent').textContent = JSON.stringify(firmwareData, null, 2);
+        modal.show();
+    }
+}
+
+function exportResults() {
+    if (firmwareData) {
+        const dataStr = JSON.stringify(firmwareData, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(dataBlob);
+        link.download = `firmware_check_${firmwareData.check_id || 'unknown'}_${new Date().toISOString().split('T')[0]}.json`;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+}
+
+function copyToClipboard() {
+    const content = document.getElementById('fullResultsContent').textContent;
+    navigator.clipboard.writeText(content).then(() => {
+        // Show success message
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-check"></i> Copied!';
+        button.className = 'btn btn-success';
+        
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.className = 'btn btn-primary';
+        }, 2000);
+    });
+}
+
+function recheckFirmware(firmwareType, category) {
+    const checkId = getCheckIdFromUrl();
+    if (!checkId) {
+        alert('Could not determine check ID');
+        return;
+    }
+    
+    // Create unique row ID
+    const rowId = `fw-row-${category}-${firmwareType.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const row = document.getElementById(rowId);
+    
+    if (!row) {
+        console.error(`Could not find row with ID: ${rowId}`);
+        alert('Could not find firmware row in table');
+        return;
+    }
+    
+    // Get the button that was clicked
+    const button = event.target.closest('button');
+    const originalButtonHtml = button.innerHTML;
+    
+    // Disable button and show spinner
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Checking...';
+    
+    // Update status badge to show checking
+    const statusCell = row.cells[2];
+    statusCell.innerHTML = '<span class="badge bg-info">Checking...</span>';
+    
+    // Prompt for credentials (you can enhance this with a modal later)
+    const username = prompt('Enter RSCM username:', 'admin');
+    if (!username) {
+        button.disabled = false;
+        button.innerHTML = originalButtonHtml;
+        displayDetailedResults(); // Restore original display
+        return;
+    }
+    
+    const password = prompt('Enter RSCM password:', 'admin');
+    if (!password) {
+        button.disabled = false;
+        button.innerHTML = originalButtonHtml;
+        displayDetailedResults(); // Restore original display
+        return;
+    }
+    
+    // Optional: ask for OS credentials if it's a Windows driver check
+    let os_username = null;
+    let os_password = null;
+    let computer_name = null;
+    
+    if (firmwareType.includes('MANA Driver') || firmwareType.includes('Windows')) {
+        os_username = prompt('Enter OS username (or cancel to skip):', '');
+        if (os_username) {
+            os_password = prompt('Enter OS password:', '');
+            computer_name = prompt('Enter computer name or IP:', '');
+        }
+    }
+    
+    console.log(`Rechecking firmware: ${firmwareType} (category: ${category})`);
+    
+    // Make API call to recheck the firmware
+    fetch('/api/check-firmware-individual', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            check_id: checkId,
+            firmware_type: firmwareType,
+            category: category,
+            username: username,
+            password: password,
+            os_username: os_username,
+            os_password: os_password,
+            computer_name: computer_name
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            console.log('Recheck successful:', data);
+            
+            // Update the row with new data
+            const result = data.result;
+            
+            // Update version
+            row.cells[1].innerHTML = `<code>${result.version || 'N/A'}</code>`;
+            
+            // Update status
+            row.cells[2].innerHTML = getStatusBadge(result.status);
+            
+            // Update method
+            row.cells[3].innerHTML = `<small class="text-muted">${result.method || 'N/A'}</small>`;
+            
+            // Update checked at time
+            row.cells[4].innerHTML = `<small class="text-muted">${new Date(result.checked_at).toLocaleString()}</small>`;
+            
+            // Update firmwareData in memory
+            if (firmwareData && firmwareData[category] && firmwareData[category].firmware_versions) {
+                firmwareData[category].firmware_versions[firmwareType] = result;
+            }
+            
+            // Show success message
+            alert(`✓ ${firmwareType} rechecked successfully!\nNew version: ${result.version}`);
+        } else {
+            console.error('Recheck failed:', data);
+            alert(`Failed to recheck ${firmwareType}: ${data.error || 'Unknown error'}`);
+            
+            // Restore original display
+            displayDetailedResults();
+        }
+    })
+    .catch(error => {
+        console.error('Error rechecking firmware:', error);
+        alert(`Error rechecking ${firmwareType}: ${error.message}`);
+        
+        // Restore original display
+        displayDetailedResults();
+    })
+    .finally(() => {
+        // Re-enable button
+        button.disabled = false;
+        button.innerHTML = originalButtonHtml;
+    });
+}
+</script>
+{% endblock %}

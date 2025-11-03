@@ -1,0 +1,509 @@
+{% extends "base.html" %}
+
+{% block title %}Systems - Firmware Version Checker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-server"></i> Systems</h1>
+                <p class="lead">Manage your systems and their firmware checking</p>
+            </div>
+            <div class="btn-group">
+                <a href="{{ url_for('add_system_automated') }}" class="btn btn-success">
+                    <i class="bi bi-robot"></i> Auto-Register System (Beta)
+                </a>
+                <a href="{{ url_for('add_system') }}" class="btn btn-primary">
+                    <i class="bi bi-plus"></i> Add System Manually
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if systems %}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row g-3">
+                    <!-- Search Bar -->
+                    <div class="col-md-4">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="text" class="form-control" id="searchInput" 
+                                   placeholder="Search systems, IPs, locations...">
+                        </div>
+                    </div>
+                    
+                    <!-- Group By Filter -->
+                    <div class="col-md-3">
+                        <select class="form-select" id="groupByFilter">
+                            <option value="none">No Grouping</option>
+                            <option value="location">Group by Location</option>
+                            <option value="building">Group by Building</option>
+                            <option value="rack">Group by Rack</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Sort By -->
+                    <div class="col-md-3">
+                        <select class="form-select" id="sortByFilter">
+                            <option value="name-asc">Name (A-Z)</option>
+                            <option value="name-desc">Name (Z-A)</option>
+                            <option value="checks-desc">Most Checks</option>
+                            <option value="checks-asc">Least Checks</option>
+                            <option value="recent">Recently Checked</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Results Count -->
+                    <div class="col-md-2">
+                        <div class="text-muted text-center mt-2">
+                            <strong><span id="visibleCount">{{ systems|length }}</span></strong> 
+                            <span class="small">of {{ systems|length }} systems</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div id="systemsContainer">
+            <!-- Systems will be rendered here by JavaScript -->
+        </div>
+        
+        <!-- No Results Message -->
+        <div id="noResultsMessage" class="card" style="display: none;">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-search fs-1 text-muted"></i>
+                <h3 class="mt-3 text-muted">No Systems Found</h3>
+                <p class="text-muted">Try adjusting your search or filters</p>
+                <button class="btn btn-outline-primary" onclick="clearFilters()">
+                    <i class="bi bi-x-circle"></i> Clear Filters
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden template for ungrouped table -->
+<template id="ungroupedTableTemplate">
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>System Name</th>
+                            <th>RSCM IP</th>
+                            <th>Port</th>
+                            <th>Location</th>
+                            <th>Checks</th>
+                            <th>Last Check</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="systemsTableBody">
+                        <!-- Rows inserted by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- Original systems data for JavaScript -->
+<script id="systemsData" type="application/json">
+{{ systems|tojson }}
+</script>
+
+<div style="display: none;">
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>System Name</th>
+                                <th>RSCM IP</th>
+                                <th>Port</th>
+                                <th>Description</th>
+                                <th>Checks</th>
+                                <th>Last Check</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for system in systems %}
+                            <tr>
+                                <td>
+                                    <strong>{{ system.name }}</strong>
+                                </td>
+                                <td>
+                                    <code>{{ system.rscm_ip }}</code>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ system.rscm_port }}</span>
+                                </td>
+                                <td>
+                                    <span class="text-muted">{{ system.description or 'No description' }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ system.check_count }}</span>
+                                </td>
+                                <td>
+                                    {% if system.last_check %}
+                                        <small class="text-muted">{{ system.last_check[:19] }}</small>
+                                    {% else %}
+                                        <small class="text-warning">Never</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ url_for('system_detail', system_id=system.id) }}" 
+                                           class="btn btn-outline-primary btn-sm" title="View Details">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('check_firmware', system_id=system.id) }}" 
+                                           class="btn btn-outline-success btn-sm" title="Check Firmware">
+                                            <i class="bi bi-check-circle"></i>
+                                        </a>
+                                        <a href="{{ url_for('edit_system', system_id=system.id) }}" 
+                                           class="btn btn-outline-secondary btn-sm" title="Edit System">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <button class="btn btn-outline-danger btn-sm" title="Delete" 
+                                                data-system-name="{{ system.name }}" 
+                                                data-system-id="{{ system.id }}"
+                                                onclick="confirmDelete(this)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-server fs-1 text-muted"></i>
+                <h3 class="mt-3 text-muted">No Systems Configured</h3>
+                <p class="text-muted">Add your first system to start monitoring firmware versions</p>
+                <a href="{{ url_for('add_system') }}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-plus"></i> Add Your First System
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the system <strong id="deleteSystemName"></strong>?</p>
+                <p class="text-warning">This will also delete all firmware check history for this system.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete System</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Load systems data
+let systemsData = JSON.parse(document.getElementById('systemsData').textContent);
+
+// Parse metadata from description
+function parseMetadata(description) {
+    const metadata = {
+        hostname: '',
+        location: '',
+        building: '',
+        room: '',
+        rack: '',
+        u_height: '',
+        notes: ''
+    };
+    
+    if (!description) return metadata;
+    
+    const parts = description.split('|');
+    for (let part of parts) {
+        part = part.trim();
+        if (part.startsWith('Host:')) {
+            metadata.hostname = part.replace('Host:', '').trim();
+        } else if (part.startsWith('Geo:')) {
+            metadata.location = part.replace('Geo:', '').trim();
+        } else if (part.startsWith('Building:')) {
+            metadata.building = part.replace('Building:', '').trim();
+        } else if (part.startsWith('Room:')) {
+            metadata.room = part.replace('Room:', '').trim();
+        } else if (part.startsWith('Rack:')) {
+            metadata.rack = part.replace('Rack:', '').trim();
+        } else if (part.startsWith('U:')) {
+            metadata.u_height = part.replace('U:', '').trim();
+        } else if (!part.includes(':')) {
+            metadata.notes = part;
+        }
+    }
+    
+    return metadata;
+}
+
+// Generate action buttons HTML
+function generateActionButtons(system) {
+    return `
+        <div class="btn-group" role="group">
+            <a href="/systems/${system.id}" 
+               class="btn btn-outline-primary btn-sm" title="View Details">
+                <i class="bi bi-eye"></i>
+            </a>
+            <a href="/check/${system.id}" 
+               class="btn btn-outline-success btn-sm" title="Check Firmware">
+                <i class="bi bi-check-circle"></i>
+            </a>
+            <a href="/systems/${system.id}/edit" 
+               class="btn btn-outline-secondary btn-sm" title="Edit System">
+                <i class="bi bi-pencil"></i>
+            </a>
+            <button class="btn btn-outline-danger btn-sm" title="Delete" 
+                    data-system-name="${system.name}" 
+                    data-system-id="${system.id}"
+                    onclick="confirmDelete(this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `;
+}
+
+// Generate table row
+function generateTableRow(system) {
+    const metadata = parseMetadata(system.description);
+    const locationInfo = [metadata.location, metadata.building, metadata.room].filter(x => x).join(', ') || 'Not specified';
+    const lastCheck = system.last_check ? system.last_check.substring(0, 19) : '<small class="text-warning">Never</small>';
+    
+    return `
+        <tr>
+            <td>
+                <strong>${system.name}</strong>
+                ${metadata.hostname ? `<br><small class="text-muted">(${metadata.hostname})</small>` : ''}
+            </td>
+            <td><code>${system.rscm_ip}</code></td>
+            <td><span class="badge bg-secondary">${system.rscm_port}</span></td>
+            <td><small class="text-muted">${locationInfo}</small></td>
+            <td><span class="badge bg-info">${system.check_count}</span></td>
+            <td><small class="text-muted">${lastCheck}</small></td>
+            <td>${generateActionButtons(system)}</td>
+        </tr>
+    `;
+}
+
+// Render ungrouped systems
+function renderUngrouped(systems) {
+    const container = document.getElementById('systemsContainer');
+    const template = document.getElementById('ungroupedTableTemplate');
+    const clone = template.content.cloneNode(true);
+    
+    container.innerHTML = '';
+    container.appendChild(clone);
+    
+    const tbody = document.getElementById('systemsTableBody');
+    tbody.innerHTML = systems.map(s => generateTableRow(s)).join('');
+}
+
+// Render grouped systems
+function renderGrouped(systems, groupBy) {
+    const container = document.getElementById('systemsContainer');
+    container.innerHTML = '';
+    
+    // Group systems
+    const groups = {};
+    systems.forEach(system => {
+        const metadata = parseMetadata(system.description);
+        let groupKey;
+        
+        switch(groupBy) {
+            case 'location':
+                groupKey = metadata.location || 'No Location';
+                break;
+            case 'building':
+                groupKey = metadata.building || 'No Building';
+                break;
+            case 'rack':
+                groupKey = metadata.rack || 'No Rack';
+                break;
+            default:
+                groupKey = 'All Systems';
+        }
+        
+        if (!groups[groupKey]) {
+            groups[groupKey] = [];
+        }
+        groups[groupKey].push(system);
+    });
+    
+    // Sort group keys
+    const sortedGroups = Object.keys(groups).sort((a, b) => {
+        // Put "No X" groups at the end
+        if (a.startsWith('No ')) return 1;
+        if (b.startsWith('No ')) return -1;
+        return a.localeCompare(b);
+    });
+    
+    // Render each group
+    sortedGroups.forEach(groupKey => {
+        const groupSystems = groups[groupKey];
+        const groupHtml = `
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="bi bi-folder"></i> ${groupKey}
+                        <span class="badge bg-primary ms-2">${groupSystems.length}</span>
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>System Name</th>
+                                    <th>RSCM IP</th>
+                                    <th>Port</th>
+                                    <th>Location</th>
+                                    <th>Checks</th>
+                                    <th>Last Check</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${groupSystems.map(s => generateTableRow(s)).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', groupHtml);
+    });
+}
+
+// Filter and sort systems
+function filterAndSortSystems() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const groupBy = document.getElementById('groupByFilter').value;
+    const sortBy = document.getElementById('sortByFilter').value;
+    
+    // Filter systems
+    let filtered = systemsData.filter(system => {
+        const metadata = parseMetadata(system.description);
+        const searchableText = [
+            system.name,
+            system.rscm_ip,
+            system.description,
+            metadata.hostname,
+            metadata.location,
+            metadata.building,
+            metadata.room,
+            metadata.rack
+        ].join(' ').toLowerCase();
+        
+        return searchableText.includes(searchTerm);
+    });
+    
+    // Sort systems
+    filtered.sort((a, b) => {
+        switch(sortBy) {
+            case 'name-asc':
+                return a.name.localeCompare(b.name);
+            case 'name-desc':
+                return b.name.localeCompare(a.name);
+            case 'checks-desc':
+                return b.check_count - a.check_count;
+            case 'checks-asc':
+                return a.check_count - b.check_count;
+            case 'recent':
+                const aTime = a.last_check || '0';
+                const bTime = b.last_check || '0';
+                return bTime.localeCompare(aTime);
+            default:
+                return 0;
+        }
+    });
+    
+    // Update visible count
+    document.getElementById('visibleCount').textContent = filtered.length;
+    
+    // Show/hide no results message
+    const noResults = document.getElementById('noResultsMessage');
+    if (filtered.length === 0) {
+        document.getElementById('systemsContainer').style.display = 'none';
+        noResults.style.display = 'block';
+    } else {
+        document.getElementById('systemsContainer').style.display = 'block';
+        noResults.style.display = 'none';
+        
+        // Render based on grouping
+        if (groupBy === 'none') {
+            renderUngrouped(filtered);
+        } else {
+            renderGrouped(filtered, groupBy);
+        }
+    }
+}
+
+// Clear filters
+function clearFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('groupByFilter').value = 'none';
+    document.getElementById('sortByFilter').value = 'name-asc';
+    filterAndSortSystems();
+}
+
+// Event listeners
+document.getElementById('searchInput').addEventListener('input', filterAndSortSystems);
+document.getElementById('groupByFilter').addEventListener('change', filterAndSortSystems);
+document.getElementById('sortByFilter').addEventListener('change', filterAndSortSystems);
+
+// Initial render
+filterAndSortSystems();
+
+function confirmDelete(button) {
+    const systemName = button.getAttribute('data-system-name');
+    const systemId = button.getAttribute('data-system-id');
+    
+    document.getElementById('deleteSystemName').textContent = systemName;
+    document.getElementById('deleteForm').action = '/systems/' + systemId + '/delete';
+    
+    var deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    deleteModal.show();
+}
+</script>
+{% endblock %}

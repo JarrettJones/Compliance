@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}Add System Metadata{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-geo-alt-fill"></i> Add Location Metadata</h1>
+                <p class="text-muted">Step 2: Provide physical location information for the discovered system</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <!-- System Information Card -->
+        <div class="card mb-3 border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-check-circle"></i> System Discovered Successfully!</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Serial Number</h6>
+                        <p class="mb-2"><strong>{{ system.serial_number }}</strong></p>
+                        
+                        <h6 class="text-muted mt-3">RSCM Connection</h6>
+                        <p class="mb-0"><code>{{ system.rscm_ip }}:{{ system.system_port }}</code></p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Manufacturer</h6>
+                        <p class="mb-2">{{ system.manufacturer }}</p>
+                        
+                        <h6 class="text-muted mt-3">Model</h6>
+                        <p class="mb-0">{{ system.model }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metadata Form -->
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-pin-map"></i> Physical Location Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-lightbulb"></i> <strong>Why collect location data?</strong>
+                    <p class="mb-0 mt-2">This information helps you track and identify systems even if network configuration changes. All fields are optional but recommended for better system tracking.</p>
+                </div>
+
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="system_hostname" class="form-label">
+                            <i class="bi bi-hdd-network"></i> System Hostname or IP Address
+                        </label>
+                        <input type="text" class="form-control" id="system_hostname" name="system_hostname"
+                               placeholder="e.g., server01.contoso.com or 10.18.64.94">
+                        <div class="form-text">The hostname or IP address used to access this system (for your records)</div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="geo_location" class="form-label">
+                                <i class="bi bi-globe"></i> Geographic Location
+                            </label>
+                            <input type="text" class="form-control" id="geo_location" name="geo_location"
+                                   placeholder="e.g., Seattle, WA or APAC Region">
+                            <div class="form-text">City, region, or datacenter location</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="building" class="form-label">
+                                <i class="bi bi-building"></i> Building / Datacenter
+                            </label>
+                            <input type="text" class="form-control" id="building" name="building"
+                                   placeholder="e.g., Building 99 or DC-West">
+                            <div class="form-text">Building name or datacenter identifier</div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="room" class="form-label">
+                                <i class="bi bi-door-closed"></i> Room / Floor
+                            </label>
+                            <input type="text" class="form-control" id="room" name="room"
+                                   placeholder="e.g., Room 2045 or Floor 3">
+                            <div class="form-text">Room number or floor</div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="rack" class="form-label">
+                                <i class="bi bi-server"></i> Rack / Bench
+                            </label>
+                            <input type="text" class="form-control" id="rack" name="rack"
+                                   placeholder="e.g., Rack A12 or Test Bench 5">
+                            <div class="form-text">Rack identifier or bench location</div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="u_height" class="form-label">
+                                <i class="bi bi-arrows-vertical"></i> U Position
+                            </label>
+                            <input type="text" class="form-control" id="u_height" name="u_height"
+                                   placeholder="e.g., U12-U14">
+                            <div class="form-text">Rack unit position</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">
+                            <i class="bi bi-card-text"></i> Additional Notes
+                        </label>
+                        <textarea class="form-control" id="description" name="description" rows="3"
+                                  placeholder="Any additional information about this system (purpose, owner, special configuration, etc.)"></textarea>
+                        <div class="form-text">Optional additional information</div>
+                    </div>
+
+                    <div class="alert alert-secondary">
+                        <h6><i class="bi bi-info-circle"></i> Example Location Format:</h6>
+                        <p class="mb-0 font-monospace small">
+                            Geo: Redmond, WA<br>
+                            Building: Building 99<br>
+                            Room: Lab 2045<br>
+                            Rack: Rack A12<br>
+                            U: U15-U17
+                        </p>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="bi bi-check-circle"></i> Complete Registration
+                        </button>
+                        <a href="{{ url_for('add_system_automated') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Start Over
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-3 border-warning">
+            <div class="card-body">
+                <h6><i class="bi bi-lightbulb"></i> Best Practices:</h6>
+                <ul class="mb-0">
+                    <li>Use consistent naming conventions across your systems</li>
+                    <li>Include enough detail to physically locate the system</li>
+                    <li>Consider including contact information in the notes field</li>
+                    <li>You can always edit this information later from the system details page</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

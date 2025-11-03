@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Firmware Recipes{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-file-earmark-check"></i> Firmware Recipes</h1>
+                <p class="lead">Define and manage expected firmware version configurations</p>
+            </div>
+            <a href="{{ url_for('add_recipe') }}" class="btn btn-primary">
+                <i class="bi bi-plus"></i> Create Recipe
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if recipes %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Recipe Name</th>
+                                <th>Description</th>
+                                <th>Firmware Versions</th>
+                                <th>Used in Checks</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for recipe in recipes %}
+                            <tr>
+                                <td>
+                                    <strong>{{ recipe.name }}</strong>
+                                </td>
+                                <td>
+                                    <span class="text-muted">{{ recipe.description or 'No description' }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">
+                                        {{ recipe.total_versions }} versions defined
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ recipe.usage_count }} checks</span>
+                                </td>
+                                <td>
+                                    <small class="text-muted">{{ recipe.created_at[:19] if recipe.created_at else 'Unknown' }}</small>
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ url_for('recipe_detail', recipe_id=recipe.id) }}" 
+                                           class="btn btn-outline-primary btn-sm" title="View Details">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <button class="btn btn-outline-danger btn-sm" title="Delete" 
+                                                data-recipe-name="{{ recipe.name }}" 
+                                                data-recipe-id="{{ recipe.id }}"
+                                                onclick="confirmDelete(this)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-file-earmark-check fs-1 text-muted"></i>
+                <h3 class="mt-3 text-muted">No Recipes Defined</h3>
+                <p class="text-muted">Create your first firmware recipe to validate system configurations</p>
+                <a href="{{ url_for('add_recipe') }}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-plus"></i> Create Your First Recipe
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the recipe <strong id="deleteRecipeName"></strong>?</p>
+                <p class="text-info">Note: Firmware checks that used this recipe will retain their results, but the recipe reference will be removed.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete Recipe</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function confirmDelete(button) {
+    const recipeName = button.getAttribute('data-recipe-name');
+    const recipeId = button.getAttribute('data-recipe-id');
+    
+    document.getElementById('deleteRecipeName').textContent = recipeName;
+    document.getElementById('deleteForm').action = '/recipes/' + recipeId + '/delete';
+    
+    var deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    deleteModal.show();
+}
+</script>
+{% endblock %}
