@@ -241,7 +241,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Fetch firmware data from API
-    fetch(`/api/check/${checkId}/firmware-data`)
+    fetch(`${SCRIPT_ROOT}/api/check/${checkId}/firmware-data`)
         .then(response => {
             console.log('API response status:', response.status);
             if (!response.ok) {

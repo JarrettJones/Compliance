@@ -1305,29 +1305,6 @@ def api_check_firmware_data(check_id):
         except json.JSONDecodeError:
             return jsonify({'error': 'Invalid firmware data'}), 500
 
-@app.route('/check/<int:system_id>/active')
-def check_active(system_id):
-    """View active/running firmware check"""
-    with get_db_connection() as conn:
-        system = conn.execute('SELECT * FROM systems WHERE id = ?', (system_id,)).fetchone()
-        if not system:
-            flash('System not found!', 'error')
-            return redirect(url_for('systems'))
-        
-        # Get the active/running check
-        active_check = conn.execute('''
-            SELECT * FROM firmware_checks 
-            WHERE system_id = ? AND status = 'running'
-            ORDER BY check_date DESC 
-            LIMIT 1
-        ''', (system_id,)).fetchone()
-        
-        if not active_check:
-            flash('No active firmware check found for this system.', 'info')
-            return redirect(url_for('check_progress', system_id=system_id))
-    
-    return render_template('check_active.html', system=system, active_check=active_check)
-
 @app.route('/api/check-status/<int:system_id>')
 def api_check_status(system_id):
     """API endpoint to check status of running firmware check with threading info"""

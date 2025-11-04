@@ -11,15 +11,9 @@
                 <p class="lead">System: <strong>{{ system.name }}</strong> ({{ system.rscm_ip }}:{{ system.rscm_port }})</p>
             </div>
             <div>
-                {% if active_check %}
-                <a href="{{ url_for('check_active', system_id=system.id) }}" class="btn btn-warning me-2">
-                    <i class="bi bi-clock"></i> View Active Check
-                </a>
-                {% else %}
                 <a href="{{ url_for('check_progress', system_id=system.id) }}" class="btn btn-info me-2">
                     <i class="bi bi-clock-history"></i> View Last Check
                 </a>
-                {% endif %}
                 <a href="{{ url_for('system_detail', system_id=system.id) }}" class="btn btn-outline-secondary">
                     <i class="bi bi-arrow-left"></i> Back to System
                 </a>
@@ -29,20 +23,104 @@
 </div>
 
 {% if active_check %}
+<!-- Active Check Progress Display -->
 <div class="row">
     <div class="col-12">
-        <div class="alert alert-warning alert-dismissible fade show" role="alert">
-            <i class="bi bi-exclamation-triangle"></i>
-            <strong>Active Check Running!</strong> 
-            A firmware check is currently in progress for this system (started {{ active_check.check_date[:19] }}).
-            <a href="{{ url_for('check_active', system_id=system.id) }}" class="alert-link">View active check progress</a>
-            or wait for it to complete before starting a new one.
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i class="bi bi-clock"></i>
+                    Firmware Check in Progress - Started {{ active_check.check_date[:19] }}
+                    <span class="badge bg-dark ms-2">Running</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Progress Animation -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <div class="spinner-border text-primary mb-3" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <h5 class="text-primary">Firmware Check in Progress</h5>
+                                <p class="text-muted mb-3">The firmware check is currently running. Real-time progress below:</p>
+                                
+                                <!-- Real-time Progress Bar -->
+                                <div class="progress mb-3" style="height: 30px;">
+                                    <div id="activeProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-info" 
+                                         role="progressbar" style="width: 5%">
+                                        <span id="activeProgressText">Initializing...</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i>
+                                    <strong>Estimated Time:</strong> 2-5 minutes depending on system response
+                                </div>
+                                
+                                <button class="btn btn-primary" onclick="refreshActiveStatus()">
+                                    <i class="bi bi-arrow-clockwise"></i> Refresh Status
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expected Process Steps -->
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="bi bi-1-circle text-primary"></i> DC-SCM Firmware
+                                </h6>
+                                <ul class="list-unstyled small">
+                                    <li><i class="bi bi-check-circle"></i> IFWI & BMC via Redfish API</li>
+                                    <li><i class="bi bi-check-circle"></i> BMC configurations via SSH IPMI</li>
+                                    <li><i class="bi bi-check-circle"></i> Security firmware via SSH Cerberus</li>
+                                </ul>
+                                <div class="text-muted small">16 firmware types</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="bi bi-2-circle text-info"></i> OVL2 Firmware
+                                </h6>
+                                <ul class="list-unstyled small">
+                                    <li><i class="bi bi-check-circle"></i> SOC Test OS via SSH serial</li>
+                                    <li><i class="bi bi-check-circle"></i> FPGA drivers via SSH sessions</li>
+                                    <li><i class="bi bi-check-circle"></i> Cyclone V & SOC FIP images</li>
+                                </ul>
+                                <div class="text-muted small">16 firmware types</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="bi bi-3-circle text-warning"></i> Other Platform
+                                </h6>
+                                <ul class="list-unstyled small">
+                                    <li><i class="bi bi-check-circle"></i> HPM CPLD via Redfish</li>
+                                    <li><i class="bi bi-check-circle"></i> SOC VR configurations</li>
+                                    <li><i class="bi bi-check-circle"></i> Storage device firmware</li>
+                                </ul>
+                                <div class="text-muted small">6 firmware types</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
-{% endif %}
-
+{% else %}
+<!-- Firmware Check Configuration Form -->
 <div class="row">
     <div class="col-12">
         <div class="card">
@@ -340,8 +418,9 @@
         </div>
     </div>
 </div>
+{% endif %}
 
-<!-- Progress Section -->
+<!-- Progress Section (shown when form submission occurs on non-active check page) -->
 <div id="progressSection" class="row mt-4" style="display: none;">
     <div class="col-12">
         <div class="card">
@@ -382,12 +461,6 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<!-- Hidden data for JavaScript -->
-<div id="jsConfig" 
-     data-has-active-check="{% if active_check %}true{% else %}false{% endif %}"
-     {% if active_check %}data-active-check-url="{{ url_for('check_active', system_id=system.id) }}"{% endif %}
-     style="display: none;"></div>
-
 <script>
 // Get the script root for URL generation (handles /firmware-checker prefix)
 const SCRIPT_ROOT = {{ request.script_root|tojson }};
@@ -438,9 +511,93 @@ function getSelectedFirmwareTypes() {
 
 // Add event listeners to update count when checkboxes change
 document.addEventListener('DOMContentLoaded', function() {
+    // Update selected count on checkbox changes
     document.querySelectorAll('.fw-category').forEach(cb => {
         cb.addEventListener('change', updateSelectedCount);
     });
+    
+    // Auto-start monitoring if there's an active check
+    {% if active_check %}
+    startActiveCheckMonitoring({{ system.id }});
+    {% endif %}
+});
+
+// Active Check Monitoring Functions
+let activeCheckInterval = null;
+
+function startActiveCheckMonitoring(systemId) {
+    console.log('Starting active check monitoring for system', systemId);
+    refreshActiveStatus(systemId);
+    // Poll every 10 seconds
+    activeCheckInterval = setInterval(() => refreshActiveStatus(systemId), 10000);
+}
+
+function stopActiveCheckMonitoring() {
+    if (activeCheckInterval) {
+        clearInterval(activeCheckInterval);
+        activeCheckInterval = null;
+    }
+}
+
+function refreshActiveStatus(systemId) {
+    fetch(SCRIPT_ROOT + `/api/check-status/${systemId}`)
+        .then(response => response.json())
+        .then(data => {
+            console.log('Active check status:', data);
+            
+            if (data.status === 'completed') {
+                // Check is complete, reload page to show results option
+                stopActiveCheckMonitoring();
+                window.location.reload();
+            } else if (data.status === 'error') {
+                // Check failed
+                stopActiveCheckMonitoring();
+                updateActiveProgress({
+                    progress: {
+                        percentage: 100,
+                        current_category: 'Error',
+                        current_firmware: data.error || 'Check failed',
+                        completed: 0,
+                        total: 0
+                    }
+                });
+                document.getElementById('activeProgressBar').classList.remove('bg-info');
+                document.getElementById('activeProgressBar').classList.add('bg-danger');
+            } else if (data.status === 'running' && data.progress_data) {
+                // Update progress bar with real data
+                updateActiveProgress(data.progress_data);
+            }
+        })
+        .catch(error => {
+            console.error('Error checking active status:', error);
+        });
+}
+
+function updateActiveProgress(progressData) {
+    const progressBar = document.getElementById('activeProgressBar');
+    const progressText = document.getElementById('activeProgressText');
+    
+    if (progressBar && progressText && progressData && progressData.progress) {
+        const progress = progressData.progress;
+        const percentage = progress.percentage || 5;
+        const currentCat = progress.current_category || 'Unknown';
+        const currentFw = progress.current_firmware || 'Starting...';
+        const completed = progress.completed || 0;
+        const total = progress.total || 0;
+        
+        // Update progress bar
+        progressBar.style.width = percentage + '%';
+        
+        // Update progress text
+        progressText.textContent = `${currentCat}: ${currentFw} (${completed}/${total} complete)`;
+        
+        console.log(`Active progress update: ${percentage}% - ${currentFw}`);
+    }
+}
+
+// Clean up interval when leaving the page
+window.addEventListener('beforeunload', function() {
+    stopActiveCheckMonitoring();
 });
 
 function startFirmwareCheck() {
@@ -451,18 +608,6 @@ function startFirmwareCheck() {
     
     // Get system ID from data attribute
     const systemId = parseInt(startBtn.getAttribute('data-system-id'));
-    
-    // Check if there's already an active check
-    const jsConfig = document.getElementById('jsConfig');
-    const hasActiveCheck = jsConfig.getAttribute('data-has-active-check') === 'true';
-    const activeCheckUrl = jsConfig.getAttribute('data-active-check-url');
-    
-    if (hasActiveCheck) {
-        if (confirm('There is already a firmware check running for this system. Do you want to view the active check instead?')) {
-            window.location.href = activeCheckUrl;
-        }
-        return;
-    }
     
     // Get credentials from form
     const username = document.getElementById('username').value.trim();
@@ -552,12 +697,8 @@ function startFirmwareCheck() {
         
         // Check if this is the new threaded response (HTTP 202)
         if (data.status === 'started' && data.check_id) {
-            // New threaded response - start monitoring the background check
-            progressBar.style.width = '20%';
-            progressStatus.textContent = 'Firmware check started in background thread...';
-            
-            // Start monitoring the threaded check
-            monitorThreadedCheck(data.check_id, systemId, startBtn, progressBar, progressStatus);
+            // Redirect back to this same page, which will now show the active check progress
+            window.location.href = SCRIPT_ROOT + `/check/${systemId}`;
         } else {
             // Old synchronous response (shouldn't happen anymore, but fallback)
             completeCheck(data, startBtn, progressBar, progressStatus, systemId);
@@ -669,7 +810,7 @@ function monitorThreadedCheck(checkId, systemId, startBtn, progressBar, progress
 
 function fetchCompletedResults(checkId, startBtn, progressBar, progressStatus, systemId) {
     // Fetch the completed results
-    fetch(`/api/check/${checkId}/firmware-data`)
+    fetch(`${SCRIPT_ROOT}/api/check/${checkId}/firmware-data`)
     .then(response => response.json())
     .then(data => {
         completeCheck(data, startBtn, progressBar, progressStatus, systemId);
