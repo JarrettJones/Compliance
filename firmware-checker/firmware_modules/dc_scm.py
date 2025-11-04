@@ -859,14 +859,14 @@ class DCScmChecker:
         # TODO: Implement actual Manticore checking logic
         pass
     
-    def check_cfm_platform_id(self, rscm_ip, rscm_port=22):
+    def check_cfm_platform_id(self, rscm_ip, system_port=5, rscm_port=22):
         """Check CFM Platform ID using SSH connection to RSCM
         
         This function connects directly to RSCM via SSH and runs:
-        'show system cerberus cfm id -i 4' to get the CfmActiveIdentifier value.
+        'show system cerberus cfm id -i <system_port>' to get the CfmActiveIdentifier value.
         
         Expected output format:
-        RScmCli# show system cerberus cfm id -i 4
+        RScmCli# show system cerberus cfm id -i 27
             Platform:
                 CfmActiveIdentifier: No valid CFM found for region 0
                 CfmPendingIdentifier: No valid CFM found for region 1
@@ -874,6 +874,7 @@ class DCScmChecker:
         
         Args:
             rscm_ip: RSCM IP address
+            system_port: System/slot port number (default 5)
             rscm_port: SSH port (default 22)
             
         Returns:
@@ -908,8 +909,8 @@ class DCScmChecker:
                 initial_output = shell.recv(8192).decode('utf-8', errors='ignore')
                 logger.debug(f"Initial shell output: {repr(initial_output)}")
             
-            # Send the CFM command
-            cfm_command = "show system cerberus cfm id -i 4\n"
+            # Send the CFM command with the correct system port
+            cfm_command = f"show system cerberus cfm id -i {system_port}\n"
             logger.debug(f"[DEBUG] Sending CFM command: {cfm_command.strip()}")
             print(f"[DC-SCM] [DEBUG] Sending command: {cfm_command.strip()}")
             shell.send(cfm_command)
@@ -1033,7 +1034,7 @@ class DCScmChecker:
             elif firmware_type in ['BMC Tip', 'BMC TIP PCD Platform ID', 'BMC TIP PCD Version ID (hex)/(dec)']:
                 return self._check_bmc_tip_individual(firmware_type, rscm_ip, system_port)
             elif firmware_type == 'CFM Platform ID':
-                return self.check_cfm_platform_id(rscm_ip)
+                return self.check_cfm_platform_id(rscm_ip, system_port)
             elif firmware_type == 'CFM Version ID (hex)/(dec)':
                 return {
                     'version': 'NOT_IMPLEMENTED_BY_DEV_TEAMS',
