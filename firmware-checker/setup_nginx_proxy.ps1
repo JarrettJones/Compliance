@@ -139,8 +139,13 @@ Write-Host ""
 Write-Host "Step 4: Testing nginx Configuration" -ForegroundColor Cyan
 Write-Host "-" * 80
 
-$testResult = & "$nginxPath\nginx.exe" -t 2>&1
-if ($LASTEXITCODE -eq 0) {
+# Change to nginx directory before testing
+Push-Location $nginxPath
+$testResult = & ".\nginx.exe" -t 2>&1
+$testExitCode = $LASTEXITCODE
+Pop-Location
+
+if ($testExitCode -eq 0) {
     Write-Host "[OK] Configuration test passed" -ForegroundColor Green
 } else {
     Write-Host "[ERROR] Configuration test failed:" -ForegroundColor Red
@@ -187,13 +192,17 @@ Write-Host "-" * 80
 $nginxProcess = Get-Process -Name "nginx" -ErrorAction SilentlyContinue
 if ($nginxProcess) {
     Write-Host "Stopping nginx..." -ForegroundColor Yellow
-    & "$nginxPath\nginx.exe" -s quit
+    Push-Location $nginxPath
+    & ".\nginx.exe" -s quit
+    Pop-Location
     Start-Sleep -Seconds 2
 }
 
-# Start nginx
+# Start nginx (must run from nginx directory)
 Write-Host "Starting nginx..." -ForegroundColor Yellow
-Start-Process -FilePath "$nginxPath\nginx.exe" -WorkingDirectory $nginxPath -WindowStyle Hidden
+Push-Location $nginxPath
+Start-Process -FilePath ".\nginx.exe" -WindowStyle Hidden
+Pop-Location
 
 Start-Sleep -Seconds 2
 
