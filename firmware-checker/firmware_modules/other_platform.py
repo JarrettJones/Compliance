@@ -268,6 +268,32 @@ class OtherPlatformChecker:
             # Map firmware types to their checking methods
             if firmware_type == 'HPMCpld':
                 return self._check_hpm_cpld_individual(rscm_ip, system_port)
+            elif firmware_type == 'M.2':
+                # Get computer name from rscm_ip (assuming format like dca20301103n414)
+                computer_name = rscm_ip
+                if self.os_username and self.os_password:
+                    return self.storage_checker.get_m2_devices(computer_name)
+                else:
+                    return {
+                        'version': 'NOT_CHECKED',
+                        'status': 'not_checked',
+                        'error': 'No OS credentials provided',
+                        'checked_at': datetime.now().isoformat(),
+                        'method': 'storage_firmware_tool'
+                    }
+            elif firmware_type == 'E.1s':
+                # Get computer name from rscm_ip (assuming format like dca20301103n414)
+                computer_name = rscm_ip
+                if self.os_username and self.os_password:
+                    return self.storage_checker.get_e1s_devices(computer_name)
+                else:
+                    return {
+                        'version': 'NOT_CHECKED',
+                        'status': 'not_checked',
+                        'error': 'No OS credentials provided',
+                        'checked_at': datetime.now().isoformat(),
+                        'method': 'storage_firmware_tool'
+                    }
             else:
                 return self._check_firmware_placeholder(firmware_type, rscm_ip, system_port)
         
