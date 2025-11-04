@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+# Set APPLICATION_ROOT for subpath deployment
+# This tells Flask it's deployed at /firmware-checker
+app.config['APPLICATION_ROOT'] = os.environ.get('APPLICATION_ROOT', '')
+
 # Support for running behind a reverse proxy (nginx, IIS)
 # This ensures Flask generates correct URLs when behind /firmware-checker path
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
