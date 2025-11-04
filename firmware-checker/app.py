@@ -6,6 +6,7 @@ from various systems including DC-SCM, OVL2, and other platform firmwares.
 """
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
+from werkzeug.middleware.proxy_fix import ProxyFix
 import sqlite3
 import os
 from datetime import datetime
@@ -26,6 +27,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# Support for running behind a reverse proxy (nginx, IIS)
+# This ensures Flask generates correct URLs when behind /firmware-checker path
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Security: Use environment variable for secret key
 # Generate one with: python generate_secret_key.py

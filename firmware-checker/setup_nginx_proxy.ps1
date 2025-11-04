@@ -1,0 +1,239 @@
+# nginx Setup Script for Firmware Checker
+# Configures nginx to serve at http://hostname/firmware-checker
+
+Write-Host "=" * 80 -ForegroundColor Cyan
+Write-Host "nginx Configuration for Firmware Checker" -ForegroundColor Yellow
+Write-Host "=" * 80 -ForegroundColor Cyan
+Write-Host ""
+
+# Step 1: Find nginx installation
+Write-Host "Step 1: Locating nginx Installation" -ForegroundColor Cyan
+Write-Host "-" * 80
+
+$nginxPaths = @(
+    "C:\nginx",
+    "C:\nginx-1.25.3",
+    "C:\nginx-1.24.0",
+    "C:\Program Files\nginx",
+    "C:\tools\nginx"
+)
+
+$nginxPath = $null
+foreach ($path in $nginxPaths) {
+    if (Test-Path "$path\nginx.exe") {
+        $nginxPath = $path
+        break
+    }
+}
+
+if (-not $nginxPath) {
+    Write-Host "[ERROR] nginx installation not found!" -ForegroundColor Red
+    Write-Host "Checked locations:" -ForegroundColor Yellow
+    foreach ($path in $nginxPaths) {
+        Write-Host "  - $path" -ForegroundColor White
+    }
+    Write-Host ""
+    Write-Host "Please specify your nginx installation path:" -ForegroundColor Yellow
+    $nginxPath = Read-Host "Enter path (e.g., C:\nginx)"
+    
+    if (-not (Test-Path "$nginxPath\nginx.exe")) {
+        Write-Host "[ERROR] nginx.exe not found at: $nginxPath" -ForegroundColor Red
+        exit 1
+    }
+}
+
+Write-Host "[OK] Found nginx at: $nginxPath" -ForegroundColor Green
+Write-Host ""
+
+# Step 2: Backup existing configuration
+Write-Host "Step 2: Backing Up Existing Configuration" -ForegroundColor Cyan
+Write-Host "-" * 80
+
+$nginxConf = "$nginxPath\conf\nginx.conf"
+$backupConf = "$nginxPath\conf\nginx.conf.backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+
+if (Test-Path $nginxConf) {
+    Copy-Item $nginxConf $backupConf
+    Write-Host "[OK] Backed up to: $backupConf" -ForegroundColor Green
+} else {
+    Write-Host "[WARNING] No existing nginx.conf found" -ForegroundColor Yellow
+}
+Write-Host ""
+
+# Step 3: Create new configuration
+Write-Host "Step 3: Creating nginx Configuration" -ForegroundColor Cyan
+Write-Host "-" * 80
+
+$hostname = $env:COMPUTERNAME.ToLower()
+
+$nginxConfig = @"
+# nginx configuration for Firmware Checker
+# Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+
+worker_processes auto;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    
+    sendfile        on;
+    keepalive_timeout  65;
+    
+    # Logging
+    access_log  logs/access.log;
+    error_log   logs/error.log;
+    
+    server {
+        listen 80;
+        server_name $hostname localhost;
+        
+        # Root redirects to firmware-checker
+        location = / {
+            return 301 /firmware-checker/;
+        }
+        
+        # Firmware Checker application
+        location /firmware-checker/ {
+            # Proxy to Waitress on localhost:5000
+            proxy_pass http://localhost:5000/;
+            
+            # Preserve original request information
+            proxy_set_header Host `$host;
+            proxy_set_header X-Real-IP `$remote_addr;
+            proxy_set_header X-Forwarded-For `$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto `$scheme;
+            proxy_set_header X-Forwarded-Host `$host;
+            proxy_set_header X-Forwarded-Port `$server_port;
+            
+            # Tell Flask it's behind /firmware-checker path
+            proxy_set_header X-Script-Name /firmware-checker;
+            
+            # Timeouts for long-running firmware checks
+            proxy_connect_timeout 120s;
+            proxy_send_timeout 120s;
+            proxy_read_timeout 120s;
+            
+            # Disable buffering for real-time updates
+            proxy_buffering off;
+        }
+        
+        # Static files with caching
+        location /firmware-checker/static/ {
+            proxy_pass http://localhost:5000/static/;
+            expires 1h;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+}
+"@
+
+Set-Content -Path $nginxConf -Value $nginxConfig -Encoding UTF8
+Write-Host "[OK] Created nginx.conf" -ForegroundColor Green
+Write-Host ""
+
+# Step 4: Test nginx configuration
+Write-Host "Step 4: Testing nginx Configuration" -ForegroundColor Cyan
+Write-Host "-" * 80
+
+$testResult = & "$nginxPath\nginx.exe" -t 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "[OK] Configuration test passed" -ForegroundColor Green
+} else {
+    Write-Host "[ERROR] Configuration test failed:" -ForegroundColor Red
+    Write-Host $testResult -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Restoring backup..." -ForegroundColor Yellow
+    if (Test-Path $backupConf) {
+        Copy-Item $backupConf $nginxConf -Force
+        Write-Host "[OK] Backup restored" -ForegroundColor Green
+    }
+    exit 1
+}
+Write-Host ""
+
+# Step 5: Configure Windows Firewall
+Write-Host "Step 5: Configuring Windows Firewall" -ForegroundColor Cyan
+Write-Host "-" * 80
+
+try {
+    $existingRule = Get-NetFirewallRule -DisplayName "nginx HTTP" -ErrorAction SilentlyContinue
+    if ($existingRule) {
+        Write-Host "[INFO] Firewall rule already exists" -ForegroundColor Yellow
+    } else {
+        New-NetFirewallRule `
+            -DisplayName "nginx HTTP" `
+            -Direction Inbound `
+            -Protocol TCP `
+            -LocalPort 80 `
+            -Action Allow `
+            -Profile Domain,Private `
+            -Enabled True | Out-Null
+        Write-Host "[OK] Created firewall rule for port 80" -ForegroundColor Green
+    }
+} catch {
+    Write-Host "[WARNING] Could not configure firewall (may need Administrator)" -ForegroundColor Yellow
+}
+Write-Host ""
+
+# Step 6: Restart nginx
+Write-Host "Step 6: Restarting nginx" -ForegroundColor Cyan
+Write-Host "-" * 80
+
+# Stop nginx if running
+$nginxProcess = Get-Process -Name "nginx" -ErrorAction SilentlyContinue
+if ($nginxProcess) {
+    Write-Host "Stopping nginx..." -ForegroundColor Yellow
+    & "$nginxPath\nginx.exe" -s quit
+    Start-Sleep -Seconds 2
+}
+
+# Start nginx
+Write-Host "Starting nginx..." -ForegroundColor Yellow
+Start-Process -FilePath "$nginxPath\nginx.exe" -WorkingDirectory $nginxPath -WindowStyle Hidden
+
+Start-Sleep -Seconds 2
+
+# Verify nginx is running
+$nginxProcess = Get-Process -Name "nginx" -ErrorAction SilentlyContinue
+if ($nginxProcess) {
+    Write-Host "[OK] nginx is running" -ForegroundColor Green
+    Write-Host "    Processes: $($nginxProcess.Count)" -ForegroundColor White
+} else {
+    Write-Host "[ERROR] Failed to start nginx" -ForegroundColor Red
+    Write-Host "Check logs at: $nginxPath\logs\error.log" -ForegroundColor Yellow
+}
+Write-Host ""
+
+# Step 7: Summary
+Write-Host "=" * 80 -ForegroundColor Cyan
+Write-Host "nginx Configuration Complete!" -ForegroundColor Green
+Write-Host "=" * 80 -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Access URLs:" -ForegroundColor Yellow
+Write-Host "  http://$hostname/firmware-checker" -ForegroundColor Cyan
+Write-Host "  http://localhost/firmware-checker" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Important:" -ForegroundColor Yellow
+Write-Host "1. Make sure Waitress is running on port 5000:" -ForegroundColor White
+Write-Host "   .\start_production.ps1" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "2. Test the URL:" -ForegroundColor White
+Write-Host "   Start-Process http://localhost/firmware-checker" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "nginx Commands:" -ForegroundColor Yellow
+Write-Host "  Start:   cd $nginxPath; .\nginx.exe" -ForegroundColor White
+Write-Host "  Stop:    cd $nginxPath; .\nginx.exe -s quit" -ForegroundColor White
+Write-Host "  Reload:  cd $nginxPath; .\nginx.exe -s reload" -ForegroundColor White
+Write-Host "  Test:    cd $nginxPath; .\nginx.exe -t" -ForegroundColor White
+Write-Host ""
+Write-Host "Logs:" -ForegroundColor Yellow
+Write-Host "  Access: $nginxPath\logs\access.log" -ForegroundColor White
+Write-Host "  Error:  $nginxPath\logs\error.log" -ForegroundColor White
+Write-Host ""
+Write-Host "Configuration file: $nginxConf" -ForegroundColor Yellow
+Write-Host "Backup: $backupConf" -ForegroundColor Yellow
+Write-Host "=" * 80 -ForegroundColor Cyan

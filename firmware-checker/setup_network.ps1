@@ -139,11 +139,11 @@ Write-Host ""
 Write-Host "Next Steps:" -ForegroundColor Yellow
 Write-Host "1. Ensure the server is running: .\start_production.ps1" -ForegroundColor White
 Write-Host "2. Share this URL with your team:" -ForegroundColor White
-Write-Host "   http://$primaryIP:$port" -ForegroundColor Cyan
+Write-Host "   http://$($primaryIP):$port" -ForegroundColor Cyan
 Write-Host "3. Users can access from any browser on your network" -ForegroundColor White
 Write-Host ""
 Write-Host "To test from another computer:" -ForegroundColor Yellow
-Write-Host "  Open browser and navigate to: http://$primaryIP:$port" -ForegroundColor Cyan
+Write-Host "  Open browser and navigate to: http://${primaryIP}:$port" -ForegroundColor Cyan
 Write-Host ""
 # Optional: Create a shortcut or bookmark info
 Write-Host "Tip: Create a bookmark or shortcut for easy access!" -ForegroundColor Yellow
