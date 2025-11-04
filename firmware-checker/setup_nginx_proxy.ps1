@@ -102,8 +102,8 @@ http {
             # Rewrite to strip /firmware-checker before passing to Flask
             rewrite ^/firmware-checker(.*)$ `$1 break;
             
-            # Proxy to Waitress at root
-            proxy_pass http://localhost:5000;
+            # Proxy to Waitress at root (use IPv4 explicitly to avoid IPv6 issues)
+            proxy_pass http://127.0.0.1:5000;
             
             # Preserve original request information
             proxy_set_header Host `$host;
