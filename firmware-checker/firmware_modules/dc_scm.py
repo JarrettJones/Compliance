@@ -915,36 +915,50 @@ class DCScmChecker:
             print(f"[DC-SCM] [DEBUG] Sending command: {cfm_command.strip()}")
             shell.send(cfm_command)
             
-            # Wait for command execution - CFM commands can take up to 30 seconds
-            # Keep reading until we see "Completion Code" which indicates command finished
-            print(f"[DC-SCM] [DEBUG] Waiting for CFM command to complete (up to 30 seconds)...")
+            # Wait for command execution - CFM commands can take up to 40 seconds
+            # Keep reading until we see "Completion Code: Success" or "Completion Code: Failed"
+            print(f"[DC-SCM] [DEBUG] Waiting for CFM command to complete (up to 40 seconds)...")
             cfm_output = ""
             start_time = time.time()
-            max_wait = 30
+            max_wait = 40
+            last_output_time = start_time
+            no_output_timeout = 5  # If no output for 5 seconds after getting some data, consider it done
             
             while time.time() - start_time < max_wait:
-                time.sleep(1)  # Check every second
-                
                 # Read any available output
                 if shell.recv_ready():
                     chunk = shell.recv(8192).decode('utf-8', errors='ignore')
-                    cfm_output += chunk
-                    logger.debug(f"[DEBUG] Received chunk: {len(chunk)} chars, total: {len(cfm_output)}")
-                    print(f"[DC-SCM] [DEBUG] Received {len(chunk)} chars, total: {len(cfm_output)} chars")
+                    if chunk:
+                        cfm_output += chunk
+                        last_output_time = time.time()
+                        logger.debug(f"[DEBUG] Received chunk: {len(chunk)} chars, total: {len(cfm_output)}")
+                        print(f"[DC-SCM] [DEBUG] Received {len(chunk)} chars, total: {len(cfm_output)} chars")
                 
-                # Check if we've received the completion indicator
-                if "Completion Code" in cfm_output:
+                # Check if we've received the completion indicator (Success or Failed)
+                if "Completion Code: Success" in cfm_output or "Completion Code: Failed" in cfm_output:
                     elapsed = time.time() - start_time
                     print(f"[DC-SCM] [DEBUG] Command completed after {elapsed:.1f} seconds")
                     logger.debug(f"[DEBUG] Found 'Completion Code' after {elapsed:.1f}s")
-                    # Wait a moment more to ensure all output is received
-                    time.sleep(1)
+                    # Wait a bit more to ensure all output is received
+                    time.sleep(0.5)
                     if shell.recv_ready():
                         final_chunk = shell.recv(8192).decode('utf-8', errors='ignore')
-                        cfm_output += final_chunk
+                        if final_chunk:
+                            cfm_output += final_chunk
+                            print(f"[DC-SCM] [DEBUG] Received final {len(final_chunk)} chars")
                     break
+                
+                # If we have some output and no new data for timeout period, something might be wrong
+                if cfm_output and (time.time() - last_output_time > no_output_timeout):
+                    elapsed = time.time() - start_time
+                    print(f"[DC-SCM] [WARNING] No new output for {no_output_timeout}s after {elapsed:.1f}s total")
+                    logger.warning(f"No new output for {no_output_timeout}s, checking if command stalled")
+                    # Continue waiting up to max_wait, don't break yet
+                
+                # Small sleep to avoid tight loop
+                time.sleep(0.2)
             
-            if "Completion Code" not in cfm_output:
+            if "Completion Code: Success" not in cfm_output and "Completion Code: Failed" not in cfm_output:
                 print(f"[DC-SCM] [WARNING] Command did not complete within {max_wait} seconds")
                 logger.warning(f"CFM command timed out after {max_wait}s without seeing Completion Code")
             
