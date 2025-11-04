@@ -481,10 +481,40 @@ class DCScmChecker:
         self.password = password
     
     def _extract_cerberus_version(self, cerberus_data):
-        """Extract Manticore firmware version from Cerberus endpoint data"""
+        """Extract Manticore firmware version from Cerberus endpoint data
+        
+        If FirmwareVersion is not available, checks @Message.ExtendedInfo for error details
+        from Microsoft.Description field.
+        """
         try:
             # Extract firmware version from Cerberus endpoint response
             firmware_version = cerberus_data.get('FirmwareVersion', 'Not Available')
+            
+            # If firmware version not found, check for error description in ExtendedInfo
+            if firmware_version == 'Not Available':
+                extended_info = cerberus_data.get('@Message.ExtendedInfo', [])
+                if extended_info and len(extended_info) > 0:
+                    # Look for Microsoft.Description in the first ExtendedInfo message
+                    oem = extended_info[0].get('Oem', {})
+                    microsoft = oem.get('Microsoft', {})
+                    description = microsoft.get('Description', '')
+                    
+                    if description:
+                        logger.info(f"Manticore firmware version not available, found description: {description}")
+                        return {
+                            'version': description,
+                            'status': 'success',
+                            'error': None,
+                            'checked_at': datetime.now().isoformat(),
+                            'raw_data': {
+                                'FirmwareVersion': 'Not Available',
+                                'Name': cerberus_data.get('Name', 'Unknown'),
+                                'Id': cerberus_data.get('Id', 'Unknown'),
+                                'Description': description,
+                                'CompletionCode': microsoft.get('CompletionCode', 'Unknown')
+                            },
+                            'note': 'Firmware version not available, returning error description from RSCM'
+                        }
             
             return {
                 'version': firmware_version,
