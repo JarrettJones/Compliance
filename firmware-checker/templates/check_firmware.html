@@ -389,6 +389,9 @@
      style="display: none;"></div>
 
 <script>
+// Get the script root for URL generation (handles /firmware-checker prefix)
+const SCRIPT_ROOT = {{ request.script_root|tojson }};
+
 let checkResults = null;
 
 // Firmware Selection Functions
@@ -521,7 +524,7 @@ function startFirmwareCheck() {
     console.log('Selected firmware types:', selectedFirmware);
     
     // Make API call
-    fetch('/api/check-firmware', {
+    fetch(SCRIPT_ROOT + '/api/check-firmware', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -619,7 +622,7 @@ function monitorThreadedCheck(checkId, systemId, startBtn, progressBar, progress
                     setTimeout(pollProgress, 2000); // Poll every 2 seconds
                 } else {
                     // Timeout - show warning but keep checking
-                    progressStatus.innerHTML = '<i class="bi bi-exclamation-triangle text-warning"></i> Check is taking longer than expected... <a href="/check/result/' + checkId + '" class="btn btn-sm btn-outline-primary ms-2">View Progress Page</a>';
+                    progressStatus.innerHTML = '<i class="bi bi-exclamation-triangle text-warning"></i> Check is taking longer than expected... <a href="' + SCRIPT_ROOT + '/check/result/' + checkId + '" class="btn btn-sm btn-outline-primary ms-2">View Progress Page</a>';
                 }
                 
             } else if (statusData.status === 'completed') {
@@ -648,7 +651,7 @@ function monitorThreadedCheck(checkId, systemId, startBtn, progressBar, progress
             if (pollCount < maxPolls) {
                 setTimeout(pollProgress, 5000); // Retry with longer delay
             } else {
-                progressStatus.innerHTML = '<i class="bi bi-exclamation-triangle text-warning"></i> Lost connection to server. <a href="/check/result/' + checkId + '" class="btn btn-sm btn-outline-primary ms-2">Check Results</a>';
+                progressStatus.innerHTML = '<i class="bi bi-exclamation-triangle text-warning"></i> Lost connection to server. <a href="' + SCRIPT_ROOT + '/check/result/' + checkId + '" class="btn btn-sm btn-outline-primary ms-2">Check Results</a>';
             }
         });
     }
@@ -669,7 +672,7 @@ function fetchCompletedResults(checkId, startBtn, progressBar, progressStatus, s
         progressBar.style.width = '100%';
         progressBar.classList.remove('progress-bar-animated');
         progressBar.classList.add('bg-success');
-        progressStatus.innerHTML = `<i class="bi bi-check-circle text-success"></i> Firmware check completed! <a href="/check/result/${checkId}" class="btn btn-sm btn-outline-primary ms-2"><i class="bi bi-eye"></i> View Results</a>`;
+        progressStatus.innerHTML = `<i class="bi bi-check-circle text-success"></i> Firmware check completed! <a href="${SCRIPT_ROOT}/check/result/${checkId}" class="btn btn-sm btn-outline-primary ms-2"><i class="bi bi-eye"></i> View Results</a>`;
         
         startBtn.disabled = false;
         startBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Run Another Check';
@@ -681,7 +684,7 @@ function completeCheck(data, startBtn, progressBar, progressStatus, systemId) {
     progressBar.style.width = '100%';
     progressBar.classList.remove('progress-bar-animated');
     progressBar.classList.add('bg-success');
-    progressStatus.innerHTML = '<i class="bi bi-check-circle text-success"></i> Firmware check completed successfully! <a href="/check/' + systemId + '/progress" class="btn btn-sm btn-outline-primary ms-2"><i class="bi bi-eye"></i> View Results</a>';
+    progressStatus.innerHTML = '<i class="bi bi-check-circle text-success"></i> Firmware check completed successfully! <a href="' + SCRIPT_ROOT + '/check/' + systemId + '/progress" class="btn btn-sm btn-outline-primary ms-2"><i class="bi bi-eye"></i> View Results</a>';
     
     // Show results if we have the data
     if (data && data.dc_scm && data.ovl2 && data.other_platform) {

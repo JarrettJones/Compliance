@@ -121,6 +121,9 @@
 
 {% block extra_scripts %}
 <script>
+// Get the script root for URL generation (handles /firmware-checker prefix)
+const SCRIPT_ROOT = {{ request.script_root|tojson }};
+
 // Form validation and submission
 document.getElementById('autoRegForm').addEventListener('submit', function(e) {
     const submitBtn = document.getElementById('submitBtn');
@@ -149,7 +152,7 @@ function testConnection() {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Testing...';
     
-    fetch('/api/test-connection', {
+    fetch(SCRIPT_ROOT + '/api/test-connection', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

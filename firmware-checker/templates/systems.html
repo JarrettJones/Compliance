@@ -238,6 +238,9 @@
 
 {% block extra_scripts %}
 <script>
+// Get the script root for URL generation (handles /firmware-checker prefix)
+const SCRIPT_ROOT = {{ request.script_root|tojson }};
+
 // Load systems data
 let systemsData = JSON.parse(document.getElementById('systemsData').textContent);
 
@@ -282,15 +285,15 @@ function parseMetadata(description) {
 function generateActionButtons(system) {
     return `
         <div class="btn-group" role="group">
-            <a href="/systems/${system.id}" 
+            <a href="${SCRIPT_ROOT}/systems/${system.id}" 
                class="btn btn-outline-primary btn-sm" title="View Details">
                 <i class="bi bi-eye"></i>
             </a>
-            <a href="/check/${system.id}" 
+            <a href="${SCRIPT_ROOT}/check/${system.id}" 
                class="btn btn-outline-success btn-sm" title="Check Firmware">
                 <i class="bi bi-check-circle"></i>
             </a>
-            <a href="/systems/${system.id}/edit" 
+            <a href="${SCRIPT_ROOT}/systems/${system.id}/edit" 
                class="btn btn-outline-secondary btn-sm" title="Edit System">
                 <i class="bi bi-pencil"></i>
             </a>

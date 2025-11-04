@@ -213,6 +213,9 @@
 
 {% block extra_scripts %}
 <script>
+// Get the script root for URL generation (handles /firmware-checker prefix)
+const SCRIPT_ROOT = {{ request.script_root|tojson }};
+
 // Initialize firmware data variable
 let firmwareData = null;
 
@@ -464,7 +467,7 @@ function recheckFirmware(firmwareType, category) {
     console.log(`Rechecking firmware: ${firmwareType} (category: ${category})`);
     
     // Make API call to recheck the firmware
-    fetch('/api/check-firmware-individual', {
+    fetch(SCRIPT_ROOT + '/api/check-firmware-individual', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
