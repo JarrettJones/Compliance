@@ -152,54 +152,43 @@
 
 {% block extra_scripts %}
 <script>
+// Get the script root for URL generation (handles /firmware-checker prefix)
+const SCRIPT_ROOT = {{ request.script_root|tojson }};
+
 let autoRefreshEnabled = true;
 let autoRefreshInterval;
-let progressSimulation;
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Start simulated progress
-    startProgressSimulation();
+    // Start with initial status check
+    refreshStatus();
     
     // Start auto-refresh
     startAutoRefresh();
 });
 
-function startProgressSimulation() {
-    let progress = 5;
-    const stages = [
-        { name: 'Connecting to system...', maxProgress: 15 },
-        { name: 'Checking DC-SCM firmware (16 types)...', maxProgress: 35 },
-        { name: 'Checking OVL2 firmware via SSH (16 types)...', maxProgress: 80 },
-        { name: 'Checking Other Platform firmware (6 types)...', maxProgress: 95 },
-        { name: 'Finalizing results...', maxProgress: 100 }
-    ];
+function updateProgress(progressData) {
+    const progressBar = document.getElementById('activeProgressBar');
+    const progressText = document.getElementById('activeProgressText');
     
-    let currentStage = 0;
-    
-    progressSimulation = setInterval(() => {
-        if (currentStage < stages.length) {
-            const stage = stages[currentStage];
-            
-            // Update progress text
-            document.getElementById('activeProgressText').textContent = stage.name;
-            
-            // Gradually increase progress
-            progress += Math.random() * 3;
-            if (progress >= stage.maxProgress) {
-                progress = stage.maxProgress;
-                currentStage++;
-            }
-            
-            // Update progress bar
-            document.getElementById('activeProgressBar').style.width = progress + '%';
-            
-            // If we've reached 100%, stop and check for completion
-            if (progress >= 100) {
-                clearInterval(progressSimulation);
-                setTimeout(checkForCompletion, 2000);
-            }
-        }
-    }, 2000);
+    if (progressData && progressData.progress) {
+        const progress = progressData.progress;
+        const percentage = progress.percentage || 0;
+        const currentCat = progress.current_category || 'Unknown';
+        const currentFw = progress.current_firmware || 'Starting...';
+        const completed = progress.completed || 0;
+        const total = progress.total || 0;
+        
+        // Update progress bar
+        progressBar.style.width = percentage + '%';
+        
+        // Update progress text
+        progressText.textContent = `${currentCat}: ${currentFw} (${completed}/${total} complete)`;
+        
+        console.log(`Progress update: ${percentage}% - ${currentFw}`);
+    } else {
+        // Fallback if no progress data available
+        progressText.textContent = 'Firmware check in progress...';
+    }
 }
 
 function startAutoRefresh() {
@@ -227,17 +216,21 @@ function toggleAutoRefresh() {
 
 function refreshStatus() {
     // Check if the firmware check is still running
-    fetch(`/api/check-status/{{ system.id }}`)
+    fetch(SCRIPT_ROOT + `/api/check-status/{{ system.id }}`)
         .then(response => response.json())
         .then(data => {
+            console.log('Status check:', data);
+            
             if (data.status === 'completed') {
                 // Check is complete, redirect to progress page
                 showCompletionModal(data);
             } else if (data.status === 'error') {
                 // Check failed, show error
                 showErrorModal(data);
+            } else if (data.status === 'running') {
+                // Update progress bar with real data
+                updateProgress(data.progress_data);
             }
-            // If still running, continue showing progress
         })
         .catch(error => {
             console.error('Error checking status:', error);
@@ -262,7 +255,7 @@ function showCompletionModal(data) {
     
     // Auto-redirect after 3 seconds
     setTimeout(() => {
-        window.location.href = `/check/{{ system.id }}/progress`;
+        window.location.href = SCRIPT_ROOT + `/check/result/${data.check_id}`;
     }, 3000);
 }
 
@@ -283,9 +276,6 @@ function showErrorModal(data) {
 // Clean up intervals when leaving the page
 window.addEventListener('beforeunload', function() {
     stopAutoRefresh();
-    if (progressSimulation) {
-        clearInterval(progressSimulation);
-    }
 });
 </script>
 {% endblock %}
