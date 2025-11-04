@@ -593,24 +593,27 @@ function monitorThreadedCheck(checkId, systemId, startBtn, progressBar, progress
             console.log('Status update:', statusData);
             
             if (statusData.status === 'running') {
-                // Update progress based on thread info
-                let progressPercent = 30; // Base progress
+                // Update progress based on actual firmware check progress
+                let progressPercent = 5; // Base progress
                 let statusMessage = 'Firmware check in progress...';
                 
-                if (statusData.thread_info) {
+                // Check if we have progress data from firmware_data
+                if (statusData.progress_data && statusData.progress_data.progress) {
+                    const progress = statusData.progress_data.progress;
+                    progressPercent = progress.percentage || 5;
+                    
+                    const currentFw = progress.current_firmware || 'Unknown';
+                    const currentCat = progress.current_category || 'Unknown';
+                    const completed = progress.completed || 0;
+                    const total = progress.total || 0;
+                    
+                    statusMessage = `Checking ${currentCat}: ${currentFw} (${completed}/${total} complete)`;
+                } else if (statusData.thread_info) {
+                    // Fallback to runtime-based estimation if no progress data yet
                     const runtime = statusData.thread_info.runtime_minutes || 0;
                     const category = statusData.thread_info.current_category || 'unknown';
                     
-                    // Estimate progress based on category and runtime
-                    if (category === 'DC-SCM') {
-                        progressPercent = 20 + (runtime * 2); // DC-SCM takes ~5 minutes
-                    } else if (category === 'OVL2') {
-                        progressPercent = 40 + (runtime * 3); // OVL2 takes longer
-                    } else if (category === 'Other Platform') {
-                        progressPercent = 80 + (runtime * 5); // Final category
-                    }
-                    
-                    progressPercent = Math.min(progressPercent, 95); // Cap at 95%
+                    progressPercent = Math.min(10 + (runtime * 5), 95);
                     statusMessage = `Checking ${category} firmware... (${runtime.toFixed(1)} min)`;
                 }
                 

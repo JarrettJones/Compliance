@@ -299,6 +299,14 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
         other_platform_checker = OtherPlatformChecker(username=username, password=password, 
                                                     os_username=os_username, os_password=os_password)
         
+        # Calculate total firmware types to check
+        total_fw_types = 0
+        dc_scm_types_to_check = selected_firmware.get('dc_scm', dc_scm_checker.firmware_types) if selected_firmware else dc_scm_checker.firmware_types
+        ovl2_types_to_check = selected_firmware.get('ovl2', ovl2_checker.firmware_types) if selected_firmware else ovl2_checker.firmware_types
+        other_platform_types_to_check = selected_firmware.get('other_platform', other_platform_checker.firmware_types) if selected_firmware else other_platform_checker.firmware_types
+        
+        total_fw_types = len(dc_scm_types_to_check) + len(ovl2_types_to_check) + len(other_platform_types_to_check)
+        
         # Initialize results structure
         results = {
             'system_id': system_id,
@@ -309,7 +317,15 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
             'check_id': check_id,
             'dc_scm': {'firmware_versions': {}},
             'ovl2': {'firmware_versions': {}},
-            'other_platform': {'firmware_versions': {}}
+            'other_platform': {'firmware_versions': {}},
+            'progress': {
+                'total': total_fw_types,
+                'completed': 0,
+                'percentage': 0,
+                'current_category': 'DC-SCM',
+                'current_firmware': 'Starting...',
+                'status': 'running'
+            }
         }
         
         # Update progress in database with initial structure
@@ -325,15 +341,16 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
         with active_checks_lock:
             active_checks[check_id]['current_category'] = 'DC-SCM'
         
-        # Determine which DC-SCM firmware types to check
-        dc_scm_types_to_check = dc_scm_checker.firmware_types
-        if selected_firmware and 'dc_scm' in selected_firmware:
-            dc_scm_types_to_check = selected_firmware['dc_scm']
-            print(f"[THREAD {threading.current_thread().ident}] Checking DC-SCM firmware ({len(dc_scm_types_to_check)} of {len(dc_scm_checker.firmware_types)} types selected)...")
-        else:
-            print(f"[THREAD {threading.current_thread().ident}] Checking DC-SCM firmware ({len(dc_scm_checker.firmware_types)} types)...")
+        # Determine which DC-SCM firmware types to check (already calculated above)
+        print(f"[THREAD {threading.current_thread().ident}] Checking DC-SCM firmware ({len(dc_scm_types_to_check)} types)...")
         
         for i, fw_type in enumerate(dc_scm_types_to_check, 1):
+            # Update progress
+            results['progress']['current_category'] = 'DC-SCM'
+            results['progress']['current_firmware'] = fw_type
+            results['progress']['completed'] = results['progress']['completed']
+            results['progress']['percentage'] = int((results['progress']['completed'] / total_fw_types) * 100)
+            
             print(f"[THREAD {threading.current_thread().ident}] DC-SCM ({i}/{len(dc_scm_types_to_check)}): Checking {fw_type}...")
             fw_result = dc_scm_checker.check_individual_firmware(fw_type, system_info['rscm_ip'], system_info['rscm_port'])
             
@@ -348,7 +365,10 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
                 }
             
             results['dc_scm']['firmware_versions'][fw_type] = fw_result
-            print(f"[THREAD {threading.current_thread().ident}] DC-SCM ({i}/{len(dc_scm_types_to_check)}): {fw_type} completed - {fw_result.get('status', 'unknown')}")
+            results['progress']['completed'] += 1
+            results['progress']['percentage'] = int((results['progress']['completed'] / total_fw_types) * 100)
+            
+            print(f"[THREAD {threading.current_thread().ident}] DC-SCM ({i}/{len(dc_scm_types_to_check)}): {fw_type} completed - {fw_result.get('status', 'unknown')} [Progress: {results['progress']['percentage']}%]")
             
             # Update progress in database
             with get_db_connection() as conn:
@@ -367,18 +387,18 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
         with active_checks_lock:
             active_checks[check_id]['current_category'] = 'OVL2'
         
-        # Determine which OVL2 firmware types to check
-        ovl2_types_to_check = ovl2_checker.firmware_types
-        if selected_firmware and 'ovl2' in selected_firmware:
-            ovl2_types_to_check = selected_firmware['ovl2']
-            print(f"[THREAD {threading.current_thread().ident}] Checking OVL2 firmware ({len(ovl2_types_to_check)} of {len(ovl2_checker.firmware_types)} types selected)...")
-        else:
-            print(f"[THREAD {threading.current_thread().ident}] Checking OVL2 firmware ({len(ovl2_checker.firmware_types)} types)...")
+        # Determine which OVL2 firmware types to check (already calculated above)
+        print(f"[THREAD {threading.current_thread().ident}] Checking OVL2 firmware ({len(ovl2_types_to_check)} types)...")
         
         # Use computer_name for MANA driver checks if provided
         computer_name = system_info.get('computer_name')
         
         for i, fw_type in enumerate(ovl2_types_to_check, 1):
+            # Update progress
+            results['progress']['current_category'] = 'OVL2'
+            results['progress']['current_firmware'] = fw_type
+            results['progress']['percentage'] = int((results['progress']['completed'] / total_fw_types) * 100)
+            
             print(f"[THREAD {threading.current_thread().ident}] OVL2 ({i}/{len(ovl2_types_to_check)}): Checking {fw_type}...")
             fw_result = ovl2_checker.check_individual_firmware(fw_type, system_info['rscm_ip'], system_info['rscm_port'], computer_name=computer_name)
             
@@ -393,7 +413,10 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
                 }
             
             results['ovl2']['firmware_versions'][fw_type] = fw_result
-            print(f"[THREAD {threading.current_thread().ident}] OVL2 ({i}/{len(ovl2_types_to_check)}): {fw_type} completed - {fw_result.get('status', 'unknown')}")
+            results['progress']['completed'] += 1
+            results['progress']['percentage'] = int((results['progress']['completed'] / total_fw_types) * 100)
+            
+            print(f"[THREAD {threading.current_thread().ident}] OVL2 ({i}/{len(ovl2_types_to_check)}): {fw_type} completed - {fw_result.get('status', 'unknown')} [Progress: {results['progress']['percentage']}%]")
             
             # Update progress in database
             with get_db_connection() as conn:
@@ -415,13 +438,17 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
         # Use computer_name for storage checks if provided, otherwise use rscm_ip
         computer_name = system_info.get('computer_name', system_info['rscm_ip'])
         
-        # Determine which Other Platform firmware types to check
+        # Determine which Other Platform firmware types to check (already calculated above)
         if selected_firmware and 'other_platform' in selected_firmware:
             # Selective check - check individual firmware types
-            other_platform_types_to_check = selected_firmware['other_platform']
-            print(f"[THREAD {threading.current_thread().ident}] Checking Other Platform firmware ({len(other_platform_types_to_check)} of {len(other_platform_checker.firmware_types)} types selected)...")
+            print(f"[THREAD {threading.current_thread().ident}] Checking Other Platform firmware ({len(other_platform_types_to_check)} types)...")
             
             for i, fw_type in enumerate(other_platform_types_to_check, 1):
+                # Update progress
+                results['progress']['current_category'] = 'Other Platform'
+                results['progress']['current_firmware'] = fw_type
+                results['progress']['percentage'] = int((results['progress']['completed'] / total_fw_types) * 100)
+                
                 print(f"[THREAD {threading.current_thread().ident}] Other Platform ({i}/{len(other_platform_types_to_check)}): Checking {fw_type}...")
                 fw_result = other_platform_checker.check_individual_firmware(fw_type, system_info['rscm_ip'], system_info['rscm_port'])
                 
@@ -436,7 +463,10 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
                     }
                 
                 results['other_platform']['firmware_versions'][fw_type] = fw_result
-                print(f"[THREAD {threading.current_thread().ident}] Other Platform ({i}/{len(other_platform_types_to_check)}): {fw_type} completed - {fw_result.get('status', 'unknown')}")
+                results['progress']['completed'] += 1
+                results['progress']['percentage'] = int((results['progress']['completed'] / total_fw_types) * 100)
+                
+                print(f"[THREAD {threading.current_thread().ident}] Other Platform ({i}/{len(other_platform_types_to_check)}): {fw_type} completed - {fw_result.get('status', 'unknown')} [Progress: {results['progress']['percentage']}%]")
                 
                 # Update progress in database
                 with get_db_connection() as conn:
@@ -447,8 +477,12 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
                     ''', (json.dumps(results), check_id))
                     conn.commit()
         else:
-            # Full check - use batch check for efficiency
+            # Full check - use batch check for efficiency (update progress for each type as batch completes)
             print(f"[THREAD {threading.current_thread().ident}] Checking Other Platform firmware using batch check...")
+            
+            # Update progress to show we're starting Other Platform
+            results['progress']['current_category'] = 'Other Platform'
+            results['progress']['current_firmware'] = 'Batch check in progress...'
             
             other_results = other_platform_checker.check_all(
                 rscm_ip=system_info['rscm_ip'], 
@@ -459,7 +493,10 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
             # Extract firmware versions from batch results
             if other_results and 'firmware_versions' in other_results:
                 results['other_platform']['firmware_versions'].update(other_results['firmware_versions'])
-                print(f"[THREAD {threading.current_thread().ident}] Other Platform check completed - {len(other_results['firmware_versions'])} firmware types checked")
+                # Update progress for all types checked in batch
+                results['progress']['completed'] += len(other_results['firmware_versions'])
+                results['progress']['percentage'] = int((results['progress']['completed'] / total_fw_types) * 100)
+                print(f"[THREAD {threading.current_thread().ident}] Other Platform check completed - {len(other_results['firmware_versions'])} firmware types checked [Progress: {results['progress']['percentage']}%]")
             else:
                 # Fallback in case of batch check failure
                 print(f"[THREAD {threading.current_thread().ident}] Other Platform batch check failed, using fallback values...")
@@ -484,6 +521,13 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
         results['other_platform']['category'] = 'Other Platform'
         results['other_platform']['status'] = 'success' 
         results['other_platform']['timestamp'] = datetime.now().isoformat()
+        
+        # Mark progress as complete
+        results['progress']['completed'] = total_fw_types
+        results['progress']['percentage'] = 100
+        results['progress']['current_category'] = 'Complete'
+        results['progress']['current_firmware'] = 'All firmware checks completed'
+        results['progress']['status'] = 'completed'
         
         end_time = time.time()
         duration = end_time - start_time
