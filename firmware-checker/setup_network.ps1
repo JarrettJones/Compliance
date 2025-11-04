@@ -145,7 +145,6 @@ Write-Host ""
 Write-Host "To test from another computer:" -ForegroundColor Yellow
 Write-Host "  Open browser and navigate to: http://$primaryIP:$port" -ForegroundColor Cyan
 Write-Host ""
-
 # Optional: Create a shortcut or bookmark info
 Write-Host "Tip: Create a bookmark or shortcut for easy access!" -ForegroundColor Yellow
 Write-Host "=" * 80 -ForegroundColor Cyan
