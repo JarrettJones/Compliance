@@ -729,6 +729,9 @@ function startFirmwareCheck() {
 }
 
 function monitorThreadedCheck(checkId, systemId, startBtn, progressBar, progressStatus) {
+    // Store check_id globally so completeCheck can access it for redirect
+    window.currentCheckId = checkId;
+    
     let pollCount = 0;
     const maxPolls = 300; // 10 minutes max polling (2-second intervals)
     
@@ -817,22 +820,18 @@ function monitorThreadedCheck(checkId, systemId, startBtn, progressBar, progress
 }
 
 function fetchCompletedResults(checkId, startBtn, progressBar, progressStatus, systemId) {
-    // Fetch the completed results
-    fetch(`${SCRIPT_ROOT}/api/check/${checkId}/firmware-data`)
-    .then(response => response.json())
-    .then(data => {
-        completeCheck(data, startBtn, progressBar, progressStatus, systemId);
-    })
-    .catch(error => {
-        // Fallback - direct user to results page
-        progressBar.style.width = '100%';
-        progressBar.classList.remove('progress-bar-animated');
-        progressBar.classList.add('bg-success');
-        progressStatus.innerHTML = `<i class="bi bi-check-circle text-success"></i> Firmware check completed! <a href="${SCRIPT_ROOT}/check/result/${checkId}" class="btn btn-sm btn-outline-primary ms-2"><i class="bi bi-eye"></i> View Results</a>`;
-        
-        startBtn.disabled = false;
-        startBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Run Another Check';
-    });
+    // Store check_id globally for redirect
+    window.currentCheckId = checkId;
+    
+    // Redirect immediately to results page
+    progressBar.style.width = '100%';
+    progressBar.classList.remove('progress-bar-animated');
+    progressBar.classList.add('bg-success');
+    progressStatus.innerHTML = `<i class="bi bi-check-circle text-success"></i> Firmware check completed! Redirecting to results...`;
+    
+    setTimeout(() => {
+        window.location.href = `${SCRIPT_ROOT}/check/result/${checkId}`;
+    }, 1500);
 }
 
 function completeCheck(data, startBtn, progressBar, progressStatus, systemId) {
@@ -840,26 +839,16 @@ function completeCheck(data, startBtn, progressBar, progressStatus, systemId) {
     progressBar.style.width = '100%';
     progressBar.classList.remove('progress-bar-animated');
     progressBar.classList.add('bg-success');
-    progressStatus.innerHTML = '<i class="bi bi-check-circle text-success"></i> Firmware check completed successfully! <a href="' + SCRIPT_ROOT + '/check/' + systemId + '/progress" class="btn btn-sm btn-outline-primary ms-2"><i class="bi bi-eye"></i> View Results</a>';
+    progressStatus.innerHTML = '<i class="bi bi-check-circle text-success"></i> Firmware check completed! Redirecting to results...';
     
-    // Show results if we have the data
-    if (data && data.dc_scm && data.ovl2 && data.other_platform) {
-        checkResults = data;
-        displayResults(data);
-    }
+    // Get the check_id from the current context
+    // The check_id should be available from the pollProgress function context
+    const checkId = window.currentCheckId;
     
-    // Reset button with additional navigation options
-    startBtn.disabled = false;
-    startBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Run Another Check';
-    
-    // Add a "View Results" button next to the start button
-    if (!document.querySelector('.view-results-btn')) {
-        const viewResultsBtn = document.createElement('a');
-        viewResultsBtn.href = '/check/' + systemId + '/progress';
-        viewResultsBtn.className = 'btn btn-primary ms-2 view-results-btn';
-        viewResultsBtn.innerHTML = '<i class="bi bi-eye"></i> View Full Results';
-        startBtn.parentNode.appendChild(viewResultsBtn);
-    }
+    // Redirect to results page after a brief delay
+    setTimeout(() => {
+        window.location.href = `${SCRIPT_ROOT}/check/result/${checkId}`;
+    }, 1500);
 }
 
 function displayResults(data) {
