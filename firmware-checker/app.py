@@ -30,22 +30,29 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Support for running behind a reverse proxy (nginx, IIS)
-# This ensures Flask generates correct URLs when behind /firmware-checker path
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+# Middleware to handle reverse proxy headers and path prefixes
+class PrefixMiddleware:
+    """Middleware to handle X-Script-Name for proper URL generation behind reverse proxy"""
+    def __init__(self, app, prefix=''):
+        self.app = app
+        self.prefix = prefix
 
-# If APPLICATION_ROOT is set, mount the app at that path
-application_root = os.environ.get('APPLICATION_ROOT', '').rstrip('/')
-if application_root:
-    # Create a simple 404 response for the root
-    def simple_app(environ, start_response):
-        response = Response('Not Found - Try ' + application_root + '/', status=404)
-        return response(environ, start_response)
-    
-    # Mount Flask app at the specified path
-    app.wsgi_app = DispatcherMiddleware(simple_app, {
-        application_root: app.wsgi_app
-    })
+    def __call__(self, environ, start_response):
+        # Check for X-Script-Name header from nginx
+        script_name = environ.get('HTTP_X_SCRIPT_NAME', '')
+        if script_name:
+            environ['SCRIPT_NAME'] = script_name
+            
+        # Also support X-Forwarded-Prefix
+        forwarded_prefix = environ.get('HTTP_X_FORWARDED_PREFIX', '')
+        if forwarded_prefix and not script_name:
+            environ['SCRIPT_NAME'] = forwarded_prefix
+            
+        return self.app(environ, start_response)
+
+# Apply middleware
+app.wsgi_app = PrefixMiddleware(app.wsgi_app)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Security: Use environment variable for secret key
 # Generate one with: python generate_secret_key.py

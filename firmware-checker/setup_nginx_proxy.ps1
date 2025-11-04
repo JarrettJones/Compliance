@@ -99,7 +99,10 @@ http {
         # Firmware Checker application
         # Keep the /firmware-checker prefix when proxying
         location /firmware-checker {
-            # Proxy to Waitress - NO trailing slash keeps the prefix
+            # Rewrite to strip /firmware-checker before passing to Flask
+            rewrite ^/firmware-checker(.*)$ `$1 break;
+            
+            # Proxy to Waitress at root
             proxy_pass http://localhost:5000;
             
             # Preserve original request information
@@ -110,7 +113,9 @@ http {
             proxy_set_header X-Forwarded-Host `$host;
             proxy_set_header X-Forwarded-Port `$server_port;
             
-            # Tell Flask the script name (path prefix)
+            # CRITICAL: Tell Flask about the /firmware-checker prefix
+            # This makes url_for() generate correct URLs
+            proxy_set_header X-Forwarded-Prefix /firmware-checker;
             proxy_set_header X-Script-Name /firmware-checker;
             
             # Performance optimizations
