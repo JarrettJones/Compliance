@@ -548,20 +548,29 @@ function stopActiveCheckMonitoring() {
 }
 
 function refreshActiveStatus(systemId) {
+    console.log('[Active Monitor] Checking status for system:', systemId);
     fetch(SCRIPT_ROOT + `/api/check-status/${systemId}`)
-        .then(response => response.json())
+        .then(response => {
+            console.log('[Active Monitor] Response status:', response.status);
+            return response.json();
+        })
         .then(data => {
-            console.log('Active check status:', data);
+            console.log('[Active Monitor] Data received:', data);
             
             if (data.status === 'completed') {
                 // Check is complete, redirect to results page
+                console.log('[Active Monitor] CHECK COMPLETED! Stopping monitoring...');
                 stopActiveCheckMonitoring();
+                
                 if (data.check_id) {
-                    console.log('Check completed, redirecting to results page for check_id:', data.check_id);
-                    window.location.href = `${SCRIPT_ROOT}/check/result/${data.check_id}`;
+                    const redirectUrl = `${SCRIPT_ROOT}/check/result/${data.check_id}`;
+                    console.log('[Active Monitor] Redirecting to:', redirectUrl);
+                    alert('Check completed! Redirecting to results page...'); // Temporary debug alert
+                    window.location.href = redirectUrl;
                 } else {
                     // Fallback: reload page if check_id not available
-                    console.warn('Check completed but no check_id available, reloading page');
+                    console.warn('[Active Monitor] Check completed but no check_id available, reloading page');
+                    alert('Check completed but no check_id! Reloading...'); // Temporary debug alert
                     window.location.reload();
                 }
             } else if (data.status === 'error') {
