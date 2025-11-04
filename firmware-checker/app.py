@@ -56,9 +56,10 @@ class PrefixMiddleware:
             
         return self.app(environ, start_response)
 
-# Apply middleware
+# Apply middleware - ProxyFix first, then PrefixMiddleware
+# ProxyFix handles X-Forwarded-* headers but doesn't handle X-Script-Name
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=0)
 app.wsgi_app = PrefixMiddleware(app.wsgi_app)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Security: Use environment variable for secret key
 # Generate one with: python generate_secret_key.py
@@ -582,6 +583,11 @@ def compare_firmware_with_recipe(firmware_data, recipe_versions):
 @app.route('/')
 def index():
     """Main dashboard page"""
+    # Debug: Log SCRIPT_NAME for troubleshooting
+    from flask import request as flask_request
+    logger.info(f"[INDEX] SCRIPT_NAME: {flask_request.environ.get('SCRIPT_NAME', 'NOT SET')}")
+    logger.info(f"[INDEX] url_for('systems'): {url_for('systems')}")
+    
     with get_db_connection() as conn:
         # Get recent systems
         systems = conn.execute('''
