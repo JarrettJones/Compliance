@@ -199,6 +199,60 @@
         </div>
     </div>
 </div>
+
+<!-- Recheck Credentials Modal -->
+<div class="modal fade" id="recheckModal" tabindex="-1" aria-labelledby="recheckModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-id" id="recheckModalLabel">
+                    <i class="bi bi-arrow-clockwise"></i> Recheck Firmware
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">Enter credentials to recheck: <strong id="recheckFirmwareType"></strong></p>
+                
+                <div class="mb-3">
+                    <label for="recheckUsername" class="form-label">RSCM Username</label>
+                    <input type="text" class="form-control" id="recheckUsername" value="admin" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="recheckPassword" class="form-label">RSCM Password</label>
+                    <input type="password" class="form-control" id="recheckPassword" value="admin" required>
+                </div>
+                
+                <div id="recheckOsCredentials" style="display: none;">
+                    <hr>
+                    <p class="text-muted small">Optional: OS credentials for storage/driver checks</p>
+                    
+                    <div class="mb-3">
+                        <label for="recheckOsUsername" class="form-label">OS Username</label>
+                        <input type="text" class="form-control" id="recheckOsUsername" placeholder="Leave blank to skip">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="recheckOsPassword" class="form-label">OS Password</label>
+                        <input type="password" class="form-control" id="recheckOsPassword">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="recheckComputerName" class="form-label">Computer Name/IP</label>
+                        <input type="text" class="form-control" id="recheckComputerName" placeholder="e.g., dca20301103n414">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="recheckSubmit">
+                    <i class="bi bi-arrow-clockwise"></i> Recheck
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_head %}
@@ -426,46 +480,60 @@ function recheckFirmware(firmwareType, category) {
     const button = event.target.closest('button');
     const originalButtonHtml = button.innerHTML;
     
-    // Disable button and show spinner
-    button.disabled = true;
-    button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Checking...';
+    // Show modal with firmware type
+    document.getElementById('recheckFirmwareType').textContent = firmwareType;
     
-    // Update status badge to show checking
-    const statusCell = row.cells[2];
-    statusCell.innerHTML = '<span class="badge bg-info">Checking...</span>';
-    
-    // Prompt for credentials (you can enhance this with a modal later)
-    const username = prompt('Enter RSCM username:', 'admin');
-    if (!username) {
-        button.disabled = false;
-        button.innerHTML = originalButtonHtml;
-        displayDetailedResults(); // Restore original display
-        return;
+    // Show OS credentials section if it's a driver/storage check
+    const osCredSection = document.getElementById('recheckOsCredentials');
+    if (firmwareType.includes('MANA Driver') || firmwareType.includes('M.2') || firmwareType.includes('E.1s') || firmwareType.includes('Windows')) {
+        osCredSection.style.display = 'block';
+    } else {
+        osCredSection.style.display = 'none';
     }
     
-    const password = prompt('Enter RSCM password:', 'admin');
-    if (!password) {
-        button.disabled = false;
-        button.innerHTML = originalButtonHtml;
-        displayDetailedResults(); // Restore original display
-        return;
-    }
+    // Set up modal submit handler
+    const modal = new bootstrap.Modal(document.getElementById('recheckModal'));
+    const submitBtn = document.getElementById('recheckSubmit');
     
-    // Optional: ask for OS credentials if it's a Windows driver check
-    let os_username = null;
-    let os_password = null;
-    let computer_name = null;
+    // Remove any existing listeners
+    const newSubmitBtn = submitBtn.cloneNode(true);
+    submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
     
-    if (firmwareType.includes('MANA Driver') || firmwareType.includes('Windows')) {
-        os_username = prompt('Enter OS username (or cancel to skip):', '');
-        if (os_username) {
-            os_password = prompt('Enter OS password:', '');
-            computer_name = prompt('Enter computer name or IP:', '');
+    newSubmitBtn.addEventListener('click', function() {
+        // Get credentials from modal
+        const username = document.getElementById('recheckUsername').value.trim();
+        const password = document.getElementById('recheckPassword').value.trim();
+        const os_username = document.getElementById('recheckOsUsername').value.trim() || null;
+        const os_password = document.getElementById('recheckOsPassword').value.trim() || null;
+        const computer_name = document.getElementById('recheckComputerName').value.trim() || null;
+        
+        if (!username || !password) {
+            alert('RSCM username and password are required');
+            return;
         }
-    }
+        
+        // Close modal
+        modal.hide();
+        
+        // Disable button and show spinner
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Checking...';
+        
+        // Update status badge to show checking
+        const statusCell = row.cells[2];
+        statusCell.innerHTML = '<span class="badge bg-info">Checking...</span>';
+        
+        console.log(`Rechecking firmware: ${firmwareType} (category: ${category})`);
+        
+        // Make API call to recheck the firmware
+        performRecheck(checkId, firmwareType, category, username, password, os_username, os_password, computer_name, row, button, originalButtonHtml);
+    });
     
-    console.log(`Rechecking firmware: ${firmwareType} (category: ${category})`);
-    
+    // Show modal
+    modal.show();
+}
+
+function performRecheck(checkId, firmwareType, category, username, password, os_username, os_password, computer_name, row, button, originalButtonHtml) {
     // Make API call to recheck the firmware
     fetch(SCRIPT_ROOT + '/api/check-firmware-individual', {
         method: 'POST',
