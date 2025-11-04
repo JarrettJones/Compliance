@@ -113,13 +113,21 @@ http {
             # Tell Flask the original path prefix
             proxy_set_header X-Forwarded-Prefix /firmware-checker;
             
+            # Performance optimizations
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            
             # Timeouts for long-running firmware checks
-            proxy_connect_timeout 120s;
+            proxy_connect_timeout 10s;
             proxy_send_timeout 120s;
             proxy_read_timeout 120s;
             
-            # Disable buffering for real-time updates
+            # Disable buffering for faster responses
             proxy_buffering off;
+            proxy_request_buffering off;
+            
+            # Enable keepalive
+            keepalive_timeout 65;
         }
         
         # Handle /firmware-checker without trailing slash - redirect to with slash
