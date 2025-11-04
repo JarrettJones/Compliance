@@ -131,7 +131,9 @@ http {
 }
 "@
 
-Set-Content -Path $nginxConf -Value $nginxConfig -Encoding UTF8
+# Use UTF8 without BOM for nginx compatibility
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($nginxConf, $nginxConfig, $utf8NoBom)
 Write-Host "[OK] Created nginx.conf" -ForegroundColor Green
 Write-Host ""
 
