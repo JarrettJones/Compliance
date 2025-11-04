@@ -97,10 +97,10 @@ http {
         }
         
         # Firmware Checker application
-        # Use trailing slash for proper path handling
-        location /firmware-checker/ {
-            # Proxy to Waitress - trailing slash strips /firmware-checker
-            proxy_pass http://localhost:5000/;
+        # Keep the /firmware-checker prefix when proxying
+        location /firmware-checker {
+            # Proxy to Waitress - NO trailing slash keeps the prefix
+            proxy_pass http://localhost:5000;
             
             # Preserve original request information
             proxy_set_header Host `$host;
@@ -110,8 +110,8 @@ http {
             proxy_set_header X-Forwarded-Host `$host;
             proxy_set_header X-Forwarded-Port `$server_port;
             
-            # Tell Flask the original path prefix
-            proxy_set_header X-Forwarded-Prefix /firmware-checker;
+            # Tell Flask the script name (path prefix)
+            proxy_set_header X-Script-Name /firmware-checker;
             
             # Performance optimizations
             proxy_http_version 1.1;
@@ -128,11 +128,6 @@ http {
             
             # Enable keepalive
             keepalive_timeout 65;
-        }
-        
-        # Handle /firmware-checker without trailing slash - redirect to with slash
-        location = /firmware-checker {
-            return 301 /firmware-checker/;
         }
     }
 }

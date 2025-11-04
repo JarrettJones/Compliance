@@ -7,6 +7,8 @@ from various systems including DC-SCM, OVL2, and other platform firmwares.
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from werkzeug.wrappers import Response
 import sqlite3
 import os
 from datetime import datetime
@@ -28,13 +30,22 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Set APPLICATION_ROOT for subpath deployment
-# This tells Flask it's deployed at /firmware-checker
-app.config['APPLICATION_ROOT'] = os.environ.get('APPLICATION_ROOT', '')
-
 # Support for running behind a reverse proxy (nginx, IIS)
 # This ensures Flask generates correct URLs when behind /firmware-checker path
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# If APPLICATION_ROOT is set, mount the app at that path
+application_root = os.environ.get('APPLICATION_ROOT', '').rstrip('/')
+if application_root:
+    # Create a simple 404 response for the root
+    def simple_app(environ, start_response):
+        response = Response('Not Found - Try ' + application_root + '/', status=404)
+        return response(environ, start_response)
+    
+    # Mount Flask app at the specified path
+    app.wsgi_app = DispatcherMiddleware(simple_app, {
+        application_root: app.wsgi_app
+    })
 
 # Security: Use environment variable for secret key
 # Generate one with: python generate_secret_key.py
