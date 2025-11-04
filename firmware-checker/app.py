@@ -87,8 +87,9 @@ active_checks = {}  # Maps check_id to thread info
 @contextmanager
 def get_db_connection():
     """Context manager for database connections"""
-    conn = sqlite3.connect(DATABASE)
+    conn = sqlite3.connect(DATABASE, timeout=30.0)  # Increase timeout to handle concurrent access
     conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA journal_mode=WAL')  # Enable Write-Ahead Logging for better concurrency
     try:
         yield conn
     finally:
