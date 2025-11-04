@@ -41,12 +41,18 @@ class PrefixMiddleware:
         # Check for X-Script-Name header from nginx
         script_name = environ.get('HTTP_X_SCRIPT_NAME', '')
         if script_name:
+            logger.info(f"[PREFIX-MW] Setting SCRIPT_NAME from X-Script-Name: {script_name}")
             environ['SCRIPT_NAME'] = script_name
             
         # Also support X-Forwarded-Prefix
         forwarded_prefix = environ.get('HTTP_X_FORWARDED_PREFIX', '')
         if forwarded_prefix and not script_name:
+            logger.info(f"[PREFIX-MW] Setting SCRIPT_NAME from X-Forwarded-Prefix: {forwarded_prefix}")
             environ['SCRIPT_NAME'] = forwarded_prefix
+        
+        # Debug logging
+        if not script_name and not forwarded_prefix:
+            logger.warning(f"[PREFIX-MW] No prefix headers found! PATH_INFO: {environ.get('PATH_INFO')}")
             
         return self.app(environ, start_response)
 
