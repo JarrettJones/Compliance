@@ -914,13 +914,13 @@ class DCScmChecker:
             print(f"[DC-SCM] [DEBUG] Sending command: {cfm_command.strip()}")
             shell.send(cfm_command)
             
-            # Wait for command execution
-            print(f"[DC-SCM] [DEBUG] Waiting 5 seconds for command execution...")
-            time.sleep(5)
+            # Wait for command execution - CFM commands can be slow
+            print(f"[DC-SCM] [DEBUG] Waiting 10 seconds for command execution...")
+            time.sleep(10)
             
             # Read command output
             print(f"[DC-SCM] [DEBUG] Reading command output...")
-            cfm_output = self._read_shell_output(shell)
+            cfm_output = self._read_shell_output(shell, timeout=20)
             logger.debug(f"[DEBUG] CFM Platform ID raw output length: {len(cfm_output)} chars")
             logger.debug(f"[DEBUG] Raw output: {repr(cfm_output)}")
             print(f"[DC-SCM] [DEBUG] Received {len(cfm_output)} characters of output")
@@ -1796,6 +1796,7 @@ class DCScmChecker:
         output = ""
         start_time = time.time()
         last_data_time = start_time
+        no_data_threshold = 3  # Consider done if no data for 3 seconds (reduced from 10)
         
         logger.debug(f"Starting to read shell output (timeout: {timeout}s)")
         print(f"[DC-SCM] Reading shell output (timeout: {timeout}s)...")
@@ -1808,21 +1809,19 @@ class DCScmChecker:
                         output += chunk
                         last_data_time = time.time()
                         logger.debug(f"Received {len(chunk)} chars, total: {len(output)}")
+                        print(f"[DC-SCM] [DEBUG] Received chunk: {len(chunk)} chars, total: {len(output)} chars")
                 except Exception as e:
                     logger.warning(f"Error reading shell chunk: {e}")
                     break
             else:
                 # If no data available, wait a bit
-                time.sleep(0.1)
+                time.sleep(0.2)
                 
-                # If we haven't received data for 5 seconds, try a longer wait
-                if time.time() - last_data_time > 5:
-                    time.sleep(1)
-                    
-                    # If still no data after 10 seconds since last data, consider done
-                    if time.time() - last_data_time > 10:
-                        logger.debug(f"No data received for 10 seconds, considering complete")
-                        break
+                # If we have received some data and no new data for threshold seconds, consider done
+                if output and (time.time() - last_data_time > no_data_threshold):
+                    logger.debug(f"No data received for {no_data_threshold} seconds after getting output, considering complete")
+                    print(f"[DC-SCM] [DEBUG] Output appears complete ({len(output)} chars)")
+                    break
                 
         logger.debug(f"Finished reading shell output: {len(output)} characters")
         return output
