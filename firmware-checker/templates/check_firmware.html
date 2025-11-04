@@ -597,6 +597,9 @@ function monitorThreadedCheck(checkId, systemId, startBtn, progressBar, progress
                 let progressPercent = 5; // Base progress
                 let statusMessage = 'Firmware check in progress...';
                 
+                // Debug logging
+                console.log('Progress data:', statusData.progress_data);
+                
                 // Check if we have progress data from firmware_data
                 if (statusData.progress_data && statusData.progress_data.progress) {
                     const progress = statusData.progress_data.progress;
@@ -608,6 +611,7 @@ function monitorThreadedCheck(checkId, systemId, startBtn, progressBar, progress
                     const total = progress.total || 0;
                     
                     statusMessage = `Checking ${currentCat}: ${currentFw} (${completed}/${total} complete)`;
+                    console.log(`Progress: ${progressPercent}% - ${statusMessage}`);
                 } else if (statusData.thread_info) {
                     // Fallback to runtime-based estimation if no progress data yet
                     const runtime = statusData.thread_info.runtime_minutes || 0;
