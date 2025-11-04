@@ -238,17 +238,31 @@ def cleanup_orphaned_checks():
                     hours = minutes / 60
                     print(f"  - Check ID {check['id']} (System {check['system_id']}) running for {hours:.1f} hours")
                     
+                    # Get existing firmware_data and update progress if it exists
+                    existing_check = conn.execute('SELECT firmware_data FROM firmware_checks WHERE id = ?', (check['id'],)).fetchone()
+                    firmware_data_str = existing_check['firmware_data'] if existing_check else '{}'
+                    
+                    # Parse and update the progress field if it exists
+                    try:
+                        if firmware_data_str and firmware_data_str != '{}':
+                            firmware_data = json.loads(firmware_data_str)
+                            if 'progress' in firmware_data:
+                                firmware_data['progress']['status'] = 'error'
+                                firmware_data['progress']['current_firmware'] = 'Interrupted by server restart'
+                            firmware_data_str = json.dumps(firmware_data)
+                        else:
+                            firmware_data_str = '{"status": "interrupted", "error": "Server restart interrupted this check"}'
+                    except (json.JSONDecodeError, KeyError):
+                        firmware_data_str = '{"status": "interrupted", "error": "Server restart interrupted this check"}'
+                    
                     # Update the orphaned check to 'error' status
                     conn.execute('''
                         UPDATE firmware_checks 
                         SET status = 'error', 
                             error_message = 'Check was interrupted when server was restarted (orphaned process)',
-                            firmware_data = COALESCE(
-                                NULLIF(firmware_data, '{"status": "initializing"}'),
-                                '{"status": "interrupted", "error": "Server restart interrupted this check"}'
-                            )
+                            firmware_data = ?
                         WHERE id = ?
-                    ''', (check['id'],))
+                    ''', (firmware_data_str, check['id'],))
                 
                 conn.commit()
                 
