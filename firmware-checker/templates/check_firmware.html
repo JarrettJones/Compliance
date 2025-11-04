@@ -143,11 +143,11 @@
                     <div class="col-md-6">
                         <h6><i class="bi bi-list-check"></i> Firmware Categories</h6>
                         <ul class="list-unstyled">
-                            <li><i class="bi bi-check text-success"></i> DC-SCM (15 firmware types)</li>
-                            <li><i class="bi bi-check text-success"></i> Other Platform (6 firmware types)</li>
-                            <li><i class="bi bi-check text-success"></i> OVL2 (18 firmware types)</li>
+                            <li><i class="bi bi-check text-success"></i> DC-SCM (16 firmware types)</li>
+                            <li><i class="bi bi-check text-success"></i> OVL2 (12 firmware types)</li>
+                            <li><i class="bi bi-check text-success"></i> Other Platform (4 firmware types)</li>
                         </ul>
-                        <p class="text-muted small">Total: 39 firmware types will be checked</p>
+                        <p class="text-muted small">Total: 32 firmware types will be checked</p>
                     </div>
                 </div>
                 
@@ -236,52 +236,68 @@
                                         <div class="col-md-4">
                                             <h6 class="text-primary">DC-SCM (16 types)</h6>
                                             <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="IFWI" id="fw_ifwi" checked>
+                                                <label class="form-check-label small" for="fw_ifwi">IFWI</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="UEFI Profile/Other" id="fw_uefi" checked>
+                                                <label class="form-check-label small" for="fw_uefi">UEFI Profile/Other</label>
+                                            </div>
+                                            <div class="form-check">
                                                 <input class="form-check-input fw-category dc_scm" type="checkbox" value="BMC FW" id="fw_bmc" checked>
                                                 <label class="form-check-label small" for="fw_bmc">BMC FW</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="BMC FW Alternate" id="fw_bmc_alt" checked>
-                                                <label class="form-check-label small" for="fw_bmc_alt">BMC FW Alternate</label>
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="Inventory" id="fw_inventory" checked>
+                                                <label class="form-check-label small" for="fw_inventory">Inventory</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="CPLD" id="fw_cpld" checked>
-                                                <label class="form-check-label small" for="fw_cpld">CPLD</label>
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="PowerCapping" id="fw_powercapping" checked>
+                                                <label class="form-check-label small" for="fw_powercapping">PowerCapping</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="BIOS" id="fw_bios" checked>
-                                                <label class="form-check-label small" for="fw_bios">BIOS</label>
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="FanTable" id="fw_fantable" checked>
+                                                <label class="form-check-label small" for="fw_fantable">FanTable</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="BIOS Alternate" id="fw_bios_alt" checked>
-                                                <label class="form-check-label small" for="fw_bios_alt">BIOS Alternate</label>
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="SDRGenerator" id="fw_sdr" checked>
+                                                <label class="form-check-label small" for="fw_sdr">SDRGenerator</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="Retimer FW" id="fw_retimer" checked>
-                                                <label class="form-check-label small" for="fw_retimer">Retimer FW</label>
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="IPMIAllowList" id="fw_ipmi" checked>
+                                                <label class="form-check-label small" for="fw_ipmi">IPMIAllowList</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="PLDM FW" id="fw_pldm" checked>
-                                                <label class="form-check-label small" for="fw_pldm">PLDM FW</label>
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="BMC Tip" id="fw_bmc_tip" checked>
+                                                <label class="form-check-label small" for="fw_bmc_tip">BMC Tip</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="PSU1 Model ID / FW" id="fw_psu1" checked>
-                                                <label class="form-check-label small" for="fw_psu1">PSU1 Model ID / FW</label>
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="BMC TIP PCD Platform ID" id="fw_bmc_tip_platform" checked>
+                                                <label class="form-check-label small" for="fw_bmc_tip_platform">BMC TIP PCD Platform ID</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="PSU2 Model ID / FW" id="fw_psu2" checked>
-                                                <label class="form-check-label small" for="fw_psu2">PSU2 Model ID / FW</label>
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="BMC TIP PCD Version ID (hex)/(dec)" id="fw_bmc_tip_version" checked>
+                                                <label class="form-check-label small" for="fw_bmc_tip_version">BMC TIP PCD Version ID</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="M.2 FW (OS Visible)" id="fw_m2" checked>
-                                                <label class="form-check-label small" for="fw_m2">M.2 FW (OS Visible)</label>
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="Manticore (HSM)" id="fw_manticore" checked>
+                                                <label class="form-check-label small" for="fw_manticore">Manticore (HSM)</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="E.1s FW (OS Visible)" id="fw_e1s" checked>
-                                                <label class="form-check-label small" for="fw_e1s">E.1s FW (OS Visible)</label>
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="CFM Platform ID" id="fw_cfm_platform" checked>
+                                                <label class="form-check-label small" for="fw_cfm_platform">CFM Platform ID</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="FPGA Bitstream" id="fw_fpga_bit" checked>
-                                                <label class="form-check-label small" for="fw_fpga_bit">FPGA Bitstream</label>
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="CFM Version ID (hex)/(dec)" id="fw_cfm_version" checked>
+                                                <label class="form-check-label small" for="fw_cfm_version">CFM Version ID</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="TPM Module" id="fw_tpm" checked>
+                                                <label class="form-check-label small" for="fw_tpm">TPM Module</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="SCM-CPLD" id="fw_scm_cpld" checked>
+                                                <label class="form-check-label small" for="fw_scm_cpld">SCM-CPLD</label>
                                             </div>
                                         </div>
                                         
@@ -290,7 +306,7 @@
                                             <h6 class="text-success">OVL2 (12 types)</h6>
                                             <div class="form-check">
                                                 <input class="form-check-input fw-category ovl2" type="checkbox" value="FPGA Agilex (App Image w/ OpRom)" id="fw_agilex" checked>
-                                                <label class="form-check-label small" for="fw_agilex">FPGA Agilex</label>
+                                                <label class="form-check-label small" for="fw_agilex">FPGA Agilex (App Image w/ OpRom)</label>
                                             </div>
                                             <div class="form-check">
                                                 <input class="form-check-input fw-category ovl2" type="checkbox" value="Cyclone V Image" id="fw_cyclone" checked>
@@ -340,37 +356,29 @@
                                         
                                         <!-- Other Platform -->
                                         <div class="col-md-4">
-                                            <h6 class="text-warning">Other Platform (6 types)</h6>
+                                            <h6 class="text-warning">Other Platform (4 types)</h6>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="CFM Platform ID" id="fw_cfm_platform" checked>
-                                                <label class="form-check-label small" for="fw_cfm_platform">CFM Platform ID</label>
+                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="HPMCpld" id="fw_hpm_cpld" checked>
+                                                <label class="form-check-label small" for="fw_hpm_cpld">HPMCpld</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="CFM Build Version" id="fw_cfm_build" checked>
-                                                <label class="form-check-label small" for="fw_cfm_build">CFM Build Version</label>
+                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="SOC VR Configs" id="fw_soc_vr" checked>
+                                                <label class="form-check-label small" for="fw_soc_vr">SOC VR Configs</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="CFM Active PFM" id="fw_cfm_pfm" checked>
-                                                <label class="form-check-label small" for="fw_cfm_pfm">CFM Active PFM</label>
+                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="E.1s" id="fw_e1s" checked>
+                                                <label class="form-check-label small" for="fw_e1s">E.1s</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="CFM ROT FW" id="fw_cfm_rot" checked>
-                                                <label class="form-check-label small" for="fw_cfm_rot">CFM ROT FW</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="M.2 FW (WinRM)" id="fw_m2_winrm" checked>
-                                                <label class="form-check-label small" for="fw_m2_winrm">M.2 FW (WinRM)</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="E.1s FW (WinRM)" id="fw_e1s_winrm" checked>
-                                                <label class="form-check-label small" for="fw_e1s_winrm">E.1s FW (WinRM)</label>
+                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="M.2" id="fw_m2" checked>
+                                                <label class="form-check-label small" for="fw_m2">M.2</label>
                                             </div>
                                         </div>
                                     </div>
                                     
                                     <div class="mt-3">
                                         <p class="text-muted small mb-0">
-                                            <i class="bi bi-info-circle"></i> <span id="selectedCount">39 firmware types</span> will be checked
+                                            <i class="bi bi-info-circle"></i> <span id="selectedCount">32 firmware types</span> will be checked
                                         </p>
                                     </div>
                                 </div>
