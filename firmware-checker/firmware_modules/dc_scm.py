@@ -1611,14 +1611,27 @@ class DCScmChecker:
             }
     
     def _get_cerberus_info_via_ssh(self, firmware_type, rscm_ip, system_port):
-        """Get Cerberus info via SSH commands (matching PowerShell implementation)"""
+        """Get Cerberus info via SSH commands (matching PowerShell implementation)
+        
+        NOTE: Manticore (HSM) uses Redfish API instead of SSH - see _check_cerberus_individual()
+        """
         try:
             # Map firmware types to Cerberus commands (matching PowerShell)
+            # NOTE: Manticore is NOT in this list - it uses Redfish API instead
             cerberus_commands = {
-                'Manticore (HSM)': f'show system cerberus version -i {system_port} -t 0 -b 0 -c 1',  # Component code 1 for Manticore
                 'CFM Platform ID': 'cerberus_utility get_cfm_id -i 2',
                 'CFM Version ID (hex)/(dec)': 'cerberus_utility get_cfm_id -i 2'
             }
+            
+            # Manticore should never reach here - it's handled by Redfish in _check_cerberus_individual()
+            if firmware_type == 'Manticore (HSM)':
+                return {
+                    'version': 'ERROR: Manticore should use Redfish API, not SSH',
+                    'status': 'error',
+                    'error': 'Internal error: Manticore check routed to SSH instead of Redfish',
+                    'checked_at': datetime.now().isoformat(),
+                    'method': 'ssh_cerberus_wrong_path'
+                }
             
             command = cerberus_commands.get(firmware_type, 'cerberus_utility get_device_info -i 2')
             
@@ -1749,7 +1762,10 @@ class DCScmChecker:
         return 'NOT_PARSED'
     
     def _parse_cerberus_output(self, firmware_type, output):
-        """Parse Cerberus command output (matching PowerShell implementation)"""
+        """Parse Cerberus command output (matching PowerShell implementation)
+        
+        NOTE: Manticore (HSM) uses Redfish API and _extract_cerberus_version() instead
+        """
         if not output:
             return 'NO_CERBERUS_OUTPUT'
         
@@ -1757,6 +1773,12 @@ class DCScmChecker:
         
         # Parse based on firmware type
         if firmware_type == 'Manticore (HSM)':
+            # Manticore should never reach here - it uses Redfish API instead
+            print(f"[DC-SCM WARNING] Manticore reached SSH parsing - should use Redfish instead!")
+            return 'ERROR: Manticore should use Redfish API, not SSH'
+        
+        # Legacy Manticore SSH parsing code (deprecated - kept for reference)
+        if False and firmware_type == 'Manticore (HSM)':
             import re
             
             # Pattern 1: Look for FirmwareVersion line directly (matching PowerShell)
