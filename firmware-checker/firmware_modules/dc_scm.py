@@ -1249,17 +1249,35 @@ class DCScmChecker:
             }
     
     def _check_cerberus_individual(self, firmware_type, rscm_ip, system_port):
-        """Check Cerberus items using SSH Cerberus commands"""
-        print(f"[DC-SCM] Checking Cerberus: {firmware_type} via SSH Cerberus...")
+        """Check Cerberus items - use Redfish for Manticore, SSH for others"""
+        print(f"[DC-SCM] Checking Cerberus: {firmware_type}...")
         try:
-            return self._get_cerberus_info_via_ssh(firmware_type, rscm_ip, system_port)
+            # For Manticore (HSM), use Redfish endpoint instead of SSH command
+            # SSH exec_command doesn't handle the long-running Cerberus commands well
+            if firmware_type == 'Manticore (HSM)':
+                print(f"[DC-SCM] Using Redfish API for {firmware_type}...")
+                cerberus_data = self._get_redfish_data(rscm_ip, system_port, '/redfish/v1/System/Cerberus/1')
+                if cerberus_data:
+                    return self._extract_cerberus_version(cerberus_data)
+                else:
+                    return {
+                        'version': 'CONNECTION_FAILED',
+                        'status': 'error',
+                        'error': 'Failed to connect to Cerberus Redfish endpoint',
+                        'checked_at': datetime.now().isoformat(),
+                        'method': 'redfish_api'
+                    }
+            else:
+                # For other Cerberus items, use SSH commands
+                print(f"[DC-SCM] Using SSH Cerberus command for {firmware_type}...")
+                return self._get_cerberus_info_via_ssh(firmware_type, rscm_ip, system_port)
         except Exception as e:
             return {
-                'version': 'SSH_CERBERUS_ERROR',
+                'version': 'CERBERUS_CHECK_ERROR',
                 'status': 'error',
                 'error': str(e),
                 'checked_at': datetime.now().isoformat(),
-                'method': 'ssh_cerberus'
+                'method': 'cerberus_check'
             }
     
     def _check_tpm_individual(self, rscm_ip, system_port):
