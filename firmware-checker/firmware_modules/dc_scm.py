@@ -961,8 +961,13 @@ class DCScmChecker:
             print(f"[DC-SCM] [DEBUG] Starting to parse CFM Platform ID...")
             cfm_active_id = self._parse_cfm_active_identifier(cfm_output)
             
+            # Check if we got a valid response from RSCM (even if CFM failed)
+            # If we see "Completion Code" in output, RSCM responded successfully
+            has_completion_code = "Completion Code" in cfm_output
+            
             if cfm_active_id:
-                logger.info(f"Successfully retrieved CFM Platform ID: {cfm_active_id}")
+                # We found CfmActiveIdentifier - could be a value, "No valid CFM", or "failed to get"
+                logger.info(f"Successfully retrieved CFM Platform ID response: {cfm_active_id}")
                 return {
                     'version': cfm_active_id,
                     'status': 'success',
@@ -971,12 +976,26 @@ class DCScmChecker:
                     'method': 'ssh_direct_rscm_cfm_command',
                     'raw_output': cfm_output
                 }
-            else:
-                logger.warning("Could not parse CFM Platform ID from output")
+            elif has_completion_code:
+                # RSCM responded but we couldn't parse CfmActiveIdentifier
+                # This shouldn't normally happen, but if it does, still mark as success since RSCM responded
+                logger.warning("RSCM responded with Completion Code but could not parse CfmActiveIdentifier")
                 return {
-                    'version': 'CFM_PLATFORM_ID_NOT_FOUND',
+                    'version': 'PARSE_ERROR_BUT_RSCM_RESPONDED',
+                    'status': 'success',
+                    'error': None,
+                    'checked_at': datetime.now().isoformat(),
+                    'method': 'ssh_direct_rscm_cfm_command',
+                    'raw_output': cfm_output,
+                    'note': 'RSCM responded successfully but CfmActiveIdentifier could not be parsed from output'
+                }
+            else:
+                # No CfmActiveIdentifier and no Completion Code - command likely failed or timed out
+                logger.warning("Could not parse CFM Platform ID from output and no Completion Code found")
+                return {
+                    'version': 'CFM_COMMAND_FAILED',
                     'status': 'error',
-                    'error': 'Could not find CfmActiveIdentifier in show system cerberus cfm id output',
+                    'error': 'Could not find CfmActiveIdentifier or Completion Code in command output',
                     'checked_at': datetime.now().isoformat(),
                     'method': 'ssh_direct_rscm_cfm_command',
                     'raw_output': cfm_output
