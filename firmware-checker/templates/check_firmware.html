@@ -554,9 +554,16 @@ function refreshActiveStatus(systemId) {
             console.log('Active check status:', data);
             
             if (data.status === 'completed') {
-                // Check is complete, reload page to show results option
+                // Check is complete, redirect to results page
                 stopActiveCheckMonitoring();
-                window.location.reload();
+                if (data.check_id) {
+                    console.log('Check completed, redirecting to results page for check_id:', data.check_id);
+                    window.location.href = `${SCRIPT_ROOT}/check/result/${data.check_id}`;
+                } else {
+                    // Fallback: reload page if check_id not available
+                    console.warn('Check completed but no check_id available, reloading page');
+                    window.location.reload();
+                }
             } else if (data.status === 'error') {
                 // Check failed
                 stopActiveCheckMonitoring();
