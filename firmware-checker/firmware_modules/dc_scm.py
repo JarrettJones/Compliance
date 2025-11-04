@@ -915,16 +915,42 @@ class DCScmChecker:
             print(f"[DC-SCM] [DEBUG] Sending command: {cfm_command.strip()}")
             shell.send(cfm_command)
             
-            # Wait for command execution - CFM commands can be slow
-            print(f"[DC-SCM] [DEBUG] Waiting 10 seconds for command execution...")
-            time.sleep(10)
+            # Wait for command execution - CFM commands can take up to 30 seconds
+            # Keep reading until we see "Completion Code" which indicates command finished
+            print(f"[DC-SCM] [DEBUG] Waiting for CFM command to complete (up to 30 seconds)...")
+            cfm_output = ""
+            start_time = time.time()
+            max_wait = 30
             
-            # Read command output
-            print(f"[DC-SCM] [DEBUG] Reading command output...")
-            cfm_output = self._read_shell_output(shell, timeout=20)
+            while time.time() - start_time < max_wait:
+                time.sleep(1)  # Check every second
+                
+                # Read any available output
+                if shell.recv_ready():
+                    chunk = shell.recv(8192).decode('utf-8', errors='ignore')
+                    cfm_output += chunk
+                    logger.debug(f"[DEBUG] Received chunk: {len(chunk)} chars, total: {len(cfm_output)}")
+                    print(f"[DC-SCM] [DEBUG] Received {len(chunk)} chars, total: {len(cfm_output)} chars")
+                
+                # Check if we've received the completion indicator
+                if "Completion Code" in cfm_output:
+                    elapsed = time.time() - start_time
+                    print(f"[DC-SCM] [DEBUG] Command completed after {elapsed:.1f} seconds")
+                    logger.debug(f"[DEBUG] Found 'Completion Code' after {elapsed:.1f}s")
+                    # Wait a moment more to ensure all output is received
+                    time.sleep(1)
+                    if shell.recv_ready():
+                        final_chunk = shell.recv(8192).decode('utf-8', errors='ignore')
+                        cfm_output += final_chunk
+                    break
+            
+            if "Completion Code" not in cfm_output:
+                print(f"[DC-SCM] [WARNING] Command did not complete within {max_wait} seconds")
+                logger.warning(f"CFM command timed out after {max_wait}s without seeing Completion Code")
+            
             logger.debug(f"[DEBUG] CFM Platform ID raw output length: {len(cfm_output)} chars")
             logger.debug(f"[DEBUG] Raw output: {repr(cfm_output)}")
-            print(f"[DC-SCM] [DEBUG] Received {len(cfm_output)} characters of output")
+            print(f"[DC-SCM] [DEBUG] Final output: {len(cfm_output)} characters")
             
             # Close connections
             print(f"[DC-SCM] [DEBUG] Closing SSH connections...")
