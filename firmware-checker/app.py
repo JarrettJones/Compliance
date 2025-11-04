@@ -80,7 +80,7 @@ DATABASE = 'firmware_checker.db'
 UPLOAD_FOLDER = 'uploads'
 
 # Thread management for background firmware checks
-thread_pool = ThreadPoolExecutor(max_workers=3)  # Limit concurrent checks to 3
+thread_pool = ThreadPoolExecutor(max_workers=10)  # Allow up to 10 concurrent firmware checks
 active_checks_lock = threading.Lock()
 active_checks = {}  # Maps check_id to thread info
 
