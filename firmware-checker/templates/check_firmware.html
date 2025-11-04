@@ -565,12 +565,24 @@ function refreshActiveStatus(systemId) {
                 if (data.check_id) {
                     const redirectUrl = `${SCRIPT_ROOT}/check/result/${data.check_id}`;
                     console.log('[Active Monitor] Redirecting to:', redirectUrl);
-                    alert('Check completed! Redirecting to results page...'); // Temporary debug alert
+                    
+                    // Update UI before redirect
+                    const progressBar = document.getElementById('activeProgressBar');
+                    const progressText = document.getElementById('activeProgressText');
+                    if (progressBar) {
+                        progressBar.style.width = '100%';
+                        progressBar.classList.remove('bg-info', 'progress-bar-animated');
+                        progressBar.classList.add('bg-success');
+                    }
+                    if (progressText) {
+                        progressText.textContent = 'Complete! Redirecting...';
+                    }
+                    
+                    // Redirect immediately
                     window.location.href = redirectUrl;
                 } else {
                     // Fallback: reload page if check_id not available
                     console.warn('[Active Monitor] Check completed but no check_id available, reloading page');
-                    alert('Check completed but no check_id! Reloading...'); // Temporary debug alert
                     window.location.reload();
                 }
             } else if (data.status === 'error') {
