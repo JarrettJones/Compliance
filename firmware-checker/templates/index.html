@@ -214,8 +214,8 @@
 </div>
 
 <!-- Firmware Types Modal -->
-<div class="modal fade" id="firmwareTypesModal" tabindex="-1" aria-labelledby="firmwareTypesModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+<div class="modal fade" id="firmwareTypesModal" tabindex="-1" aria-labelledby="firmwareTypesModalLabel" aria-hidden="true" onclick="if(event.target === this) closeModal()">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
                 <h5 class="modal-title" id="firmwareTypesModalLabel">
@@ -224,14 +224,14 @@
                 <button type="button" class="btn-close btn-close-white" onclick="closeModal()" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="row">
-                    <div class="col-md-4 mb-4">
-                        <div class="card border-primary">
+                <div class="row row-cols-1 row-cols-md-3 g-4">
+                    <div class="col">
+                        <div class="card border-primary h-100">
                             <div class="card-header bg-primary text-white">
                                 <h6 class="mb-0"><i class="bi bi-motherboard"></i> DC-SCM</h6>
                                 <small>16 Firmware Types</small>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body" style="min-height: 400px;">
                                 <ul class="list-unstyled small mb-0">
                                     <li><i class="bi bi-check-circle-fill text-success"></i> IFWI</li>
                                     <li><i class="bi bi-check-circle-fill text-success"></i> UEFI Profile/Other</li>
@@ -254,13 +254,13 @@
                         </div>
                     </div>
                     
-                    <div class="col-md-4 mb-4">
-                        <div class="card border-success">
+                    <div class="col">
+                        <div class="card border-success h-100">
                             <div class="card-header bg-success text-white">
                                 <h6 class="mb-0"><i class="bi bi-diagram-3"></i> OVL2</h6>
                                 <small>10 Firmware Types</small>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body" style="min-height: 400px;">
                                 <ul class="list-unstyled small mb-0">
                                     <li><i class="bi bi-check-circle-fill text-success"></i> SOC Test OS (STOS)</li>
                                     <li><i class="bi bi-check-circle-fill text-success"></i> Cyclone V Image</li>
@@ -277,13 +277,13 @@
                         </div>
                     </div>
                     
-                    <div class="col-md-4 mb-4">
-                        <div class="card border-warning">
+                    <div class="col">
+                        <div class="card border-warning h-100">
                             <div class="card-header bg-warning text-dark">
                                 <h6 class="mb-0"><i class="bi bi-hdd-rack"></i> Other Platform</h6>
                                 <small>7 Firmware Types</small>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body" style="min-height: 400px;">
                                 <ul class="list-unstyled small mb-0">
                                     <li><i class="bi bi-check-circle-fill text-success"></i> HPMCpld</li>
                                     <li><i class="bi bi-check-circle-fill text-success"></i> SOC VR Config - PVCCD</li>
@@ -297,7 +297,7 @@
                     </div>
                 </div>
                 
-                <div class="alert alert-info mb-0">
+                <div class="alert alert-info mb-0 mt-4">
                     <i class="bi bi-info-circle"></i> <strong>Total:</strong> 33 firmware types across 3 categories can be checked automatically
                 </div>
             </div>
@@ -315,27 +315,35 @@
         const modal = document.getElementById('firmwareTypesModal');
         const backdrop = document.getElementById('modalBackdrop');
         
+        // Remove show class and hide modal
         modal.classList.remove('show');
-        modal.style.display = 'none';
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 150); // Wait for fade animation
+        
+        // Remove modal-open class from body
         document.body.classList.remove('modal-open');
         
+        // Remove backdrop
         if (backdrop) {
-            backdrop.remove();
+            backdrop.classList.remove('show');
+            setTimeout(() => {
+                backdrop.remove();
+            }, 150);
         }
+        
+        // Remove any leftover modal-backdrop elements
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(b => b.remove());
     }
-    
-    // Close modal when clicking outside
-    document.addEventListener('click', function(event) {
-        const modal = document.getElementById('firmwareTypesModal');
-        if (event.target === modal) {
-            closeModal();
-        }
-    });
     
     // Close modal with Escape key
     document.addEventListener('keydown', function(event) {
         if (event.key === 'Escape') {
-            closeModal();
+            const modal = document.getElementById('firmwareTypesModal');
+            if (modal.classList.contains('show')) {
+                closeModal();
+            }
         }
     });
 </script>
