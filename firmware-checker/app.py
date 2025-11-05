@@ -826,34 +826,7 @@ def systems():
 
 @app.route('/systems/add', methods=['GET', 'POST'])
 def add_system():
-    """Add a new system"""
-    if request.method == 'POST':
-        name = request.form['name']
-        rscm_ip = request.form['rscm_ip']
-        rscm_port = request.form.get('rscm_port', 22, type=int)
-        description = request.form.get('description', '')
-        
-        try:
-            with get_db_connection() as conn:
-                conn.execute('''
-                    INSERT INTO systems (name, rscm_ip, rscm_port, description)
-                    VALUES (?, ?, ?, ?)
-                ''', (name, rscm_ip, rscm_port, description))
-                conn.commit()
-            
-            flash(f'System "{name}" added successfully!', 'success')
-            return redirect(url_for('systems'))
-            
-        except sqlite3.IntegrityError:
-            flash(f'System name "{name}" already exists!', 'error')
-        except Exception as e:
-            flash(f'Error adding system: {str(e)}', 'error')
-    
-    return render_template('add_system.html')
-
-@app.route('/systems/add-automated', methods=['GET', 'POST'])
-def add_system_automated():
-    """Automated system registration - test/beta feature"""
+    """Automated system registration"""
     if request.method == 'POST':
         try:
             # Get RSCM connection details
@@ -865,7 +838,7 @@ def add_system_automated():
             # Validate required fields
             if not rscm_ip or not password:
                 flash('RSCM IP and password are required!', 'error')
-                return render_template('add_system_automated.html')
+                return render_template('add_system.html')
             
             # Try to connect and get serial number
             print(f"[AUTO-REG] Attempting to connect to {rscm_ip}:{system_port} with user '{username}'")
@@ -875,7 +848,7 @@ def add_system_automated():
             connection_test = dc_scm_checker.test_redfish_connection(rscm_ip, system_port)
             if connection_test['status'] != 'success':
                 flash(f"Failed to connect to RSCM: {connection_test['message']}", 'error')
-                return render_template('add_system_automated.html')
+                return render_template('add_system.html')
             
             # Get system information including serial number
             print(f"[AUTO-REG] Connection successful, retrieving system information...")
@@ -883,7 +856,7 @@ def add_system_automated():
             
             if not system_data:
                 flash('Failed to retrieve system information from RSCM', 'error')
-                return render_template('add_system_automated.html')
+                return render_template('add_system.html')
             
             # Extract serial number and system info
             serial_number = system_data.get('SerialNumber', 'Unknown')
@@ -893,7 +866,7 @@ def add_system_automated():
             
             if serial_number == 'Unknown' or not serial_number:
                 flash('Could not retrieve serial number from system', 'error')
-                return render_template('add_system_automated.html')
+                return render_template('add_system.html')
             
             print(f"[AUTO-REG] Retrieved Serial Number: {serial_number}")
             
@@ -924,17 +897,17 @@ def add_system_automated():
         except Exception as e:
             logger.error(f"Error in automated system registration: {str(e)}")
             flash(f'Error during automated registration: {str(e)}', 'error')
-            return render_template('add_system_automated.html')
+            return render_template('add_system.html')
     
-    return render_template('add_system_automated.html')
+    return render_template('add_system.html')
 
 @app.route('/systems/add-metadata', methods=['GET', 'POST'])
 def add_system_metadata():
     """Add metadata to automatically discovered system"""
     # Check if we have pending system data
     if 'pending_system' not in session:
-        flash('No pending system registration found. Please start the automated registration process.', 'warning')
-        return redirect(url_for('add_system_automated'))
+        flash('No pending system registration found. Please start the registration process.', 'warning')
+        return redirect(url_for('add_system'))
     
     pending = session['pending_system']
     

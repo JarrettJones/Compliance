@@ -1,110 +1,118 @@
 {% extends "base.html" %}
 
-{% block title %}Add System - Firmware Version Checker{% endblock %}
+{% block title %}Add System{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h1><i class="bi bi-plus-circle"></i> Add New System</h1>
-                <p class="lead">Configure a new system for firmware monitoring</p>
+                <h1><i class="bi bi-cpu-fill"></i> Add System</h1>
+                <p class="text-muted">Connect to RSCM and automatically discover system information</p>
             </div>
-            <a href="{{ url_for('systems') }}" class="btn btn-outline-secondary">
+            <a href="{{ url_for('systems') }}" class="btn btn-secondary">
                 <i class="bi bi-arrow-left"></i> Back to Systems
             </a>
         </div>
     </div>
 </div>
 
-<div class="row justify-content-center">
-    <div class="col-lg-8">
+<div class="row">
+    <div class="col-lg-8 mx-auto">
         <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">System Information</h5>
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-robot"></i> Step 1: Connect to RSCM</h5>
             </div>
             <div class="card-body">
-                <form method="POST">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> <strong>Automated Registration:</strong> This process will:
+                    <ul class="mb-0 mt-2">
+                        <li>Connect to your RSCM using Redfish API</li>
+                        <li>Automatically retrieve the system serial number from BMC</li>
+                        <li>Allow you to add location metadata (building, rack, etc.)</li>
+                        <li>Create the system record with all information</li>
+                    </ul>
+                </div>
+
+                <form method="POST" id="autoRegForm">
                     <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="name" class="form-label">System Name *</label>
-                            <input type="text" class="form-control" id="name" name="name" required
-                                   placeholder="e.g., Production-Server-01">
-                            <div class="form-text">Unique identifier for this system</div>
-                        </div>
-                        
                         <div class="col-md-6 mb-3">
                             <label for="rscm_ip" class="form-label">RSCM IP Address *</label>
                             <input type="text" class="form-control" id="rscm_ip" name="rscm_ip" required
-                                   placeholder="e.g., 192.168.1.100" pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$">
-                            <div class="form-text">IP address for RSCM connection</div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="rscm_port" class="form-label">RSCM Port</label>
-                            <input type="number" class="form-control" id="rscm_port" name="rscm_port" 
-                                   value="22" min="1" max="65535">
-                            <div class="form-text">Port number for RSCM connection (default: 22)</div>
+                                   placeholder="e.g., 172.29.89.27" pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$">
+                            <div class="form-text">IP address of the RSCM</div>
                         </div>
                         
                         <div class="col-md-6 mb-3">
-                            <label for="description" class="form-label">Description</label>
-                            <input type="text" class="form-control" id="description" name="description"
-                                   placeholder="e.g., Main production server in datacenter A">
-                            <div class="form-text">Optional description for this system</div>
+                            <label for="system_port" class="form-label">System Port *</label>
+                            <input type="number" class="form-control" id="system_port" name="system_port" 
+                                   value="5" min="1" max="65535" required>
+                            <div class="form-text">System port/slot number</div>
                         </div>
                     </div>
-                    
-                    <div class="mb-4">
-                        <div class="card bg-light">
-                            <div class="card-body">
-                                <h6 class="card-title"><i class="bi bi-info-circle"></i> Firmware Types to Check</h6>
-                                <div class="row">
-                                    <div class="col-md-4">
-                                        <strong>DC-SCM (15 types)</strong>
-                                        <ul class="list-unstyled small text-muted">
-                                            <li>• IFWI, BMC, Inventory</li>
-                                            <li>• PowerCapping, FanTable</li>
-                                            <li>• SDRGenerator, IPMIAllowList</li>
-                                            <li>• BMCTip, Manticore, CFM</li>
-                                            <li>• TPM Module, SCM-CPLD</li>
-                                        </ul>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <strong>Other Platform (6 types)</strong>
-                                        <ul class="list-unstyled small text-muted">
-                                            <li>• HPMCpld</li>
-                                            <li>• SOC VR Configs</li>
-                                            <li>• E.1s (Primary/Secondary)</li>
-                                            <li>• M.2 (Primary/Secondary)</li>
-                                        </ul>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <strong>OVL2 (18 types)</strong>
-                                        <ul class="list-unstyled small text-muted">
-                                            <li>• FPGA Agilex variants</li>
-                                            <li>• Cyclone V variants</li>
-                                            <li>• OVL SOC FIP variants</li>
-                                            <li>• Drivers & Tools</li>
-                                            <li>• Glacier Cerberus variants</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-shield-lock"></i> <strong>RSCM Credentials Required</strong>
+                        <p class="mb-0 mt-2">Provide credentials to authenticate with the RSCM for automatic serial number retrieval.</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="username" class="form-label">RSCM Username *</label>
+                            <input type="text" class="form-control" id="username" name="username" 
+                                   value="root" required>
+                            <div class="form-text">Default is typically "root"</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="password" class="form-label">RSCM Password *</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                            <div class="form-text">RSCM admin password</div>
                         </div>
                     </div>
-                    
-                    <div class="d-flex justify-content-between">
-                        <a href="{{ url_for('systems') }}" class="btn btn-secondary">
-                            <i class="bi bi-x"></i> Cancel
-                        </a>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-plus"></i> Add System
+
+                    <div class="alert alert-secondary">
+                        <i class="bi bi-clock-history"></i> <strong>What happens next?</strong>
+                        <p class="mb-0 mt-2">After clicking "Connect & Discover", we'll connect to the RSCM, retrieve the serial number, and then you'll be able to add location metadata (building, rack, etc.) before saving the system.</p>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                            <i class="bi bi-plugin"></i> Connect & Discover System
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="testConnection()">
+                            <i class="bi bi-wifi"></i> Test Connection First
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6><i class="bi bi-question-circle"></i> Need Help?</h6>
+                <p class="text-muted mb-2">Make sure:</p>
+                <ul class="text-muted mb-0">
+                    <li>The RSCM IP address is correct and accessible from this machine</li>
+                    <li>Redfish API is enabled on the RSCM (usually enabled by default)</li>
+                    <li>You have valid RSCM credentials (typically root/password)</li>
+                    <li>Network connectivity allows HTTPS on port 8080 to the RSCM</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h5>Connecting to RSCM...</h5>
+                <p class="text-muted mb-0">Retrieving system information and serial number</p>
             </div>
         </div>
     </div>
@@ -113,31 +121,78 @@
 
 {% block extra_scripts %}
 <script>
-// Form validation
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.querySelector('form');
-    const ipInput = document.getElementById('rscm_ip');
+// Get the script root for URL generation (handles /firmware-checker prefix)
+const SCRIPT_ROOT = {{ request.script_root|tojson }};
+
+// Form validation and submission
+document.getElementById('autoRegForm').addEventListener('submit', function(e) {
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Connecting...';
     
-    // IP address validation
-    ipInput.addEventListener('input', function() {
-        const ipPattern = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
-        if (this.value && !ipPattern.test(this.value)) {
-            this.setCustomValidity('Please enter a valid IP address');
-        } else {
-            this.setCustomValidity('');
-        }
-    });
+    // Show loading modal
+    const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+    loadingModal.show();
+});
+
+// Test connection function
+function testConnection() {
+    const rscm_ip = document.getElementById('rscm_ip').value;
+    const system_port = document.getElementById('system_port').value;
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
     
-    // Form submission
-    form.addEventListener('submit', function(e) {
-        const name = document.getElementById('name').value.trim();
-        const ip = document.getElementById('rscm_ip').value.trim();
+    if (!rscm_ip || !password) {
+        alert('Please fill in RSCM IP and password first');
+        return;
+    }
+    
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Testing...';
+    
+    fetch(SCRIPT_ROOT + '/api/test-connection', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            rscm_ip: rscm_ip,
+            system_port: parseInt(system_port),
+            username: username,
+            password: password
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
         
-        if (!name || !ip) {
-            e.preventDefault();
-            alert('Please fill in all required fields');
+        if (data.status === 'success') {
+            alert('✅ Connection Successful!\n\nRSCM Details:\n' + 
+                  'Name: ' + data.rack_manager_info.name + '\n' +
+                  'Type: ' + data.rack_manager_info.manager_type + '\n' +
+                  'Firmware: ' + data.rack_manager_info.firmware_version);
+        } else {
+            alert('❌ Connection Failed\n\n' + data.message);
         }
+    })
+    .catch(error => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        alert('❌ Connection Test Error\n\n' + error.message);
     });
+}
+
+// IP address validation
+document.getElementById('rscm_ip').addEventListener('input', function() {
+    const ipPattern = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+    if (this.value && !ipPattern.test(this.value)) {
+        this.setCustomValidity('Please enter a valid IP address');
+    } else {
+        this.setCustomValidity('');
+    }
 });
 </script>
 {% endblock %}
