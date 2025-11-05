@@ -1359,7 +1359,8 @@ def api_check_status(system_id):
             ''', (system_id,)).fetchone()
             
             if recent_check:
-                if recent_check['status'] == 'success':
+                # Handle both 'success' (legacy) and 'completed' (new) status
+                if recent_check['status'] in ('success', 'completed'):
                     return jsonify({
                         'status': 'completed',
                         'check_id': recent_check['id'],

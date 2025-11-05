@@ -71,7 +71,7 @@ class DCScmChecker:
             'timestamp': datetime.now().isoformat(),
             'rscm_ip': rscm_ip,
             'system_port': system_port,
-            'status': 'success',
+            'status': 'completed',
             'firmware_versions': {},
             'connection_info': None,
             'errors': []
