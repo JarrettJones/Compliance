@@ -44,37 +44,18 @@
         </div>
     </div>
     
-    <div class="col-md-6 col-lg-3 mb-3">
+    <div class="col-md-6 col-lg-4 mb-3">
         <div class="card bg-info text-white" 
-             data-bs-toggle="tooltip" 
-             data-bs-html="true"
-             data-bs-placement="bottom"
-             title="<div class='text-start'><strong>DC-SCM (16):</strong> IFWI, UEFI Profile/Other, BMC FW, Inventory, PowerCapping, FanTable, SDRGenerator, IPMIAllowList, BMC Tip, BMC TIP PCD Platform ID, BMC TIP PCD Version ID, Manticore (HSM), CFM Platform ID, CFM Version ID, TPM Module, SCM-CPLD<br><br><strong>OVL2 (10):</strong> SOC Test OS (STOS), Cyclone V Image, Cyclone V PFMID, OVL SOC FIP PFMID, SOC VR Config, ATF, SCP, UEFI, UEFI Config, MANA Driver<br><br><strong>Other Platform (7):</strong> HPMCpld, SOC VR Configs (PVCCD, PVCCIN, PVNN), M.2, E.1s</div>"
+             onclick="document.getElementById('firmwareTypesModal').classList.add('show'); document.getElementById('firmwareTypesModal').style.display='block'; document.body.classList.add('modal-open'); var backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop fade show'; backdrop.id = 'modalBackdrop'; document.body.appendChild(backdrop);"
              style="cursor: pointer;">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
                         <h4 class="card-title">33 Types</h4>
-                        <p class="card-text">3 Categories</p>
+                        <p class="card-text">3 Categories <i class="bi bi-info-circle-fill"></i></p>
                     </div>
                     <div class="align-self-center">
                         <i class="bi bi-cpu fs-1"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-6 col-lg-3 mb-3">
-        <div class="card bg-warning text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title">{{ stats.get('recent_days', 7) }}</h4>
-                        <p class="card-text">Days Activity</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="bi bi-calendar-week fs-1"></i>
                     </div>
                 </div>
             </div>
@@ -231,18 +212,131 @@
         </div>
     </div>
 </div>
+
+<!-- Firmware Types Modal -->
+<div class="modal fade" id="firmwareTypesModal" tabindex="-1" aria-labelledby="firmwareTypesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="firmwareTypesModalLabel">
+                    <i class="bi bi-cpu"></i> Supported Firmware Types & Categories
+                </h5>
+                <button type="button" class="btn-close btn-close-white" onclick="closeModal()" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-4 mb-4">
+                        <div class="card border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0"><i class="bi bi-motherboard"></i> DC-SCM</h6>
+                                <small>16 Firmware Types</small>
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-unstyled small mb-0">
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> IFWI</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> UEFI Profile/Other</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> BMC FW</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> Inventory</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> PowerCapping</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> FanTable</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> SDRGenerator</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> IPMIAllowList</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> BMC Tip</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> BMC TIP PCD Platform ID</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> BMC TIP PCD Version ID</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> Manticore (HSM)</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> CFM Platform ID</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> CFM Version ID</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> TPM Module</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> SCM-CPLD</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-4">
+                        <div class="card border-success">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0"><i class="bi bi-diagram-3"></i> OVL2</h6>
+                                <small>10 Firmware Types</small>
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-unstyled small mb-0">
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC Test OS (STOS)</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> Cyclone V Image</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> Cyclone V PFMID</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> OVL SOC FIP PFMID</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC VR Config</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> ATF</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> SCP</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> UEFI</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> UEFI Config</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> MANA Driver</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-4">
+                        <div class="card border-warning">
+                            <div class="card-header bg-warning text-dark">
+                                <h6 class="mb-0"><i class="bi bi-hdd-rack"></i> Other Platform</h6>
+                                <small>7 Firmware Types</small>
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-unstyled small mb-0">
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> HPMCpld</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC VR Config - PVCCD</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC VR Config - PVCCIN</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC VR Config - PVNN</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> M.2</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> E.1s</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info mb-0">
+                    <i class="bi bi-info-circle"></i> <strong>Total:</strong> 33 firmware types across 3 categories can be checked automatically
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    // Initialize Bootstrap tooltips
-    document.addEventListener('DOMContentLoaded', function() {
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl, {
-                trigger: 'hover'
-            });
-        });
+    function closeModal() {
+        const modal = document.getElementById('firmwareTypesModal');
+        const backdrop = document.getElementById('modalBackdrop');
+        
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        document.body.classList.remove('modal-open');
+        
+        if (backdrop) {
+            backdrop.remove();
+        }
+    }
+    
+    // Close modal when clicking outside
+    document.addEventListener('click', function(event) {
+        const modal = document.getElementById('firmwareTypesModal');
+        if (event.target === modal) {
+            closeModal();
+        }
+    });
+    
+    // Close modal with Escape key
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeModal();
+        }
     });
 </script>
 {% endblock %}
