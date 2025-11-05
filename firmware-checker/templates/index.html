@@ -44,7 +44,7 @@
         </div>
     </div>
     
-    <div class="col-md-6 col-lg-4 mb-3">
+    <div class="col-md-6 col-lg-3 mb-3">
         <div class="card bg-info text-white" 
              onclick="document.getElementById('firmwareTypesModal').classList.add('show'); document.getElementById('firmwareTypesModal').style.display='block'; document.body.classList.add('modal-open'); var backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop fade show'; backdrop.id = 'modalBackdrop'; document.body.appendChild(backdrop);"
              style="cursor: pointer;">
@@ -60,6 +60,24 @@
                 </div>
             </div>
         </div>
+    </div>
+    
+    <div class="col-md-6 col-lg-3 mb-3">
+        <a href="{{ url_for('recipes') }}" class="text-decoration-none">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ stats.total_recipes }}</h4>
+                            <p class="card-text">Recipes</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-book fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </a>
     </div>
 </div>
 
@@ -307,9 +325,7 @@
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
 <script>
     function closeModal() {
         const modal = document.getElementById('firmwareTypesModal');
@@ -341,7 +357,7 @@
     document.addEventListener('keydown', function(event) {
         if (event.key === 'Escape') {
             const modal = document.getElementById('firmwareTypesModal');
-            if (modal.classList.contains('show')) {
+            if (modal && modal.classList.contains('show')) {
                 closeModal();
             }
         }

@@ -672,6 +672,7 @@ def index():
         stats = {
             'total_systems': conn.execute('SELECT COUNT(*) as count FROM systems').fetchone()['count'],
             'total_checks': conn.execute('SELECT COUNT(*) as count FROM firmware_checks').fetchone()['count'],
+            'total_recipes': conn.execute('SELECT COUNT(*) as count FROM firmware_recipes').fetchone()['count'],
             'recent_systems': systems,
             'recent_checks': recent_checks
         }
@@ -1354,7 +1355,7 @@ def api_check_status(system_id):
             recent_check = conn.execute('''
                 SELECT * FROM firmware_checks 
                 WHERE system_id = ?
-                ORDER BY check_date DESC 
+                ORDER BY check_date DESC py 
                 LIMIT 1
             ''', (system_id,)).fetchone()
             
