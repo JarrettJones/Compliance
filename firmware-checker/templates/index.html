@@ -45,12 +45,17 @@
     </div>
     
     <div class="col-md-6 col-lg-3 mb-3">
-        <div class="card bg-info text-white">
+        <div class="card bg-info text-white" 
+             data-bs-toggle="tooltip" 
+             data-bs-html="true"
+             data-bs-placement="bottom"
+             title="<div class='text-start'><strong>DC-SCM (16):</strong> IFWI, UEFI Profile/Other, BMC FW, Inventory, PowerCapping, FanTable, SDRGenerator, IPMIAllowList, BMC Tip, BMC TIP PCD Platform ID, BMC TIP PCD Version ID, Manticore (HSM), CFM Platform ID, CFM Version ID, TPM Module, SCM-CPLD<br><br><strong>OVL2 (10):</strong> SOC Test OS (STOS), Cyclone V Image, Cyclone V PFMID, OVL SOC FIP PFMID, SOC VR Config, ATF, SCP, UEFI, UEFI Config, MANA Driver<br><br><strong>Other Platform (7):</strong> HPMCpld, SOC VR Configs (PVCCD, PVCCIN, PVNN), M.2, E.1s</div>"
+             style="cursor: pointer;">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <h4 class="card-title">33</h4>
-                        <p class="card-text">Firmware Types</p>
+                        <h4 class="card-title">33 Types</h4>
+                        <p class="card-text">3 Categories</p>
                     </div>
                     <div class="align-self-center">
                         <i class="bi bi-cpu fs-1"></i>
@@ -65,11 +70,11 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <h4 class="card-title">3</h4>
-                        <p class="card-text">Categories</p>
+                        <h4 class="card-title">{{ stats.get('recent_days', 7) }}</h4>
+                        <p class="card-text">Days Activity</p>
                     </div>
                     <div class="align-self-center">
-                        <i class="bi bi-tags fs-1"></i>
+                        <i class="bi bi-calendar-week fs-1"></i>
                     </div>
                 </div>
             </div>
@@ -226,4 +231,18 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Initialize Bootstrap tooltips
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl, {
+                trigger: 'hover'
+            });
+        });
+    });
+</script>
 {% endblock %}
