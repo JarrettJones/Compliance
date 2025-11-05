@@ -281,7 +281,8 @@ class DCScmChecker:
                 'PowerCapping': 'PowerCapping',    # Maps to PowerCapping in firmware_types
                 'SDRGen': 'SDRGenerator',          # Maps to SDRGenerator in firmware_types  
                 'FanTable': 'FanTable',           # Maps to FanTable in firmware_types
-                'Inventory': 'Inventory'          # Maps to Inventory in firmware_types
+                'Inventory': 'Inventory',         # Maps to Inventory in firmware_types
+                'IPMIAllowList': 'IPMIAllowList'  # Maps to IPMIAllowList in firmware_types
             }
             
             for ssh_component, fw_type in ssh_ipmi_components.items():
@@ -343,7 +344,6 @@ class DCScmChecker:
                 
                 # Add placeholder implementations for other firmware types not yet implemented
                 placeholder_firmware_types = [
-                    'IPMIAllowList', 
                     'CFM Platform ID',
                     'CFM Version ID (hex)/(dec)',
                     'TPM Module'
@@ -692,7 +692,8 @@ class DCScmChecker:
                 'SDRGen': '0x6',        # SDR Generator
                 'FanTable': '0x4',      # Fan Table  
                 'Inventory': '0x1',     # Inventory
-                'PowerCapping': '0x3'   # Power Capping
+                'PowerCapping': '0x3',  # Power Capping
+                'IPMIAllowList': '0xb'  # IPMI Allow List
             }
             
             if component not in command_codes:
@@ -1109,17 +1110,8 @@ class DCScmChecker:
                 return self._check_bmc_individual(rscm_ip, system_port)
             elif firmware_type == 'SCM-CPLD':
                 return self._check_scm_cpld_individual(rscm_ip, system_port)
-            elif firmware_type in ['Inventory', 'PowerCapping', 'FanTable', 'SDRGenerator']:
+            elif firmware_type in ['Inventory', 'PowerCapping', 'FanTable', 'SDRGenerator', 'IPMIAllowList']:
                 return self._check_bmc_config_individual(firmware_type, rscm_ip, system_port)
-            elif firmware_type == 'IPMIAllowList':
-                # No command available yet for IPMIAllowList
-                return {
-                    'version': 'NOT_IMPLEMENTED',
-                    'status': 'not_implemented',
-                    'error': 'Command not yet available for IPMIAllowList checking',
-                    'checked_at': datetime.now().isoformat(),
-                    'method': 'not_available'
-                }
             elif firmware_type in ['BMC Tip', 'BMC TIP PCD Platform ID', 'BMC TIP PCD Version ID (hex)/(dec)']:
                 return self._check_bmc_tip_individual(firmware_type, rscm_ip, system_port)
             elif firmware_type == 'CFM Platform ID':
@@ -1410,7 +1402,8 @@ class DCScmChecker:
                 'Inventory': 'raw 0x36 0xd2 0x1 0x1',     # Component code 0x1
                 'PowerCapping': 'raw 0x36 0xd2 0x3 0x1',  # Component code 0x3  
                 'FanTable': 'raw 0x36 0xd2 0x4 0x1',      # Component code 0x4
-                'SDRGenerator': 'raw 0x36 0xd2 0x6 0x1'   # Component code 0x6
+                'SDRGenerator': 'raw 0x36 0xd2 0x6 0x1',  # Component code 0x6
+                'IPMIAllowList': 'raw 0x36 0xd2 0xb 0x1'  # Component code 0xb
             }
             
             if firmware_type not in raw_commands:
@@ -1704,7 +1697,7 @@ class DCScmChecker:
             return 'NO_OUTPUT'
         
         # Parse raw IPMI responses for specific firmware types
-        if firmware_type in ['Inventory', 'PowerCapping', 'FanTable', 'SDRGenerator']:
+        if firmware_type in ['Inventory', 'PowerCapping', 'FanTable', 'SDRGenerator', 'IPMIAllowList']:
             import re
             print(f"[DC-SCM DEBUG] Parsing {firmware_type} output: {repr(output)}")
             
