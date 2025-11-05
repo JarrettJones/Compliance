@@ -51,7 +51,7 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <h4 class="card-title">33 Types</h4>
+                        <h4 class="card-title">32 Types</h4>
                         <p class="card-text">3 Categories <i class="bi bi-info-circle-fill"></i></p>
                     </div>
                     <div class="align-self-center">
@@ -268,10 +268,10 @@
                                     <li><i class="bi bi-check-circle-fill text-success"></i> IPMIAllowList</li>
                                     <li><i class="bi bi-check-circle-fill text-success"></i> BMC Tip</li>
                                     <li><i class="bi bi-check-circle-fill text-success"></i> BMC TIP PCD Platform ID</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> BMC TIP PCD Version ID</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> BMC TIP PCD Version ID (hex)/(dec)</li>
                                     <li><i class="bi bi-check-circle-fill text-success"></i> Manticore (HSM)</li>
                                     <li><i class="bi bi-check-circle-fill text-success"></i> CFM Platform ID</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> CFM Version ID</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> CFM Version ID (hex)/(dec)</li>
                                     <li><i class="bi bi-check-circle-fill text-success"></i> TPM Module</li>
                                     <li><i class="bi bi-check-circle-fill text-success"></i> SCM-CPLD</li>
                                 </ul>
@@ -283,20 +283,22 @@
                         <div class="card border-success h-100">
                             <div class="card-header bg-success text-white">
                                 <h6 class="mb-0"><i class="bi bi-diagram-3"></i> OVL2</h6>
-                                <small>10 Firmware Types</small>
+                                <small>12 Firmware Types</small>
                             </div>
                             <div class="card-body" style="min-height: 400px;">
                                 <ul class="list-unstyled small mb-0">
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC Test OS (STOS)</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> FPGA Agilex (App Image w/ OpRom)</li>
                                     <li><i class="bi bi-check-circle-fill text-success"></i> Cyclone V Image</li>
                                     <li><i class="bi bi-check-circle-fill text-success"></i> Cyclone V PFMID</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> OVL SOC FIP</li>
                                     <li><i class="bi bi-check-circle-fill text-success"></i> OVL SOC FIP PFMID</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC VR Config</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> ATF</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> SCP</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> UEFI</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> UEFI Config</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> MANA Driver</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC Test OS (STOS)</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> Host FPGA Driver & Tools</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC FPGA Driver</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> MANA Driver (Windows)</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> Glacier Cerberus FW</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> Glacier Cerberus Utility</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> Glacier Peak CFM</li>
                                 </ul>
                             </div>
                         </div>
@@ -306,16 +308,14 @@
                         <div class="card border-warning h-100">
                             <div class="card-header bg-warning text-dark">
                                 <h6 class="mb-0"><i class="bi bi-hdd-rack"></i> Other Platform</h6>
-                                <small>7 Firmware Types</small>
+                                <small>4 Firmware Types</small>
                             </div>
                             <div class="card-body" style="min-height: 400px;">
                                 <ul class="list-unstyled small mb-0">
                                     <li><i class="bi bi-check-circle-fill text-success"></i> HPMCpld</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC VR Config - PVCCD</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC VR Config - PVCCIN</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC VR Config - PVNN</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> M.2</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC VR Configs</li>
                                     <li><i class="bi bi-check-circle-fill text-success"></i> E.1s</li>
+                                    <li><i class="bi bi-check-circle-fill text-success"></i> M.2</li>
                                 </ul>
                             </div>
                         </div>
@@ -323,7 +323,7 @@
                 </div>
                 
                 <div class="alert alert-info mb-0 mt-4">
-                    <i class="bi bi-info-circle"></i> <strong>Total:</strong> 33 firmware types across 3 categories can be checked automatically
+                    <i class="bi bi-info-circle"></i> <strong>Total:</strong> 32 firmware types across 3 categories can be checked automatically
                 </div>
             </div>
             <div class="modal-footer">
