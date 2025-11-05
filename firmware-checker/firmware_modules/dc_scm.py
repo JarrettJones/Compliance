@@ -1701,8 +1701,9 @@ class DCScmChecker:
             import re
             print(f"[DC-SCM DEBUG] Parsing {firmware_type} output: {repr(output)}")
             
-            # Look for "Ipmi Response: [hex values]" pattern (matching PowerShell regex)
-            version_match = re.search(r'Ipmi Response:\s*([0-9A-Fa-f\s]+)(?![0-9A-Fa-f\s]*Ipmi Response)', output)
+            # Look for "Ipmi Response: [hex values]" pattern with non-greedy match
+            # Stop at newline or "Completion" to avoid capturing extra data
+            version_match = re.search(r'Ipmi Response:\s*([0-9A-Fa-f\s]+?)(?:\n|Completion)', output, re.DOTALL)
             
             if version_match:
                 # Extract hex values and get last 3 (matching PowerShell logic)
