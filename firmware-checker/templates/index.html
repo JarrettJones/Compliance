@@ -138,6 +138,7 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Firmware Checks</h5>
+                <small class="text-muted">Status indicates check completion, not firmware health</small>
             </div>
             <div class="card-body recent-checks">
                 {% if stats.recent_checks %}
@@ -150,7 +151,13 @@
                                 </div>
                                 <div class="d-flex justify-content-between align-items-center">
                                     <span class="badge bg-{{ 'warning' if check.status == 'running' else ('success' if check.status == 'success' else 'danger') }}">
-                                        {% if check.status == 'running' %}<i class="bi bi-clock"></i> {% endif %}{{ check.status.title() }}
+                                        {% if check.status == 'running' %}
+                                            <i class="bi bi-clock"></i> Running
+                                        {% elif check.status == 'success' %}
+                                            <i class="bi bi-check-circle"></i> Completed
+                                        {% else %}
+                                            <i class="bi bi-x-circle"></i> Failed
+                                        {% endif %}
                                     </span>
                                     {% if check.error_message %}
                                         <small class="text-danger">{{ check.error_message[:50] }}...</small>
