@@ -102,12 +102,13 @@ def init_db():
         conn.execute('''
             CREATE TABLE IF NOT EXISTS systems (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
                 rscm_ip TEXT NOT NULL,
                 rscm_port INTEGER NOT NULL DEFAULT 22,
                 description TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(name, rscm_ip, rscm_port)
             )
         ''')
         
@@ -929,15 +930,15 @@ def add_system():
             
             print(f"[AUTO-REG] Retrieved Serial Number: {serial_number}")
             
-            # Check if system already exists with this serial number
+            # Check if system already exists with this serial number + RSCM location
             with get_db_connection() as conn:
                 existing = conn.execute(
-                    'SELECT id FROM systems WHERE name = ?', 
-                    (serial_number,)
+                    'SELECT id FROM systems WHERE name = ? AND rscm_ip = ? AND rscm_port = ?', 
+                    (serial_number, rscm_ip, system_port)
                 ).fetchone()
                 
                 if existing:
-                    flash(f'System with serial number {serial_number} already exists!', 'warning')
+                    flash(f'System with serial number {serial_number} at {rscm_ip}:{system_port} already exists!', 'warning')
                     return redirect(url_for('system_detail', system_id=existing['id']))
             
             # Store temporary data in session for metadata entry
