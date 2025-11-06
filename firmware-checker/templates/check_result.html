@@ -174,15 +174,27 @@
                                 </div>
                                 {% endif %}
 
+                                {% if firmware_data.recipe_comparison.not_in_recipe > 0 %}
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i> 
+                                    <strong>Note:</strong> {{ firmware_data.recipe_comparison.not_in_recipe }} firmware version(s) were checked but are not defined in this recipe and were not validated. 
+                                    <a href="{{ url_for('edit_recipe', recipe_id=recipe.id) }}" class="alert-link">Edit recipe</a> to add them for validation.
+                                </div>
+                                {% endif %}
+
                                 <!-- Detailed Comparison by Category -->
                                 <div class="accordion mt-3" id="recipeComparisonAccordion">
                                     {% for category_name, category_results in firmware_data.recipe_comparison.details.items() %}
+                                    {% set category_fw_count = firmware_data.get(category_name.lower().replace('-', '_').replace(' ', '_'), {}).get('firmware_versions', {})|length %}
                                     <div class="accordion-item">
                                         <h2 class="accordion-header">
                                             <button class="accordion-button {% if loop.index > 1 %}collapsed{% endif %}" type="button" 
                                                     data-bs-toggle="collapse" data-bs-target="#recipeCategory{{ loop.index }}">
                                                 <i class="bi bi-folder2-open me-2"></i> {{ category_name }} 
-                                                <span class="badge bg-secondary ms-2">{{ category_results|length }} items</span>
+                                                <span class="badge bg-success ms-2">{{ category_results|length }} validated</span>
+                                                {% if category_fw_count > category_results|length %}
+                                                <span class="badge bg-info ms-1">{{ category_fw_count - category_results|length }} not in recipe</span>
+                                                {% endif %}
                                             </button>
                                         </h2>
                                         <div id="recipeCategory{{ loop.index }}" 
