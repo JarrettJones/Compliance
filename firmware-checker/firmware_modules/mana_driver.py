@@ -6,6 +6,8 @@ Handles checking Microsoft Azure Network Adapter Virtual Bus driver version
 import logging
 import subprocess
 import winrm
+import base64
+import os
 from datetime import datetime
 from typing import Optional, Dict, Any
 
@@ -29,6 +31,13 @@ class ManaDriverChecker:
         
         # Default device name to check
         self.device_friendly_name = "Microsoft Azure Network Adapter Virtual Bus"
+    
+    def get_powershell_executable(self) -> str:
+        """Get the PowerShell executable path, preferring custom installation."""
+        custom_pwsh = r"D:\Tools\PowerShell\pwsh.exe"
+        if os.path.exists(custom_pwsh):
+            return custom_pwsh
+        return "powershell.exe"
     
     def test_ping_ipv4(self, computer_name: str) -> bool:
         """Check if the target computer is reachable via ping."""
@@ -106,9 +115,10 @@ class ManaDriverChecker:
             
             # Connect via WinRM or run locally
             if computer_name.lower() in ['localhost', '127.0.0.1', '.']:
-                # For localhost, use subprocess
+                # For localhost, use subprocess with custom PowerShell path
+                pwsh_exe = self.get_powershell_executable()
                 result = subprocess.run(
-                    ['powershell.exe', '-Command', ps_script],
+                    [pwsh_exe, '-Command', ps_script],
                     capture_output=True,
                     text=True,
                     timeout=self.timeout
@@ -134,11 +144,37 @@ class ManaDriverChecker:
                     transport='ntlm'
                 )
                 
-                # Execute PowerShell command
-                result = session.run_ps(ps_script)
+                # Try multiple PowerShell paths - check custom path first, then fallback to system paths
+                pwsh_paths = [
+                    r'D:\Tools\PowerShell\pwsh.exe',
+                    r'C:\Program Files\PowerShell\7\pwsh.exe',
+                    r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+                ]
                 
-                if result.status_code != 0:
-                    error_msg = result.std_err.decode('utf-8')
+                # Encode the PowerShell script to avoid quoting issues
+                encoded_script = base64.b64encode(ps_script.encode('utf-16-le')).decode('ascii')
+                
+                result = None
+                last_error = None
+                
+                for pwsh_path in pwsh_paths:
+                    try:
+                        # Use -EncodedCommand to pass the script safely
+                        cmd = f'{pwsh_path} -NoProfile -EncodedCommand {encoded_script}'
+                        result = session.run_cmd(cmd)
+                        
+                        if result.status_code == 0:
+                            break  # Success, use this result
+                        else:
+                            last_error = result.std_err.decode('utf-8')
+                            logger.debug(f"PowerShell path {pwsh_path} failed: {last_error}")
+                    except Exception as e:
+                        last_error = str(e)
+                        logger.debug(f"PowerShell path {pwsh_path} exception: {last_error}")
+                        continue
+                
+                if not result or result.status_code != 0:
+                    error_msg = last_error or "All PowerShell paths failed"
                     logger.error(f"Command execution error: {error_msg}")
                     return {
                         'version': 'EXECUTION_ERROR',
