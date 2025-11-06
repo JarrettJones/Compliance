@@ -10,9 +10,14 @@
                 <h1><i class="bi bi-file-earmark-check"></i> {{ recipe.name }}</h1>
                 <p class="lead">{{ recipe.description or 'Firmware validation recipe' }}</p>
             </div>
-            <a href="{{ url_for('recipes') }}" class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left"></i> Back to Recipes
-            </a>
+            <div>
+                <a href="{{ url_for('edit_recipe', recipe_id=recipe.id) }}" class="btn btn-primary me-2">
+                    <i class="bi bi-pencil"></i> Edit Recipe
+                </a>
+                <a href="{{ url_for('recipes') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Recipes
+                </a>
+            </div>
         </div>
     </div>
 </div>

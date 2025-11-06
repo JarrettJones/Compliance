@@ -784,6 +784,65 @@ def recipe_detail(recipe_id):
     return render_template('recipe_detail.html', recipe=recipe, 
                          firmware_versions=firmware_versions, checks=checks)
 
+@app.route('/recipes/<int:recipe_id>/edit', methods=['GET', 'POST'])
+def edit_recipe(recipe_id):
+    """Edit an existing recipe"""
+    with get_db_connection() as conn:
+        recipe = conn.execute('SELECT * FROM firmware_recipes WHERE id = ?', (recipe_id,)).fetchone()
+        if not recipe:
+            flash('Recipe not found!', 'error')
+            return redirect(url_for('recipes'))
+    
+    if request.method == 'POST':
+        try:
+            name = request.form.get('name', '').strip()
+            description = request.form.get('description', '').strip()
+            
+            if not name:
+                flash('Recipe name is required!', 'error')
+                return redirect(url_for('edit_recipe', recipe_id=recipe_id))
+            
+            # Parse firmware versions from form data
+            firmware_versions = {}
+            for key, value in request.form.items():
+                if key.startswith('fw_'):
+                    # Format: fw_category_firmware_type
+                    parts = key[3:].split('_', 1)
+                    if len(parts) == 2:
+                        category, fw_type = parts
+                        # Replace underscores back with spaces for display
+                        category = category.replace('_', ' ')
+                        fw_type = fw_type.replace('_', ' ')
+                        
+                        if value.strip():  # Only add if version is not empty
+                            if category not in firmware_versions:
+                                firmware_versions[category] = {}
+                            firmware_versions[category][fw_type] = value.strip()
+            
+            if not firmware_versions:
+                flash('At least one firmware version must be specified!', 'error')
+                return redirect(url_for('edit_recipe', recipe_id=recipe_id))
+            
+            # Update recipe in database
+            with get_db_connection() as conn:
+                conn.execute('''
+                    UPDATE firmware_recipes 
+                    SET name = ?, description = ?, firmware_versions = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (name, description, json.dumps(firmware_versions), recipe_id))
+                conn.commit()
+            
+            flash(f'Recipe "{name}" has been updated successfully!', 'success')
+            return redirect(url_for('recipe_detail', recipe_id=recipe_id))
+            
+        except Exception as e:
+            flash(f'Error updating recipe: {str(e)}', 'error')
+            return redirect(url_for('edit_recipe', recipe_id=recipe_id))
+    
+    # GET request - show edit form
+    firmware_versions = json.loads(recipe['firmware_versions'])
+    return render_template('edit_recipe.html', recipe=recipe, firmware_versions=firmware_versions)
+
 @app.route('/recipes/<int:recipe_id>/delete', methods=['POST'])
 def delete_recipe(recipe_id):
     """Delete a recipe"""

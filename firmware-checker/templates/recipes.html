@@ -60,6 +60,10 @@
                                            class="btn btn-outline-primary btn-sm" title="View Details">
                                             <i class="bi bi-eye"></i>
                                         </a>
+                                        <a href="{{ url_for('edit_recipe', recipe_id=recipe.id) }}" 
+                                           class="btn btn-outline-secondary btn-sm" title="Edit">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
                                         <button class="btn btn-outline-danger btn-sm" title="Delete" 
                                                 data-recipe-name="{{ recipe.name }}" 
                                                 data-recipe-id="{{ recipe.id }}"
