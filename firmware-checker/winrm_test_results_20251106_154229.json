@@ -1,0 +1,245 @@
+{
+  "test_date": "2025-11-06T15:42:21.046332",
+  "computer_name": "C41431157B0210B.redmond.corp.microsoft.com",
+  "username": "administrator",
+  "tests": {
+    "mana_driver": {
+      "version": "Driver information not available",
+      "status": "not_found",
+      "error": "Driver information could not be retrieved",
+      "checked_at": "2025-11-06T15:42:21.920628",
+      "method": "mana_driver_check",
+      "device_info": {
+        "Device found": "Microsoft Azure Network Adapter Virtual Bus",
+        "Status": "OK",
+        "Device ID": "PCI\\VEN_1414&DEV_00B9&SUBSYS_00B91414&REV_00\\4&1CE27165&0&0100",
+        "Manufacturer": "Microsoft"
+      }
+    },
+    "storage_firmware": {
+      "full_check": {
+        "status": "success",
+        "error": null,
+        "raw_output": "UpdateStorageFirmware.exe found. Running command...\r\n[2025-11-06-23:42:27:825,  9128,  6140] Microsoft UpdateStorageFirmware tool: 1.3.0.2\r\n\r\n[2025-11-06-23:42:27:825,  9128,  6140] Copyright (c) Microsoft Corporation. All rights reserved.\r\n\r\n[2025-11-06-23:42:27:825,  9128,  6140] \r\n\r\n[2025-11-06-23:42:27:838,  9128,  6140] Device # | BusType | Type | SCSIAddress | VendorId ProductId                       | SerialNumber                               | ActiveFW | PendingFW\r\n\r\n[2025-11-06-23:42:27:838,  9128,  6140] ------------------------------------------------------------------------------------------------------------------------------------------------------\r\n\r\n[2025-11-06-23:42:27:838,  9128,  6140] Disk 1   | NVME    | SSD  | 06 00 00 00 | HFS3T8GFMWX183N                          | 0425BIE1Q0107I070T0O                       | 61081A50 | NA      \r\n\r\n[2025-11-06-23:42:27:838,  9128,  6140] Disk 2   | NVME    | SSD  | 01 00 00 00 | HFS3T8GFMWX183N                          | 0425BIE1Q0107I070T0T                       | 61081A50 | NA      \r\n\r\n[2025-11-06-23:42:27:838,  9128,  6140] Disk 3   | NVME    | SSD  | 02 00 00 00 | HFS3T8GFMWX183N                          | 0425BIE1Q0107I070T1O                       | 61081A50 | NA      \r\n\r\n[2025-11-06-23:42:27:838,  9128,  6140] Disk 4   | NVME    | SSD  | 04 00 00 00 | HFS3T8GFMWX183N                          | 0425BIE1Q0107I070T0R                       | 61081A50 | NA      \r\n\r\n[2025-11-06-23:42:27:838,  9128,  6140] Disk 5   | NVME    | SSD  | 07 00 00 00 | HFS3T8GFMWX183N                          | 0425BIE1Q0107I070T0N                       | 61081A50 | NA      \r\n\r\n[2025-11-06-23:42:27:838,  9128,  6140] Disk 6   | NVME    | SSD  | 00 00 00 00 | MZVL6960HFLB-00AMV                       | S89HNG0Y301792                             | LDBD1M4Q | NA      \r\n\r\n[2025-11-06-23:42:27:838,  9128,  6140] Disk 7   | NVME    | SSD  | 03 00 00 00 | HFS3T8GFMWX183N                          | 0425BIE1Q0107I070T0L                       | 61081A50 | NA      \r\n\r\n[2025-11-06-23:42:27:838,  9128,  6140] Disk 8   | NVME    | SSD  | 05 00 00 00 | HFS3T8GFMWX183N                          | 0425BIE1Q0107I070T0V                       | 61081A50 | NA",
+        "storage_devices": {
+          "Disk_1": {
+            "disk_number": "1",
+            "bus_type": "NVME",
+            "device_type_hw": "SSD",
+            "scsi_address": "06 00 00 00",
+            "vendor_product": "HFS3T8GFMWX183N",
+            "serial_number": "0425BIE1Q0107I070T0O",
+            "firmware_version": "61081A50",
+            "pending_firmware": "NA",
+            "device_type": "E.1s",
+            "status": "detected"
+          },
+          "Disk_2": {
+            "disk_number": "2",
+            "bus_type": "NVME",
+            "device_type_hw": "SSD",
+            "scsi_address": "01 00 00 00",
+            "vendor_product": "HFS3T8GFMWX183N",
+            "serial_number": "0425BIE1Q0107I070T0T",
+            "firmware_version": "61081A50",
+            "pending_firmware": "NA",
+            "device_type": "E.1s",
+            "status": "detected"
+          },
+          "Disk_3": {
+            "disk_number": "3",
+            "bus_type": "NVME",
+            "device_type_hw": "SSD",
+            "scsi_address": "02 00 00 00",
+            "vendor_product": "HFS3T8GFMWX183N",
+            "serial_number": "0425BIE1Q0107I070T1O",
+            "firmware_version": "61081A50",
+            "pending_firmware": "NA",
+            "device_type": "E.1s",
+            "status": "detected"
+          },
+          "Disk_4": {
+            "disk_number": "4",
+            "bus_type": "NVME",
+            "device_type_hw": "SSD",
+            "scsi_address": "04 00 00 00",
+            "vendor_product": "HFS3T8GFMWX183N",
+            "serial_number": "0425BIE1Q0107I070T0R",
+            "firmware_version": "61081A50",
+            "pending_firmware": "NA",
+            "device_type": "E.1s",
+            "status": "detected"
+          },
+          "Disk_5": {
+            "disk_number": "5",
+            "bus_type": "NVME",
+            "device_type_hw": "SSD",
+            "scsi_address": "07 00 00 00",
+            "vendor_product": "HFS3T8GFMWX183N",
+            "serial_number": "0425BIE1Q0107I070T0N",
+            "firmware_version": "61081A50",
+            "pending_firmware": "NA",
+            "device_type": "E.1s",
+            "status": "detected"
+          },
+          "Disk_6": {
+            "disk_number": "6",
+            "bus_type": "NVME",
+            "device_type_hw": "SSD",
+            "scsi_address": "00 00 00 00",
+            "vendor_product": "MZVL6960HFLB-00AMV",
+            "serial_number": "S89HNG0Y301792",
+            "firmware_version": "LDBD1M4Q",
+            "pending_firmware": "NA",
+            "device_type": "M.2",
+            "status": "detected"
+          },
+          "Disk_7": {
+            "disk_number": "7",
+            "bus_type": "NVME",
+            "device_type_hw": "SSD",
+            "scsi_address": "03 00 00 00",
+            "vendor_product": "HFS3T8GFMWX183N",
+            "serial_number": "0425BIE1Q0107I070T0L",
+            "firmware_version": "61081A50",
+            "pending_firmware": "NA",
+            "device_type": "E.1s",
+            "status": "detected"
+          },
+          "Disk_8": {
+            "disk_number": "8",
+            "bus_type": "NVME",
+            "device_type_hw": "SSD",
+            "scsi_address": "05 00 00 00",
+            "vendor_product": "HFS3T8GFMWX183N",
+            "serial_number": "0425BIE1Q0107I070T0V",
+            "firmware_version": "61081A50",
+            "pending_firmware": "NA",
+            "device_type": "E.1s",
+            "status": "detected"
+          }
+        }
+      },
+      "m2_devices": {
+        "version": "Drive 6: LDBD1M4Q",
+        "status": "success",
+        "error": null,
+        "checked_at": "2025-11-06T15:42:28.213982",
+        "method": "storage_firmware_tool",
+        "device_info": {
+          "device_count": 1,
+          "devices": [
+            {
+              "disk_number": "6",
+              "bus_type": "NVME",
+              "device_type_hw": "SSD",
+              "scsi_address": "00 00 00 00",
+              "vendor_product": "MZVL6960HFLB-00AMV",
+              "serial_number": "S89HNG0Y301792",
+              "firmware_version": "LDBD1M4Q",
+              "pending_firmware": "NA",
+              "device_type": "M.2",
+              "status": "detected"
+            }
+          ]
+        }
+      },
+      "e1s_devices": {
+        "version": "Drive 1: 61081A50 | Drive 2: 61081A50 | Drive 3: 61081A50 | Drive 4: 61081A50 | Drive 5: 61081A50 | Drive 7: 61081A50 | Drive 8: 61081A50",
+        "status": "success",
+        "error": null,
+        "checked_at": "2025-11-06T15:42:29.245886",
+        "method": "storage_firmware_tool",
+        "device_info": {
+          "device_count": 7,
+          "devices": [
+            {
+              "disk_number": "1",
+              "bus_type": "NVME",
+              "device_type_hw": "SSD",
+              "scsi_address": "06 00 00 00",
+              "vendor_product": "HFS3T8GFMWX183N",
+              "serial_number": "0425BIE1Q0107I070T0O",
+              "firmware_version": "61081A50",
+              "pending_firmware": "NA",
+              "device_type": "E.1s",
+              "status": "detected"
+            },
+            {
+              "disk_number": "2",
+              "bus_type": "NVME",
+              "device_type_hw": "SSD",
+              "scsi_address": "01 00 00 00",
+              "vendor_product": "HFS3T8GFMWX183N",
+              "serial_number": "0425BIE1Q0107I070T0T",
+              "firmware_version": "61081A50",
+              "pending_firmware": "NA",
+              "device_type": "E.1s",
+              "status": "detected"
+            },
+            {
+              "disk_number": "3",
+              "bus_type": "NVME",
+              "device_type_hw": "SSD",
+              "scsi_address": "02 00 00 00",
+              "vendor_product": "HFS3T8GFMWX183N",
+              "serial_number": "0425BIE1Q0107I070T1O",
+              "firmware_version": "61081A50",
+              "pending_firmware": "NA",
+              "device_type": "E.1s",
+              "status": "detected"
+            },
+            {
+              "disk_number": "4",
+              "bus_type": "NVME",
+              "device_type_hw": "SSD",
+              "scsi_address": "04 00 00 00",
+              "vendor_product": "HFS3T8GFMWX183N",
+              "serial_number": "0425BIE1Q0107I070T0R",
+              "firmware_version": "61081A50",
+              "pending_firmware": "NA",
+              "device_type": "E.1s",
+              "status": "detected"
+            },
+            {
+              "disk_number": "5",
+              "bus_type": "NVME",
+              "device_type_hw": "SSD",
+              "scsi_address": "07 00 00 00",
+              "vendor_product": "HFS3T8GFMWX183N",
+              "serial_number": "0425BIE1Q0107I070T0N",
+              "firmware_version": "61081A50",
+              "pending_firmware": "NA",
+              "device_type": "E.1s",
+              "status": "detected"
+            },
+            {
+              "disk_number": "7",
+              "bus_type": "NVME",
+              "device_type_hw": "SSD",
+              "scsi_address": "03 00 00 00",
+              "vendor_product": "HFS3T8GFMWX183N",
+              "serial_number": "0425BIE1Q0107I070T0L",
+              "firmware_version": "61081A50",
+              "pending_firmware": "NA",
+              "device_type": "E.1s",
+              "status": "detected"
+            },
+            {
+              "disk_number": "8",
+              "bus_type": "NVME",
+              "device_type_hw": "SSD",
+              "scsi_address": "05 00 00 00",
+              "vendor_product": "HFS3T8GFMWX183N",
+              "serial_number": "0425BIE1Q0107I070T0V",
+              "firmware_version": "61081A50",
+              "pending_firmware": "NA",
+              "device_type": "E.1s",
+              "status": "detected"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -459,7 +459,7 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
                 results['progress']['percentage'] = int((results['progress']['completed'] / total_fw_types) * 100)
                 
                 print(f"[THREAD {threading.current_thread().ident}] Other Platform ({i}/{len(other_platform_types_to_check)}): Checking {fw_type}...")
-                fw_result = other_platform_checker.check_individual_firmware(fw_type, system_info['rscm_ip'], system_info['rscm_port'])
+                fw_result = other_platform_checker.check_individual_firmware(fw_type, system_info['rscm_ip'], system_info['rscm_port'], computer_name=computer_name)
                 
                 # Safety check for None results
                 if fw_result is None:

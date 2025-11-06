@@ -251,13 +251,14 @@ class OtherPlatformChecker:
         # TODO: Implement actual M.2 Secondary checking logic
         pass
     
-    def check_individual_firmware(self, firmware_type, rscm_ip, system_port=5):
+    def check_individual_firmware(self, firmware_type, rscm_ip, system_port=5, computer_name=None):
         """Check individual firmware type with detailed progress
         
         Args:
             firmware_type: Name of the firmware type to check
             rscm_ip: RSCM IP address
             system_port: System port/slot number
+            computer_name: Windows computer name for storage firmware checks (optional)
             
         Returns:
             Dictionary with firmware version information
@@ -269,10 +270,10 @@ class OtherPlatformChecker:
             if firmware_type == 'HPMCpld':
                 return self._check_hpm_cpld_individual(rscm_ip, system_port)
             elif firmware_type == 'M.2':
-                # Get computer name from rscm_ip (assuming format like dca20301103n414)
-                computer_name = rscm_ip
+                # Use provided computer_name for storage checks, fallback to rscm_ip if not provided
+                target_computer = computer_name if computer_name else rscm_ip
                 if self.os_username and self.os_password:
-                    return self.storage_checker.get_m2_devices(computer_name)
+                    return self.storage_checker.get_m2_devices(target_computer)
                 else:
                     return {
                         'version': 'NOT_CHECKED',
@@ -282,10 +283,10 @@ class OtherPlatformChecker:
                         'method': 'storage_firmware_tool'
                     }
             elif firmware_type == 'E.1s':
-                # Get computer name from rscm_ip (assuming format like dca20301103n414)
-                computer_name = rscm_ip
+                # Use provided computer_name for storage checks, fallback to rscm_ip if not provided
+                target_computer = computer_name if computer_name else rscm_ip
                 if self.os_username and self.os_password:
-                    return self.storage_checker.get_e1s_devices(computer_name)
+                    return self.storage_checker.get_e1s_devices(target_computer)
                 else:
                     return {
                         'version': 'NOT_CHECKED',
