@@ -1275,7 +1275,7 @@ def check_result(check_id):
     with get_db_connection() as conn:
         # Get the specific check
         check = conn.execute('''
-            SELECT fc.*, s.name as system_name, s.rscm_ip, s.rscm_port
+            SELECT fc.*, s.name as system_name, s.rscm_ip, s.rscm_port, s.description as system_description
             FROM firmware_checks fc
             JOIN systems s ON fc.system_id = s.id
             WHERE fc.id = ?
