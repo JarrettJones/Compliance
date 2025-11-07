@@ -1381,7 +1381,7 @@ def api_check_status(system_id):
             recent_check = conn.execute('''
                 SELECT * FROM firmware_checks 
                 WHERE system_id = ?
-                ORDER BY check_date DESC py 
+                ORDER BY check_date DESC 
                 LIMIT 1
             ''', (system_id,)).fetchone()
             

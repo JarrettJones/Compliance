@@ -59,7 +59,7 @@
                                     <strong>Estimated Time:</strong> Approximately 10 minutes for complete firmware check
                                 </div>
                                 
-                                <button class="btn btn-primary" onclick="refreshActiveStatus()">
+                                <button class="btn btn-primary" onclick="refreshActiveStatus({{ system.id }})">
                                     <i class="bi bi-arrow-clockwise"></i> Refresh Status
                                 </button>
                             </div>
@@ -548,6 +548,19 @@ function stopActiveCheckMonitoring() {
 }
 
 function refreshActiveStatus(systemId) {
+    // If systemId not provided, try to get it from the page
+    if (!systemId) {
+        const startBtn = document.getElementById('startCheckBtn');
+        if (startBtn) {
+            systemId = parseInt(startBtn.getAttribute('data-system-id'));
+        }
+    }
+    
+    if (!systemId) {
+        console.error('[Active Monitor] Cannot refresh: systemId not available');
+        return;
+    }
+    
     console.log('[Active Monitor] Checking status for system:', systemId);
     fetch(SCRIPT_ROOT + `/api/check-status/${systemId}`)
         .then(response => {
@@ -597,15 +610,25 @@ function refreshActiveStatus(systemId) {
                         total: 0
                     }
                 });
-                document.getElementById('activeProgressBar').classList.remove('bg-info');
-                document.getElementById('activeProgressBar').classList.add('bg-danger');
+                const progressBar = document.getElementById('activeProgressBar');
+                if (progressBar) {
+                    progressBar.classList.remove('bg-info', 'progress-bar-animated');
+                    progressBar.classList.add('bg-danger');
+                }
             } else if (data.status === 'running' && data.progress_data) {
                 // Update progress bar with real data
                 updateActiveProgress(data.progress_data);
+            } else if (data.status === 'none') {
+                // No check found - page may be stale
+                console.log('[Active Monitor] No check found, stopping monitoring');
+                stopActiveCheckMonitoring();
+                alert('No active check found. The page may be outdated.');
+                window.location.reload();
             }
         })
         .catch(error => {
             console.error('Error checking active status:', error);
+            alert('Failed to check status: ' + error.message);
         });
 }
 
