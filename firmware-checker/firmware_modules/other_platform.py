@@ -11,6 +11,7 @@ from requests.auth import HTTPBasicAuth
 from urllib3.exceptions import InsecureRequestWarning
 import urllib3
 from .storage_firmware import StorageFirmwareChecker
+from .os_version import OSVersionChecker
 
 # Disable SSL warnings for self-signed certificates
 urllib3.disable_warnings(InsecureRequestWarning)
@@ -25,7 +26,8 @@ class OtherPlatformChecker:
             'HPMCpld',
             'SOC VR Configs',
             'E.1s',
-            'M.2'
+            'M.2',
+            'Windows OS Version'
         ]
         
         # Credentials for Redfish API access
@@ -40,6 +42,13 @@ class OtherPlatformChecker:
         # Initialize storage firmware checker
         self.storage_checker = StorageFirmwareChecker(
             os_username=os_username, 
+            os_password=os_password,
+            timeout=timeout
+        )
+        
+        # Initialize OS version checker
+        self.os_version_checker = OSVersionChecker(
+            os_username=os_username,
             os_password=os_password,
             timeout=timeout
         )
@@ -120,6 +129,32 @@ class OtherPlatformChecker:
                 
                 results['firmware_versions']['M.2'] = storage_result.copy()
                 results['firmware_versions']['E.1s'] = storage_result.copy()
+            
+            # Check Windows OS Version if we have OS credentials and computer name
+            if self.os_username and self.os_password and computer_name:
+                # We have credentials and a target computer - check OS version
+                print(f"[OTHER] Checking Windows OS version on {computer_name}...")
+                os_version_result = self.os_version_checker.get_os_version(computer_name)
+                results['firmware_versions']['Windows OS Version'] = os_version_result
+                print(f"[OTHER] Windows OS version check completed")
+            else:
+                # No OS credentials or target computer - skip OS version check
+                if not self.os_username or not self.os_password:
+                    skip_reason = "No OS credentials provided"
+                    print(f"[OTHER] Skipping OS version check: {skip_reason}")
+                elif not computer_name:
+                    skip_reason = "No target computer specified"
+                    print(f"[OTHER] Skipping OS version check: {skip_reason}")
+                else:
+                    skip_reason = "Missing requirements"
+                
+                results['firmware_versions']['Windows OS Version'] = {
+                    'version': 'NOT_CHECKED',
+                    'status': 'not_checked',
+                    'error': skip_reason,
+                    'checked_at': datetime.now().isoformat(),
+                    'method': 'os_version_check'
+                }
             
             # SOC VR Configs - still placeholder
             results['firmware_versions']['SOC VR Configs'] = self._check_firmware_placeholder('SOC VR Configs', rscm_ip, system_port)
@@ -294,6 +329,19 @@ class OtherPlatformChecker:
                         'error': 'No OS credentials provided',
                         'checked_at': datetime.now().isoformat(),
                         'method': 'storage_firmware_tool'
+                    }
+            elif firmware_type == 'Windows OS Version':
+                # Use provided computer_name for OS version check, fallback to rscm_ip if not provided
+                target_computer = computer_name if computer_name else rscm_ip
+                if self.os_username and self.os_password:
+                    return self.os_version_checker.get_os_version(target_computer)
+                else:
+                    return {
+                        'version': 'NOT_CHECKED',
+                        'status': 'not_checked',
+                        'error': 'No OS credentials provided',
+                        'checked_at': datetime.now().isoformat(),
+                        'method': 'os_version_check'
                     }
             else:
                 return self._check_firmware_placeholder(firmware_type, rscm_ip, system_port)

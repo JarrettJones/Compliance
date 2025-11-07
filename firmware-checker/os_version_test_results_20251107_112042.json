@@ -1,0 +1,23 @@
+{
+  "test_date": "2025-11-07T11:20:41.713066",
+  "computer_name": "C41431157B0210B.redmond.corp.microsoft.com",
+  "username": "administrator",
+  "test_results": {
+    "os_version": {
+      "version": "27924.1002.arm64fre.rs_prerelease_azcc.250813-1250",
+      "status": "success",
+      "error": null,
+      "checked_at": "2025-11-07T11:20:42.403405",
+      "method": "os_version_check",
+      "os_info": {
+        "build_lab_ex": "27924.1002.arm64fre.rs_prerelease_azcc.250813-1250",
+        "current_build": "27924",
+        "current_version": "6.3",
+        "product_name": "CloudHost",
+        "display_version": "Dev",
+        "ubr": "1002",
+        "build_branch": "rs_prerelease_azcc"
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "test_date": "2025-11-07T11:18:20.774333",
+  "computer_name": "localhost",
+  "username": "local",
+  "test_results": {
+    "os_version": {
+      "version": "26100.1.240331-1435",
+      "status": "success",
+      "error": null,
+      "checked_at": "2025-11-07T11:18:21.432564",
+      "method": "os_version_check",
+      "os_info": {
+        "build_lab_ex": "26100.1.amd64fre.ge_release.240331-1435",
+        "current_build": "26200",
+        "current_version": "6.3",
+        "product_name": "Windows 10 Enterprise",
+        "display_version": "25H2",
+        "ubr": "6899",
+        "build_branch": "ge_release",
+        "filtered_version": "26100.1.240331-1435"
+      }
+    }
+  }
+}
