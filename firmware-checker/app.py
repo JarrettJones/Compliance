@@ -666,7 +666,7 @@ def index():
         
         # Get recent firmware checks
         recent_checks = conn.execute('''
-            SELECT fc.*, s.name as system_name
+            SELECT fc.*, s.name as system_name, s.description as system_description
             FROM firmware_checks fc
             JOIN systems s ON fc.system_id = s.id
             ORDER BY fc.check_date DESC
