@@ -661,7 +661,7 @@ def index():
             LEFT JOIN firmware_checks fc ON s.id = fc.system_id
             GROUP BY s.id
             ORDER BY s.updated_at DESC
-            LIMIT 10
+            LIMIT 5
         ''').fetchall()
         
         # Get recent firmware checks
