@@ -318,12 +318,22 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
         
         # Initialize results structure
         results = {
+            'check_id': check_id,
+            'check_date': datetime.now().isoformat(),
+            'system_details': {
+                'system_id': system_id,
+                'serial_number': system_info['name'],
+                'system_name': system_info['name'],  # Serial number (kept for backward compatibility)
+                'rscm_ip': system_info['rscm_ip'],
+                'rscm_port': system_info['rscm_port'],
+                'computer_name': system_info.get('computer_name'),  # Hostname/IP for WinRM
+                'hostname': system_info.get('computer_name')  # Alias for clarity
+            },
+            # Legacy fields (kept for backward compatibility)
             'system_id': system_id,
             'system_name': system_info['name'],
             'rscm_ip': system_info['rscm_ip'],
             'rscm_port': system_info['rscm_port'],
-            'check_date': datetime.now().isoformat(),
-            'check_id': check_id,
             'dc_scm': {'firmware_versions': {}},
             'ovl2': {'firmware_versions': {}},
             'other_platform': {'firmware_versions': {}},
