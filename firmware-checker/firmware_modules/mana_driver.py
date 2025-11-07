@@ -224,22 +224,24 @@ class ManaDriverChecker:
             # Check for error conditions
             if "Error:" in output:
                 return {
-                    'version': 'DEVICE_NOT_FOUND',
-                    'status': 'not_found',
-                    'error': 'Microsoft Azure Network Adapter Virtual Bus device not found',
+                    'version': 'NOT_INSTALLED',
+                    'status': 'success',
+                    'error': None,
                     'checked_at': datetime.now().isoformat(),
                     'method': 'mana_driver_check',
-                    'raw_output': output
+                    'raw_output': output,
+                    'note': 'Device not found on system - driver not installed'
                 }
             
             if "Driver information not available" in output:
                 return {
-                    'version': 'Driver information not available',
-                    'status': 'not_found',
-                    'error': 'Driver information could not be retrieved',
+                    'version': 'NOT_INSTALLED',
+                    'status': 'success',
+                    'error': None,
                     'checked_at': datetime.now().isoformat(),
                     'method': 'mana_driver_check',
-                    'device_info': driver_info
+                    'device_info': driver_info,
+                    'note': 'Driver information not available - driver may not be installed'
                 }
             
             # Extract driver version
@@ -266,12 +268,13 @@ class ManaDriverChecker:
                 }
             else:
                 return {
-                    'version': 'Driver information not available',
-                    'status': 'not_found',
-                    'error': 'Driver version could not be extracted',
+                    'version': 'NOT_INSTALLED',
+                    'status': 'success',
+                    'error': None,
                     'checked_at': datetime.now().isoformat(),
                     'method': 'mana_driver_check',
-                    'raw_output': output
+                    'raw_output': output,
+                    'note': 'Driver version could not be extracted - driver may not be installed'
                 }
                 
         except Exception as e:
