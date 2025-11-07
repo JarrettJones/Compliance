@@ -9,8 +9,12 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.wrappers import Response
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
 import sqlite3
 import os
+import sys
+import signal
 from datetime import datetime
 import logging
 from contextlib import contextmanager
@@ -147,6 +151,18 @@ def init_db():
             )
         ''')
         
+        # Users table for authentication
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                is_admin INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP
+            )
+        ''')
+        
         # Add recipe_id column to firmware_checks if it doesn't exist
         try:
             conn.execute('ALTER TABLE firmware_checks ADD COLUMN recipe_id INTEGER')
@@ -204,6 +220,42 @@ def init_db():
                 firmware_types
             )
             conn.commit()
+
+def create_default_admin():
+    """Create default admin user if no users exist"""
+    with get_db_connection() as conn:
+        user_count = conn.execute('SELECT COUNT(*) as count FROM users').fetchone()['count']
+        
+        if user_count == 0:
+            # Create default admin user: username = admin, password = admin
+            default_username = 'admin'
+            default_password = 'admin'
+            password_hash = generate_password_hash(default_password)
+            
+            conn.execute('''
+                INSERT INTO users (username, password_hash, is_admin)
+                VALUES (?, ?, 1)
+            ''', (default_username, password_hash))
+            conn.commit()
+            
+            print("=" * 80)
+            print("DEFAULT ADMIN USER CREATED")
+            print("=" * 80)
+            print(f"Username: {default_username}")
+            print(f"Password: {default_password}")
+            print("=" * 80)
+            print("IMPORTANT: Please change the default password after first login!")
+            print("=" * 80)
+
+def login_required(f):
+    """Decorator to require login for routes"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
 
 def cleanup_orphaned_checks():
     """Clean up orphaned 'running' firmware checks on server startup"""
@@ -642,6 +694,51 @@ def compare_firmware_with_recipe(firmware_data, recipe_versions):
     
     return comparison
 
+# Authentication Routes
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        with get_db_connection() as conn:
+            user = conn.execute(
+                'SELECT * FROM users WHERE username = ?',
+                (username,)
+            ).fetchone()
+            
+            if user and check_password_hash(user['password_hash'], password):
+                # Login successful
+                session['user_id'] = user['id']
+                session['username'] = user['username']
+                session['is_admin'] = user['is_admin']
+                
+                # Update last login time
+                conn.execute(
+                    'UPDATE users SET last_login = ? WHERE id = ?',
+                    (datetime.now().isoformat(), user['id'])
+                )
+                conn.commit()
+                
+                flash(f'Welcome back, {username}!', 'success')
+                
+                # Redirect to next page or admin panel
+                next_page = request.args.get('next')
+                return redirect(next_page if next_page else url_for('admin'))
+            else:
+                flash('Invalid username or password', 'error')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """Logout user"""
+    username = session.get('username', 'User')
+    session.clear()
+    flash(f'Goodbye, {username}!', 'info')
+    return redirect(url_for('index'))
+
 # Routes
 @app.route('/')
 def index():
@@ -687,6 +784,40 @@ def index():
 def help():
     """Help and instructions page"""
     return render_template('help.html')
+
+@app.route('/admin')
+@login_required
+def admin():
+    """Admin panel for application management"""
+    # Get app statistics
+    with get_db_connection() as conn:
+        stats = {
+            'total_systems': conn.execute('SELECT COUNT(*) as count FROM systems').fetchone()['count'],
+            'total_checks': conn.execute('SELECT COUNT(*) as count FROM firmware_checks').fetchone()['count'],
+            'total_recipes': conn.execute('SELECT COUNT(*) as count FROM firmware_recipes').fetchone()['count'],
+            'running_checks': conn.execute("SELECT COUNT(*) as count FROM firmware_checks WHERE status = 'running'").fetchone()['count']
+        }
+        
+        # Get running checks details
+        running_checks = conn.execute('''
+            SELECT fc.id, fc.check_date, s.name as system_name, s.rscm_ip,
+                   (julianday('now') - julianday(fc.check_date)) * 24 * 60 as minutes_running
+            FROM firmware_checks fc
+            JOIN systems s ON fc.system_id = s.id
+            WHERE fc.status = 'running'
+            ORDER BY fc.check_date DESC
+        ''').fetchall()
+    
+    # Get version information
+    import flask
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    flask_version = flask.__version__
+    
+    return render_template('admin.html', 
+                         stats=stats, 
+                         running_checks=running_checks,
+                         python_version=python_version,
+                         flask_version=flask_version)
 
 @app.route('/recipes')
 def recipes():
@@ -1865,6 +1996,64 @@ def api_cleanup_orphaned_checks():
             'error': str(e)
         }), 500
 
+@app.route('/api/restart-application', methods=['POST'])
+def api_restart_application():
+    """API endpoint to restart the Flask application"""
+    try:
+        # Check if any firmware checks are currently running
+        with active_checks_lock:
+            if len(active_checks) > 0:
+                active_list = []
+                for check_id, info in active_checks.items():
+                    with get_db_connection() as conn:
+                        check = conn.execute('''
+                            SELECT fc.id, s.name as system_name, s.rscm_ip
+                            FROM firmware_checks fc
+                            JOIN systems s ON fc.system_id = s.id
+                            WHERE fc.id = ?
+                        ''', (check_id,)).fetchone()
+                        
+                        if check:
+                            active_list.append({
+                                'check_id': check_id,
+                                'system_name': check['system_name'],
+                                'rscm_ip': check['rscm_ip'],
+                                'runtime_minutes': (time.time() - info['start_time']) / 60
+                            })
+                
+                return jsonify({
+                    'status': 'blocked',
+                    'message': 'Cannot restart while firmware checks are running',
+                    'active_checks': active_list,
+                    'active_count': len(active_checks)
+                }), 400
+        
+        # No active checks, safe to restart
+        logger.info("Application restart requested - shutting down gracefully...")
+        
+        # Shutdown thread pool
+        def shutdown_and_restart():
+            time.sleep(1)  # Give time for response to be sent
+            thread_pool.shutdown(wait=False)
+            logger.info("Restarting application...")
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+        
+        # Start shutdown in background thread
+        restart_thread = threading.Thread(target=shutdown_and_restart, daemon=True)
+        restart_thread.start()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Application is restarting...'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error restarting application: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
 @app.errorhandler(404)
 def not_found(error):
     return render_template('404.html'), 404
@@ -1894,6 +2083,9 @@ if __name__ == '__main__':
     init_db()
     
     print("Database initialized successfully!")
+    
+    # Create default admin user if needed
+    create_default_admin()
     
     # Cleanup orphaned running checks on startup
     cleanup_orphaned_checks()

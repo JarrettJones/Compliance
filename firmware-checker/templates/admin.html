@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Panel - Firmware Version Checker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="bi bi-gear-fill"></i> Admin Panel</h1>
+        <p class="lead">Application management and system control</p>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ stats.total_systems }}</h4>
+                        <p class="card-text">Total Systems</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-server fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ stats.total_checks }}</h4>
+                        <p class="card-text">Total Checks</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-check-circle fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ stats.total_recipes }}</h4>
+                        <p class="card-text">Recipes</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-book fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card {% if stats.running_checks > 0 %}bg-danger{% else %}bg-info{% endif %} text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ stats.running_checks }}</h4>
+                        <p class="card-text">Active Checks</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-clock-history fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Checks Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-activity"></i> Active Firmware Checks
+                    <span class="badge bg-light text-dark ms-2">{{ running_checks|length }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if running_checks %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> 
+                        <strong>Warning:</strong> {{ running_checks|length }} firmware check(s) currently running. Application restart is blocked until all checks complete.
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Check ID</th>
+                                    <th>System</th>
+                                    <th>RSCM IP</th>
+                                    <th>Started</th>
+                                    <th>Runtime</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for check in running_checks %}
+                                <tr>
+                                    <td><a href="{{ url_for('check_result', check_id=check.id) }}" class="badge bg-primary">#{{ check.id }}</a></td>
+                                    <td><strong>{{ check.system_name }}</strong></td>
+                                    <td><code>{{ check.rscm_ip }}</code></td>
+                                    <td>{{ check.check_date[:19] }}</td>
+                                    <td>
+                                        <span class="badge bg-{% if check.minutes_running > 60 %}danger{% elif check.minutes_running > 30 %}warning{% else %}info{% endif %}">
+                                            {{ "%.1f"|format(check.minutes_running) }} min
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('check_firmware', system_id=check.id) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle"></i> No firmware checks currently running. Safe to restart application.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Application Control Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="bi bi-power"></i> Application Control</h5>
+            </div>
+            <div class="card-body">
+                <h6>Restart Application</h6>
+                <p class="text-muted">
+                    Restart the Flask application. This is useful after pulling updates from git or making configuration changes.
+                    The application will automatically reload with the latest code.
+                </p>
+                
+                {% if running_checks %}
+                    <button class="btn btn-danger" disabled>
+                        <i class="bi bi-x-circle"></i> Restart Blocked ({{ running_checks|length }} checks running)
+                    </button>
+                    <small class="text-danger d-block mt-2">
+                        <i class="bi bi-info-circle"></i> Wait for all firmware checks to complete before restarting
+                    </small>
+                {% else %}
+                    <button class="btn btn-danger" onclick="confirmRestart()">
+                        <i class="bi bi-arrow-clockwise"></i> Restart Application
+                    </button>
+                    <small class="text-muted d-block mt-2">
+                        <i class="bi bi-info-circle"></i> Application will restart immediately and automatically reconnect
+                    </small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Information -->
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> System Information</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Python Version:</dt>
+                    <dd class="col-sm-8"><code>{{ python_version }}</code></dd>
+                    
+                    <dt class="col-sm-4">Flask Version:</dt>
+                    <dd class="col-sm-8"><code>{{ flask_version }}</code></dd>
+                    
+                    <dt class="col-sm-4">Database:</dt>
+                    <dd class="col-sm-8"><code>SQLite3</code></dd>
+                    
+                    <dt class="col-sm-4">App Mode:</dt>
+                    <dd class="col-sm-8"><span class="badge bg-warning">Development</span></dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-house"></i> Dashboard
+                    </a>
+                    <a href="{{ url_for('systems') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-server"></i> Manage Systems
+                    </a>
+                    <a href="{{ url_for('recipes') }}" class="btn btn-outline-warning">
+                        <i class="bi bi-book"></i> Manage Recipes
+                    </a>
+                    <button class="btn btn-outline-info" onclick="refreshPage()">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh Page
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Restart Confirmation Modal -->
+<div class="modal fade" id="restartModal" tabindex="-1" aria-labelledby="restartModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="restartModalLabel">
+                    <i class="bi bi-exclamation-triangle"></i> Confirm Application Restart
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Are you sure you want to restart the application?</strong></p>
+                <p class="text-muted mb-0">
+                    The Flask application will shut down and restart immediately. 
+                    All active connections will be temporarily interrupted.
+                    The page will automatically attempt to reconnect once the application is back online.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="restartApplication()">
+                    <i class="bi bi-arrow-clockwise"></i> Yes, Restart Now
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const SCRIPT_ROOT = {{ request.script_root|tojson }};
+
+function confirmRestart() {
+    const modal = new bootstrap.Modal(document.getElementById('restartModal'));
+    modal.show();
+}
+
+function restartApplication() {
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('restartModal'));
+    modal.hide();
+    
+    // Show loading indicator
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-info position-fixed top-0 start-50 translate-middle-x mt-3';
+    alertDiv.style.zIndex = '9999';
+    alertDiv.innerHTML = `
+        <div class="d-flex align-items-center">
+            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+            <strong>Restarting application...</strong>
+        </div>
+    `;
+    document.body.appendChild(alertDiv);
+    
+    // Make API call to restart
+    fetch(SCRIPT_ROOT + '/api/restart-application', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alertDiv.className = 'alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3';
+            alertDiv.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    <strong>Application restarting... Waiting for reconnection...</strong>
+                </div>
+            `;
+            
+            // Wait and try to reconnect
+            setTimeout(() => {
+                checkServerAvailability();
+            }, 3000);
+        } else if (data.status === 'blocked') {
+            alertDiv.className = 'alert alert-danger position-fixed top-0 start-50 translate-middle-x mt-3';
+            alertDiv.innerHTML = `
+                <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+                <strong>Cannot Restart:</strong> ${data.message}
+                <br><small>${data.active_count} check(s) currently running</small>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('Error restarting application:', error);
+        // This is expected - the server is restarting
+        alertDiv.className = 'alert alert-warning position-fixed top-0 start-50 translate-middle-x mt-3';
+        alertDiv.innerHTML = `
+            <div class="d-flex align-items-center">
+                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                <strong>Application restarting... Waiting for reconnection...</strong>
+            </div>
+        `;
+        
+        setTimeout(() => {
+            checkServerAvailability();
+        }, 3000);
+    });
+}
+
+function checkServerAvailability() {
+    let attempts = 0;
+    const maxAttempts = 20;
+    
+    const checkInterval = setInterval(() => {
+        attempts++;
+        
+        fetch(SCRIPT_ROOT + '/', {
+            method: 'HEAD',
+            cache: 'no-cache'
+        })
+        .then(response => {
+            if (response.ok) {
+                clearInterval(checkInterval);
+                
+                // Show success message
+                const alertDiv = document.querySelector('.alert');
+                if (alertDiv) {
+                    alertDiv.className = 'alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3';
+                    alertDiv.innerHTML = `
+                        <i class="bi bi-check-circle"></i> <strong>Application restarted successfully!</strong>
+                        <br><small>Reloading page...</small>
+                    `;
+                }
+                
+                // Reload page after short delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            }
+        })
+        .catch(error => {
+            // Still waiting for server
+            if (attempts >= maxAttempts) {
+                clearInterval(checkInterval);
+                const alertDiv = document.querySelector('.alert');
+                if (alertDiv) {
+                    alertDiv.className = 'alert alert-danger position-fixed top-0 start-50 translate-middle-x mt-3';
+                    alertDiv.innerHTML = `
+                        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+                        <strong>Restart timeout:</strong> Server is taking longer than expected to restart.
+                        <br><small>Try refreshing the page manually.</small>
+                    `;
+                }
+            }
+        });
+    }, 1500); // Check every 1.5 seconds
+}
+
+function refreshPage() {
+    window.location.reload();
+}
+
+// Auto-refresh active checks every 30 seconds
+setInterval(() => {
+    if (document.visibilityState === 'visible') {
+        window.location.reload();
+    }
+}, 30000);
+</script>
+{% endblock %}

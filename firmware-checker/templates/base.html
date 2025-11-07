@@ -52,6 +52,34 @@
                             <i class="bi bi-question-circle"></i> Help
                         </a>
                     </li>
+                    {% if session.get('user_id') %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'admin' %}active{% endif %}" 
+                           href="{{ url_for('admin') }}">
+                            <i class="bi bi-gear-fill"></i> Admin
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <ul class="navbar-nav">
+                    {% if session.get('user_id') %}
+                    <li class="nav-item">
+                        <span class="navbar-text me-2">
+                            <i class="bi bi-person-circle"></i> {{ session.get('username') }}
+                        </span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('logout') }}">
+                            <i class="bi bi-box-arrow-right"></i> Logout
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('login') }}">
+                            <i class="bi bi-box-arrow-in-right"></i> Login
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
