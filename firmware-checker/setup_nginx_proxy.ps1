@@ -96,11 +96,15 @@ http {
             return 301 /firmware-checker/;
         }
         
+        # Redirect /firmware-checker to /firmware-checker/ (with trailing slash)
+        location = /firmware-checker {
+            return 301 /firmware-checker/;
+        }
+        
         # Firmware Checker application
-        # Keep the /firmware-checker prefix when proxying
-        location /firmware-checker {
-            # Rewrite to strip /firmware-checker before passing to Flask
-            rewrite ^/firmware-checker(.*)$ `$1 break;
+        location /firmware-checker/ {
+            # Strip /firmware-checker prefix and pass the rest to Flask
+            rewrite ^/firmware-checker/(.*)$ /`$1 break;
             
             # Proxy to Waitress at root (use IPv4 explicitly to avoid IPv6 issues)
             proxy_pass http://127.0.0.1:5000;
