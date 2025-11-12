@@ -218,8 +218,8 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <h4 class="card-title">32 Types</h4>
-                        <p class="card-text">3 Categories <i class="bi bi-info-circle-fill"></i></p>
+                        <h4 class="card-title">{{ stats.total_firmware_types }} Type{{ 's' if stats.total_firmware_types != 1 else '' }}</h4>
+                        <p class="card-text">{{ firmware_by_category|length }} Categor{{ 'ies' if firmware_by_category|length != 1 else 'y' }} <i class="bi bi-info-circle-fill"></i></p>
                     </div>
                     <div class="align-self-center">
                         <i class="bi bi-cpu fs-1"></i>
@@ -420,82 +420,50 @@
                 <button type="button" class="btn-close btn-close-white" onclick="closeModal()" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="row row-cols-1 row-cols-md-3 g-4">
-                    <div class="col">
-                        <div class="card border-primary h-100">
-                            <div class="card-header bg-primary text-white">
-                                <h6 class="mb-0"><i class="bi bi-motherboard"></i> DC-SCM</h6>
-                                <small>16 Firmware Types</small>
-                            </div>
-                            <div class="card-body" style="min-height: 400px;">
-                                <ul class="list-unstyled small mb-0">
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> IFWI</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> UEFI Profile/Other</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> BMC FW</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> Inventory</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> PowerCapping</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> FanTable</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> SDRGenerator</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> IPMIAllowList</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> BMC Tip</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> BMC TIP PCD Platform ID</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> BMC TIP PCD Version ID (hex)/(dec)</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> Manticore (HSM)</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> CFM Platform ID</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> CFM Version ID (hex)/(dec)</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> TPM Module</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> SCM-CPLD</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col">
-                        <div class="card border-success h-100">
-                            <div class="card-header bg-success text-white">
-                                <h6 class="mb-0"><i class="bi bi-diagram-3"></i> OVL2</h6>
-                                <small>12 Firmware Types</small>
-                            </div>
-                            <div class="card-body" style="min-height: 400px;">
-                                <ul class="list-unstyled small mb-0">
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> FPGA Agilex (App Image w/ OpRom)</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> Cyclone V Image</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> Cyclone V PFMID</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> OVL SOC FIP</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> OVL SOC FIP PFMID</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC Test OS (STOS)</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> Host FPGA Driver & Tools</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC FPGA Driver</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> MANA Driver (Windows)</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> Glacier Cerberus FW</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> Glacier Cerberus Utility</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> Glacier Peak CFM</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col">
-                        <div class="card border-warning h-100">
-                            <div class="card-header bg-warning text-dark">
-                                <h6 class="mb-0"><i class="bi bi-hdd-rack"></i> Other Platform</h6>
-                                <small>4 Firmware Types</small>
-                            </div>
-                            <div class="card-body" style="min-height: 400px;">
-                                <ul class="list-unstyled small mb-0">
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> HPMCpld</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> SOC VR Configs</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> E.1s</li>
-                                    <li><i class="bi bi-check-circle-fill text-success"></i> M.2</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
+                {% if firmware_by_category %}
+                <div class="alert alert-info mb-3">
+                    {% if session.get('program_id') %}
+                    <i class="bi bi-info-circle"></i> Showing firmware types available for <strong>{{ session.get('program_name') }}</strong> program
+                    {% else %}
+                    <i class="bi bi-info-circle"></i> Showing all available firmware types
+                    {% endif %}
                 </div>
                 
-                <div class="alert alert-info mb-0 mt-4">
-                    <i class="bi bi-info-circle"></i> <strong>Total:</strong> 32 firmware types across 3 categories can be checked automatically
+                <div class="row row-cols-1 row-cols-md-3 g-4">
+                    {% for category, count in firmware_by_category.items() %}
+                    <div class="col">
+                        <div class="card border-{% if loop.index == 1 %}primary{% elif loop.index == 2 %}success{% else %}info{% endif %} h-100">
+                            <div class="card-header bg-{% if loop.index == 1 %}primary{% elif loop.index == 2 %}success{% else %}info{% endif %} text-white">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-{% if category == 'DC-SCM' %}motherboard{% elif category == 'OVL2' %}diagram-3{% else %}hdd-rack{% endif %}"></i> 
+                                    {{ category }}
+                                </h6>
+                                <small>{{ count }} Firmware Type{{ 's' if count != 1 else '' }}</small>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted small">
+                                    {% if category == 'DC-SCM' %}
+                                    Datacenter Server Component Manager firmware including IFWI, BMC, security modules, and platform configurations.
+                                    {% elif category == 'OVL2' %}
+                                    Offload Engine firmware including FPGA images, SOC components, drivers, and security frameworks.
+                                    {% else %}
+                                    Additional platform firmware for storage controllers, voltage regulators, and peripheral devices.
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
+                
+                <div class="alert alert-success mb-0 mt-4">
+                    <i class="bi bi-info-circle"></i> <strong>Total:</strong> {{ stats.total_firmware_types }} firmware type{{ 's' if stats.total_firmware_types != 1 else '' }} across {{ firmware_by_category|length }} categor{{ 'ies' if firmware_by_category|length != 1 else 'y' }}
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> No firmware types configured for this program.
+                </div>
+                {% endif %}
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeModal()">Close</button>
