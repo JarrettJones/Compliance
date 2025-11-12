@@ -13,8 +13,26 @@ from pathlib import Path
 # Certificate details
 CERT_THUMBPRINT = "A8A8C64E7AD375981BCE879DE6F42A42E4297515"
 SERVER_NAME = "dca20301103n414.redmond.corp.microsoft.com"
-NGINX_PATH = r"C:\nginx-1.24.0"
-CERT_DIR = os.path.join(NGINX_PATH, "ssl")
+
+# Try to find nginx installation
+NGINX_PATHS = [
+    r"C:\nginx-1.24.0",
+    r"C:\nginx",
+    r"C:\Program Files\nginx",
+    r"C:\tools\nginx"
+]
+
+NGINX_PATH = None
+for path in NGINX_PATHS:
+    if os.path.exists(path):
+        NGINX_PATH = path
+        break
+
+if not NGINX_PATH:
+    # Ask user for nginx path
+    pass  # Will be handled in main()
+
+CERT_DIR = os.path.join(NGINX_PATH, "ssl") if NGINX_PATH else None
 
 def print_colored(text, color="white"):
     """Print colored text (limited colors for Windows)"""
@@ -48,9 +66,22 @@ def main():
     print()
     
     # Check if nginx directory exists
-    if not os.path.exists(NGINX_PATH):
-        print_colored(f"ERROR: nginx directory not found at {NGINX_PATH}", "red")
-        sys.exit(1)
+    global NGINX_PATH, CERT_DIR
+    
+    if not NGINX_PATH or not os.path.exists(NGINX_PATH):
+        print_colored("nginx directory not found in default locations.", "yellow")
+        print("Please enter the path to your nginx installation:")
+        nginx_input = input("nginx path: ").strip().strip('"')
+        
+        if not os.path.exists(nginx_input):
+            print_colored(f"ERROR: nginx directory not found at {nginx_input}", "red")
+            sys.exit(1)
+        
+        NGINX_PATH = nginx_input
+        CERT_DIR = os.path.join(NGINX_PATH, "ssl")
+    
+    print_colored(f"Using nginx directory: {NGINX_PATH}", "green")
+    print()
     
     # Create ssl directory if it doesn't exist
     if not os.path.exists(CERT_DIR):
