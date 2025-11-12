@@ -54,6 +54,55 @@
                             </div>
                         </div>
 
+                        <div class="mb-4">
+                            <label class="form-label">Available Firmware Check Types <span class="text-danger">*</span></label>
+                            <div class="form-text mb-2">
+                                Select which firmware types can be checked for systems in this program
+                            </div>
+                            
+                            {% if firmware_by_category %}
+                            <div class="border rounded p-3" style="max-height: 400px; overflow-y: auto;">
+                                {% for category, firmware_types in firmware_by_category.items() %}
+                                <div class="mb-3">
+                                    <h6 class="text-primary">
+                                        <i class="bi bi-folder"></i> {{ category }}
+                                        <button type="button" class="btn btn-sm btn-outline-primary ms-2" 
+                                                onclick="toggleCategory('{{ category }}', true)">
+                                            Select All
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary ms-1" 
+                                                onclick="toggleCategory('{{ category }}', false)">
+                                            Deselect All
+                                        </button>
+                                    </h6>
+                                    <div class="ms-3">
+                                        {% for ft in firmware_types %}
+                                        <div class="form-check">
+                                            <input class="form-check-input firmware-type-check category-{{ category }}" 
+                                                   type="checkbox" 
+                                                   name="firmware_types" 
+                                                   value="{{ ft.id }}"
+                                                   id="firmware_type_{{ ft.id }}"
+                                                   {% if ft.id in selected_firmware_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="firmware_type_{{ ft.id }}">
+                                                {{ ft.name }}
+                                                {% if ft.description %}
+                                                <small class="text-muted">- {{ ft.description }}</small>
+                                                {% endif %}
+                                            </label>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle"></i> No firmware types available. Please initialize the database.
+                            </div>
+                            {% endif %}
+                        </div>
+
                         <div class="mb-3">
                             <div class="form-check form-switch">
                                 <input class="form-check-input" 
@@ -94,4 +143,15 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function toggleCategory(category, select) {
+    const checkboxes = document.querySelectorAll('.category-' + category);
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = select;
+    });
+}
+</script>
 {% endblock %}

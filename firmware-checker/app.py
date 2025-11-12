@@ -155,6 +155,17 @@ def init_db():
             )
         ''')
         
+        # Junction table for program-firmware type associations
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS program_firmware_types (
+                program_id INTEGER NOT NULL,
+                firmware_type_id INTEGER NOT NULL,
+                PRIMARY KEY (program_id, firmware_type_id),
+                FOREIGN KEY (program_id) REFERENCES programs (id) ON DELETE CASCADE,
+                FOREIGN KEY (firmware_type_id) REFERENCES firmware_types (id) ON DELETE CASCADE
+            )
+        ''')
+        
         # Firmware recipes table
         conn.execute('''
             CREATE TABLE IF NOT EXISTS firmware_recipes (
@@ -1140,36 +1151,63 @@ def admin_programs():
 @admin_required
 def admin_add_program():
     """Add a new program"""
-    if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        description = request.form.get('description', '').strip()
-        check_methodology = request.form.get('check_methodology', 'standard')
-        is_active = 1 if request.form.get('is_active') == 'on' else 0
-        
-        if not name:
-            flash('Program name is required', 'error')
-            return redirect(url_for('admin_add_program'))
-        
-        if check_methodology not in ['echo_falls', 'standard', 'custom']:
-            flash('Invalid check methodology', 'error')
-            return redirect(url_for('admin_add_program'))
-        
-        try:
-            with get_db_connection() as conn:
-                conn.execute('''
+    with get_db_connection() as conn:
+        if request.method == 'POST':
+            name = request.form.get('name', '').strip()
+            description = request.form.get('description', '').strip()
+            check_methodology = request.form.get('check_methodology', 'standard')
+            is_active = 1 if request.form.get('is_active') == 'on' else 0
+            firmware_type_ids = request.form.getlist('firmware_types')  # Get selected firmware types
+            
+            if not name:
+                flash('Program name is required', 'error')
+                return redirect(url_for('admin_add_program'))
+            
+            if check_methodology not in ['echo_falls', 'standard', 'custom']:
+                flash('Invalid check methodology', 'error')
+                return redirect(url_for('admin_add_program'))
+            
+            try:
+                # Insert program
+                cursor = conn.execute('''
                     INSERT INTO programs (name, description, check_methodology, is_active)
                     VALUES (?, ?, ?, ?)
                 ''', (name, description, check_methodology, is_active))
+                program_id = cursor.lastrowid
+                
+                # Associate firmware types with the program
+                for firmware_type_id in firmware_type_ids:
+                    conn.execute('''
+                        INSERT INTO program_firmware_types (program_id, firmware_type_id)
+                        VALUES (?, ?)
+                    ''', (program_id, int(firmware_type_id)))
+                
                 conn.commit()
+                
+                flash(f'Program "{name}" created successfully with {len(firmware_type_ids)} firmware type(s)', 'success')
+                return redirect(url_for('admin_programs'))
             
-            flash(f'Program "{name}" created successfully', 'success')
-            return redirect(url_for('admin_programs'))
+            except sqlite3.IntegrityError:
+                flash(f'A program with the name "{name}" already exists', 'error')
+                return redirect(url_for('admin_add_program'))
         
-        except sqlite3.IntegrityError:
-            flash(f'A program with the name "{name}" already exists', 'error')
-            return redirect(url_for('admin_add_program'))
-    
-    return render_template('admin_program_form.html', program=None, action='Add')
+        # GET request - show form with all firmware types
+        firmware_types = conn.execute('''
+            SELECT * FROM firmware_types ORDER BY category, name
+        ''').fetchall()
+        
+        # Group firmware types by category
+        firmware_by_category = {}
+        for ft in firmware_types:
+            if ft['category'] not in firmware_by_category:
+                firmware_by_category[ft['category']] = []
+            firmware_by_category[ft['category']].append(ft)
+        
+        return render_template('admin_program_form.html', 
+                             program=None, 
+                             action='Add',
+                             firmware_by_category=firmware_by_category,
+                             selected_firmware_types=[])
 
 @app.route('/admin/programs/edit/<int:program_id>', methods=['GET', 'POST'])
 @admin_required
@@ -1187,6 +1225,7 @@ def admin_edit_program(program_id):
             description = request.form.get('description', '').strip()
             check_methodology = request.form.get('check_methodology', 'standard')
             is_active = 1 if request.form.get('is_active') == 'on' else 0
+            firmware_type_ids = request.form.getlist('firmware_types')  # Get selected firmware types
             
             if not name:
                 flash('Program name is required', 'error')
@@ -1197,12 +1236,22 @@ def admin_edit_program(program_id):
                 return render_template('admin_program_form.html', program=program, action='Edit')
             
             try:
+                # Update program
                 conn.execute('''
                     UPDATE programs
                     SET name = ?, description = ?, check_methodology = ?, 
                         is_active = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                 ''', (name, description, check_methodology, is_active, program_id))
+                
+                # Update firmware type associations - delete old ones and add new ones
+                conn.execute('DELETE FROM program_firmware_types WHERE program_id = ?', (program_id,))
+                for firmware_type_id in firmware_type_ids:
+                    conn.execute('''
+                        INSERT INTO program_firmware_types (program_id, firmware_type_id)
+                        VALUES (?, ?)
+                    ''', (program_id, int(firmware_type_id)))
+                
                 conn.commit()
                 
                 flash(f'Program "{name}" updated successfully', 'success')
@@ -1212,7 +1261,30 @@ def admin_edit_program(program_id):
                 flash(f'A program with the name "{name}" already exists', 'error')
                 return render_template('admin_program_form.html', program=program, action='Edit')
         
-        return render_template('admin_program_form.html', program=program, action='Edit')
+        # GET request - show form with all firmware types and current selections
+        firmware_types = conn.execute('''
+            SELECT * FROM firmware_types ORDER BY category, name
+        ''').fetchall()
+        
+        # Group firmware types by category
+        firmware_by_category = {}
+        for ft in firmware_types:
+            if ft['category'] not in firmware_by_category:
+                firmware_by_category[ft['category']] = []
+            firmware_by_category[ft['category']].append(ft)
+        
+        # Get currently selected firmware types for this program
+        selected_firmware_types = [
+            row['firmware_type_id'] for row in conn.execute('''
+                SELECT firmware_type_id FROM program_firmware_types WHERE program_id = ?
+            ''', (program_id,)).fetchall()
+        ]
+        
+        return render_template('admin_program_form.html', 
+                             program=program, 
+                             action='Edit',
+                             firmware_by_category=firmware_by_category,
+                             selected_firmware_types=selected_firmware_types)
 
 @app.route('/admin/programs/toggle/<int:program_id>', methods=['POST'])
 @admin_required
