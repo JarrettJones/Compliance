@@ -1395,6 +1395,37 @@ def index():
         ''', program_params).fetchall()
         
         # Get stats for this program
+        # Count firmware types assigned to this program
+        if program_id:
+            firmware_types_count = conn.execute('''
+                SELECT COUNT(*) as count 
+                FROM program_firmware_types 
+                WHERE program_id = ?
+            ''', (program_id,)).fetchone()['count']
+            
+            # Get firmware types grouped by category for this program
+            firmware_types = conn.execute('''
+                SELECT ft.category, COUNT(ft.id) as count
+                FROM firmware_types ft
+                INNER JOIN program_firmware_types pft ON ft.id = pft.firmware_type_id
+                WHERE pft.program_id = ?
+                GROUP BY ft.category
+                ORDER BY ft.category
+            ''', (program_id,)).fetchall()
+        else:
+            firmware_types_count = conn.execute('SELECT COUNT(*) as count FROM firmware_types').fetchone()['count']
+            
+            # Get all firmware types grouped by category
+            firmware_types = conn.execute('''
+                SELECT category, COUNT(id) as count
+                FROM firmware_types
+                GROUP BY category
+                ORDER BY category
+            ''').fetchall()
+        
+        # Convert to dict for easier template access
+        firmware_by_category = {row['category']: row['count'] for row in firmware_types}
+        
         stats = {
             'total_systems': conn.execute(f'SELECT COUNT(*) as count FROM systems s {program_filter}', program_params).fetchone()['count'],
             'total_checks': conn.execute(f'''
@@ -1404,11 +1435,12 @@ def index():
                 {program_filter}
             ''', program_params).fetchone()['count'],
             'total_recipes': conn.execute(f'SELECT COUNT(*) as count FROM firmware_recipes fr {program_filter.replace("s.program_id", "fr.program_id")}', program_params).fetchone()['count'],
+            'total_firmware_types': firmware_types_count,
             'recent_systems': systems,
             'recent_checks': recent_checks
         }
     
-    return render_template('index.html', stats=stats)
+    return render_template('index.html', stats=stats, firmware_by_category=firmware_by_category)
 
 @app.route('/help')
 def help():
