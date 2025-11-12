@@ -1115,6 +1115,129 @@ def reject_access_request(request_id):
     
     return redirect(url_for('admin_access_requests'))
 
+# Program Management Routes
+@app.route('/admin/programs')
+@admin_required
+def admin_programs():
+    """Program management page"""
+    with get_db_connection() as conn:
+        programs = conn.execute('''
+            SELECT p.*,
+                   COUNT(DISTINCT s.id) as system_count,
+                   COUNT(DISTINCT fc.id) as check_count,
+                   COUNT(DISTINCT fr.id) as recipe_count
+            FROM programs p
+            LEFT JOIN systems s ON p.id = s.program_id
+            LEFT JOIN firmware_checks fc ON s.id = fc.system_id
+            LEFT JOIN firmware_recipes fr ON p.id = fr.program_id
+            GROUP BY p.id
+            ORDER BY p.is_active DESC, p.name
+        ''').fetchall()
+    
+    return render_template('admin_programs.html', programs=programs)
+
+@app.route('/admin/programs/add', methods=['GET', 'POST'])
+@admin_required
+def admin_add_program():
+    """Add a new program"""
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        description = request.form.get('description', '').strip()
+        check_methodology = request.form.get('check_methodology', 'standard')
+        is_active = 1 if request.form.get('is_active') == 'on' else 0
+        
+        if not name:
+            flash('Program name is required', 'error')
+            return redirect(url_for('admin_add_program'))
+        
+        if check_methodology not in ['echo_falls', 'standard', 'custom']:
+            flash('Invalid check methodology', 'error')
+            return redirect(url_for('admin_add_program'))
+        
+        try:
+            with get_db_connection() as conn:
+                conn.execute('''
+                    INSERT INTO programs (name, description, check_methodology, is_active)
+                    VALUES (?, ?, ?, ?)
+                ''', (name, description, check_methodology, is_active))
+                conn.commit()
+            
+            flash(f'Program "{name}" created successfully', 'success')
+            return redirect(url_for('admin_programs'))
+        
+        except sqlite3.IntegrityError:
+            flash(f'A program with the name "{name}" already exists', 'error')
+            return redirect(url_for('admin_add_program'))
+    
+    return render_template('admin_program_form.html', program=None, action='Add')
+
+@app.route('/admin/programs/edit/<int:program_id>', methods=['GET', 'POST'])
+@admin_required
+def admin_edit_program(program_id):
+    """Edit an existing program"""
+    with get_db_connection() as conn:
+        program = conn.execute('SELECT * FROM programs WHERE id = ?', (program_id,)).fetchone()
+        
+        if not program:
+            flash('Program not found', 'error')
+            return redirect(url_for('admin_programs'))
+        
+        if request.method == 'POST':
+            name = request.form.get('name', '').strip()
+            description = request.form.get('description', '').strip()
+            check_methodology = request.form.get('check_methodology', 'standard')
+            is_active = 1 if request.form.get('is_active') == 'on' else 0
+            
+            if not name:
+                flash('Program name is required', 'error')
+                return render_template('admin_program_form.html', program=program, action='Edit')
+            
+            if check_methodology not in ['echo_falls', 'standard', 'custom']:
+                flash('Invalid check methodology', 'error')
+                return render_template('admin_program_form.html', program=program, action='Edit')
+            
+            try:
+                conn.execute('''
+                    UPDATE programs
+                    SET name = ?, description = ?, check_methodology = ?, 
+                        is_active = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (name, description, check_methodology, is_active, program_id))
+                conn.commit()
+                
+                flash(f'Program "{name}" updated successfully', 'success')
+                return redirect(url_for('admin_programs'))
+            
+            except sqlite3.IntegrityError:
+                flash(f'A program with the name "{name}" already exists', 'error')
+                return render_template('admin_program_form.html', program=program, action='Edit')
+        
+        return render_template('admin_program_form.html', program=program, action='Edit')
+
+@app.route('/admin/programs/toggle/<int:program_id>', methods=['POST'])
+@admin_required
+def admin_toggle_program(program_id):
+    """Toggle program active status"""
+    with get_db_connection() as conn:
+        program = conn.execute('SELECT * FROM programs WHERE id = ?', (program_id,)).fetchone()
+        
+        if not program:
+            flash('Program not found', 'error')
+            return redirect(url_for('admin_programs'))
+        
+        new_status = 0 if program['is_active'] else 1
+        conn.execute('''
+            UPDATE programs
+            SET is_active = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (new_status, program_id))
+        conn.commit()
+        
+        status_text = 'activated' if new_status else 'deactivated'
+        flash(f'Program "{program["name"]}" has been {status_text}', 'success')
+    
+    return redirect(url_for('admin_programs'))
+
 # Routes
 @app.route('/select-program')
 @login_required

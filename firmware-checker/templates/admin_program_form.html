@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}{{ action }} Program - Admin - Firmware Checker{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-building"></i> {{ action }} Program
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Program Name <span class="text-danger">*</span></label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="name" 
+                                   name="name" 
+                                   value="{{ program.name if program else '' }}"
+                                   required
+                                   placeholder="e.g., Echo Falls, Project Alpha">
+                            <div class="form-text">A unique name for this program</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" 
+                                      id="description" 
+                                      name="description" 
+                                      rows="3"
+                                      placeholder="Brief description of this program">{{ program.description if program else '' }}</textarea>
+                            <div class="form-text">Optional description to help users identify this program</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="check_methodology" class="form-label">Check Methodology <span class="text-danger">*</span></label>
+                            <select class="form-select" id="check_methodology" name="check_methodology" required>
+                                <option value="echo_falls" {% if program and program.check_methodology == 'echo_falls' %}selected{% endif %}>
+                                    Echo Falls - Original methodology
+                                </option>
+                                <option value="standard" {% if not program or program.check_methodology == 'standard' %}selected{% endif %}>
+                                    Standard - Default checking method
+                                </option>
+                                <option value="custom" {% if program and program.check_methodology == 'custom' %}selected{% endif %}>
+                                    Custom - User-defined process
+                                </option>
+                            </select>
+                            <div class="form-text">
+                                The firmware checking methodology to use for this program
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       id="is_active" 
+                                       name="is_active"
+                                       {% if not program or program.is_active %}checked{% endif %}>
+                                <label class="form-check-label" for="is_active">
+                                    Active
+                                </label>
+                            </div>
+                            <div class="form-text">
+                                Inactive programs are hidden from the program selector
+                            </div>
+                        </div>
+
+                        {% if program %}
+                        <div class="alert alert-info">
+                            <strong><i class="bi bi-info-circle"></i> Program Statistics:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>Created: {{ program.created_at.split('.')[0] if program.created_at else 'Unknown' }}</li>
+                                <li>Last Updated: {{ program.updated_at.split('.')[0] if program.updated_at else 'Unknown' }}</li>
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{{ url_for('admin_programs') }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> {{ action }} Program
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

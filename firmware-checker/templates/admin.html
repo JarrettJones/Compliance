@@ -215,6 +215,9 @@
                         <span class="badge bg-danger">{{ pending_requests }}</span>
                         {% endif %}
                     </a>
+                    <a href="{{ url_for('admin_programs') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-building"></i> Manage Programs
+                    </a>
                     <a href="{{ url_for('systems') }}" class="btn btn-outline-secondary">
                         <i class="bi bi-server"></i> Manage Systems
                     </a>
