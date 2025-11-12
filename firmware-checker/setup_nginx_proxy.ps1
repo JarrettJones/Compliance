@@ -117,9 +117,9 @@ if ($certExists) {
         listen 443 ssl;
         server_name $hostname $fullHostname localhost;
         
-        # SSL Configuration
-        ssl_certificate      ssl/server.crt;
-        ssl_certificate_key  ssl/server.key;
+        # SSL Configuration (absolute paths for clarity)
+        ssl_certificate      $nginxPath/ssl/server.crt;
+        ssl_certificate_key  $nginxPath/ssl/server.key;
         
         # SSL Security Settings
         ssl_protocols TLSv1.2 TLSv1.3;
