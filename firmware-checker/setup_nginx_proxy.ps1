@@ -66,6 +66,18 @@ Write-Host "-" * 80
 
 $hostname = $env:COMPUTERNAME.ToLower()
 
+# Check if SSL certificates exist
+$sslDir = "$nginxPath\ssl"
+$certExists = (Test-Path "$sslDir\server.crt") -and (Test-Path "$sslDir\server.key")
+$fullHostname = "$hostname.redmond.corp.microsoft.com"
+
+if ($certExists) {
+    Write-Host "[OK] SSL certificates found - enabling HTTPS" -ForegroundColor Green
+} else {
+    Write-Host "[INFO] No SSL certificates found - HTTP only" -ForegroundColor Yellow
+    Write-Host "       Run install_ca_certificate.py to enable HTTPS" -ForegroundColor Yellow
+}
+
 $nginxConfig = @"
 # nginx configuration for Firmware Checker
 # Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
@@ -87,9 +99,42 @@ http {
     access_log  logs/access.log;
     error_log   logs/error.log;
     
+    # HTTP Server (Port 80) - Redirect to HTTPS if certificates exist
     server {
         listen 80;
-        server_name $hostname localhost;
+        server_name $hostname $fullHostname localhost;
+"@
+
+if ($certExists) {
+    $nginxConfig += @"
+        
+        # Redirect all HTTP to HTTPS
+        return 301 https://`$host`$request_uri;
+    }
+    
+    # HTTPS Server (Port 443) - Main application server
+    server {
+        listen 443 ssl;
+        server_name $hostname $fullHostname localhost;
+        
+        # SSL Configuration
+        ssl_certificate      ssl/server.crt;
+        ssl_certificate_key  ssl/server.key;
+        
+        # SSL Security Settings
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+        ssl_prefer_server_ciphers on;
+        ssl_session_cache shared:SSL:10m;
+        ssl_session_timeout 10m;
+"@
+} else {
+    $nginxConfig += @"
+
+"@
+}
+
+$nginxConfig += @"
         
         # Root redirects to firmware-checker
         location = / {
@@ -106,7 +151,7 @@ http {
             # Strip /firmware-checker prefix and pass the rest to Flask
             rewrite ^/firmware-checker/(.*)$ /`$1 break;
             
-            # Proxy to Waitress at root (use IPv4 explicitly to avoid IPv6 issues)
+            # Proxy to Flask/Waitress at root (use IPv4 explicitly to avoid IPv6 issues)
             proxy_pass http://127.0.0.1:5000;
             
             # Preserve original request information
@@ -178,9 +223,10 @@ Write-Host "Step 5: Configuring Windows Firewall" -ForegroundColor Cyan
 Write-Host "-" * 80
 
 try {
-    $existingRule = Get-NetFirewallRule -DisplayName "nginx HTTP" -ErrorAction SilentlyContinue
-    if ($existingRule) {
-        Write-Host "[INFO] Firewall rule already exists" -ForegroundColor Yellow
+    # HTTP Rule
+    $httpRule = Get-NetFirewallRule -DisplayName "nginx HTTP" -ErrorAction SilentlyContinue
+    if ($httpRule) {
+        Write-Host "[INFO] HTTP firewall rule already exists" -ForegroundColor Yellow
     } else {
         New-NetFirewallRule `
             -DisplayName "nginx HTTP" `
@@ -190,7 +236,25 @@ try {
             -Action Allow `
             -Profile Domain,Private `
             -Enabled True | Out-Null
-        Write-Host "[OK] Created firewall rule for port 80" -ForegroundColor Green
+        Write-Host "[OK] Created firewall rule for port 80 (HTTP)" -ForegroundColor Green
+    }
+    
+    # HTTPS Rule (if certificates exist)
+    if ($certExists) {
+        $httpsRule = Get-NetFirewallRule -DisplayName "nginx HTTPS" -ErrorAction SilentlyContinue
+        if ($httpsRule) {
+            Write-Host "[INFO] HTTPS firewall rule already exists" -ForegroundColor Yellow
+        } else {
+            New-NetFirewallRule `
+                -DisplayName "nginx HTTPS" `
+                -Direction Inbound `
+                -Protocol TCP `
+                -LocalPort 443 `
+                -Action Allow `
+                -Profile Domain,Private `
+                -Enabled True | Out-Null
+            Write-Host "[OK] Created firewall rule for port 443 (HTTPS)" -ForegroundColor Green
+        }
     }
 } catch {
     Write-Host "[WARNING] Could not configure firewall (may need Administrator)" -ForegroundColor Yellow
@@ -236,8 +300,14 @@ Write-Host "nginx Configuration Complete!" -ForegroundColor Green
 Write-Host "=" * 80 -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Access URLs:" -ForegroundColor Yellow
-Write-Host "  http://$hostname/firmware-checker" -ForegroundColor Cyan
-Write-Host "  http://localhost/firmware-checker" -ForegroundColor Cyan
+if ($certExists) {
+    Write-Host "  https://$fullHostname/firmware-checker" -ForegroundColor Green
+    Write-Host "  https://$hostname/firmware-checker" -ForegroundColor Cyan
+    Write-Host "  http://$hostname/firmware-checker (redirects to HTTPS)" -ForegroundColor Yellow
+} else {
+    Write-Host "  http://$hostname/firmware-checker" -ForegroundColor Cyan
+    Write-Host "  http://localhost/firmware-checker" -ForegroundColor Cyan
+}
 Write-Host ""
 Write-Host "Important:" -ForegroundColor Yellow
 Write-Host "1. Make sure Waitress is running on port 5000:" -ForegroundColor White
