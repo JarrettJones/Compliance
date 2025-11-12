@@ -45,8 +45,17 @@
                     </div>
                 </form>
             </div>
-            <div class="card-footer text-center text-muted small">
-                <i class="bi bi-info-circle"></i> Default credentials: admin / admin
+        </div>
+        
+        <!-- Request Access -->
+        <div class="card mt-3">
+            <div class="card-body text-center">
+                <p class="text-muted mb-2">
+                    <i class="bi bi-person-plus"></i> Don't have an account?
+                </p>
+                <a href="{{ url_for('request_access') }}" class="btn btn-outline-primary">
+                    <i class="bi bi-person-plus-fill"></i> Request Access
+                </a>
             </div>
         </div>
         

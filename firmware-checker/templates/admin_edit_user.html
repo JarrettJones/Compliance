@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Edit User - Firmware Version Checker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="bi bi-person-gear"></i> Edit User: {{ user.username }}
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin_edit_user', user_id=user.id) }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" value="{{ user.username }}" disabled>
+                        <small class="form-text text-muted">Username cannot be changed</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="role" class="form-label">Role <span class="text-danger">*</span></label>
+                        <select class="form-select" id="role" name="role" required>
+                            <option value="viewer" {% if user.role == 'viewer' %}selected{% endif %}>
+                                Viewer - Read-only access, can run checks
+                            </option>
+                            <option value="editor" {% if user.role == 'editor' %}selected{% endif %}>
+                                Editor - Can add/modify systems and recipes, run checks
+                            </option>
+                            <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>
+                                Admin - Full access including user management
+                            </option>
+                        </select>
+                        <small class="form-text text-muted">
+                            <strong>Viewer:</strong> Can view and run firmware checks only<br>
+                            <strong>Editor:</strong> Can create/edit systems, recipes, and run checks<br>
+                            <strong>Admin:</strong> Full access including user management
+                        </small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="first_name" class="form-label">First Name</label>
+                        <input type="text" class="form-control" id="first_name" name="first_name" 
+                               value="{{ user.first_name or '' }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="last_name" class="form-label">Last Name</label>
+                        <input type="text" class="form-control" id="last_name" name="last_name" 
+                               value="{{ user.last_name or '' }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" 
+                               value="{{ user.email or '' }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="team" class="form-label">Team</label>
+                        <input type="text" class="form-control" id="team" name="team" 
+                               value="{{ user.team or '' }}" placeholder="e.g., SIT, SLGS">
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="mb-3">
+                        <label for="new_password" class="form-label">New Password</label>
+                        <input type="password" class="form-control" id="new_password" name="new_password" 
+                               placeholder="Leave blank to keep current password">
+                        <small class="form-text text-muted">Only fill this if you want to change the user's password</small>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Account Info</label>
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">Created:</dt>
+                            <dd class="col-sm-8">{{ user.created_at[:19] if user.created_at else 'Unknown' }}</dd>
+                            
+                            <dt class="col-sm-4">Last Login:</dt>
+                            <dd class="col-sm-8">{{ user.last_login[:19] if user.last_login else 'Never' }}</dd>
+                            
+                            <dt class="col-sm-4">Status:</dt>
+                            <dd class="col-sm-8">
+                                {% if user.is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Inactive</span>
+                                {% endif %}
+                            </dd>
+                        </dl>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

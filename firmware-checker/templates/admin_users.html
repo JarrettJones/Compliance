@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+
+{% block title %}User Management - Firmware Version Checker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-people"></i> User Management</h1>
+                <p class="lead">Manage registered users and permissions</p>
+            </div>
+            <div>
+                <a href="{{ url_for('admin_add_user') }}" class="btn btn-success me-2">
+                    <i class="bi bi-person-plus"></i> Add User
+                </a>
+                <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Admin Panel
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Team Filter Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <a href="{{ url_for('admin_users', team='all') }}" class="text-decoration-none">
+            <div class="card {% if team_filter == 'all' %}bg-primary text-white{% else %}border-primary{% endif %}">
+                <div class="card-body text-center">
+                    <h4 class="card-title">{{ team_counts.all }}</h4>
+                    <p class="card-text">All Users</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <a href="{{ url_for('admin_users', team='SIT') }}" class="text-decoration-none">
+            <div class="card {% if team_filter == 'SIT' %}bg-success text-white{% else %}border-success{% endif %}">
+                <div class="card-body text-center">
+                    <h4 class="card-title">{{ team_counts.SIT }}</h4>
+                    <p class="card-text">SIT Team</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <a href="{{ url_for('admin_users', team='SLGS') }}" class="text-decoration-none">
+            <div class="card {% if team_filter == 'SLGS' %}bg-info text-white{% else %}border-info{% endif %}">
+                <div class="card-body text-center">
+                    <h4 class="card-title">{{ team_counts.SLGS }}</h4>
+                    <p class="card-text">SLGS Team</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <a href="{{ url_for('admin_users', team='Other') }}" class="text-decoration-none">
+            <div class="card {% if team_filter == 'Other' %}bg-warning text-dark{% else %}border-warning{% endif %}">
+                <div class="card-body text-center">
+                    <h4 class="card-title">{{ team_counts.Other }}</h4>
+                    <p class="card-text">Other</p>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- Users Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-person-lines-fill"></i> 
+                    {% if team_filter != 'all' %}{{ team_filter }} Team Users{% else %}All Registered Users{% endif %}
+                    <span class="badge bg-secondary ms-2">{{ users|length }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if users %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Team</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Registered</th>
+                                    <th>Last Login</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in users %}
+                                <tr {% if not user.is_active %}class="table-secondary"{% endif %}>
+                                    <td>
+                                        <strong>{{ user.username }}</strong>
+                                    </td>
+                                    <td>{{ user.first_name }}</td>
+                                    <td>
+                                        <a href="mailto:{{ user.email }}">{{ user.email }}</a>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if user.team == 'SIT' %}success{% elif user.team == 'SLGS' %}info{% else %}warning{% endif %}">
+                                            {{ user.team }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if user.role == 'admin' %}
+                                            <span class="badge bg-danger">
+                                                <i class="bi bi-shield-fill"></i> Admin
+                                            </span>
+                                        {% elif user.role == 'editor' %}
+                                            <span class="badge bg-primary">
+                                                <i class="bi bi-pencil-fill"></i> Editor
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">
+                                                <i class="bi bi-eye-fill"></i> Viewer
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if user.is_active %}
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-check-circle"></i> Active
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-warning text-dark">
+                                                <i class="bi bi-x-circle"></i> Inactive
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ user.created_at[:10] }}</small>
+                                    </td>
+                                    <td>
+                                        {% if user.last_login %}
+                                            <small class="text-muted">{{ user.last_login[:19] }}</small>
+                                        {% else %}
+                                            <small class="text-muted">Never</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            {% if user.id != session.user_id %}
+                                                <!-- Edit User -->
+                                                <a href="{{ url_for('admin_edit_user', user_id=user.id) }}" 
+                                                   class="btn btn-primary"
+                                                   title="Edit user">
+                                                    <i class="bi bi-pencil"></i>
+                                                </a>
+                                                
+                                                <!-- Toggle Active/Inactive -->
+                                                <button type="button" 
+                                                        class="btn btn-{% if user.is_active %}warning{% else %}success{% endif %} toggle-active-btn"
+                                                        data-user-id="{{ user.id }}"
+                                                        data-username="{{ user.username }}"
+                                                        data-is-active="{{ user.is_active }}"
+                                                        title="{% if user.is_active %}Deactivate{% else %}Activate{% endif %} user">
+                                                    <i class="bi bi-{% if user.is_active %}pause-circle{% else %}play-circle{% endif %}"></i>
+                                                </button>
+                                                
+                                                <!-- Delete User (only if not admin) -->
+                                                {% if user.role != 'admin' %}
+                                                    <button type="button" 
+                                                            class="btn btn-danger delete-user-btn"
+                                                            data-user-id="{{ user.id }}"
+                                                            data-username="{{ user.username }}"
+                                                            title="Delete user">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-secondary">You</span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-people fs-1"></i>
+                        <p class="mt-2">No users found{% if team_filter != 'all' %} in {{ team_filter }} team{% endif %}</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart"></i> User Statistics</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-6">Total Registered Users:</dt>
+                    <dd class="col-sm-6"><strong>{{ team_counts.all }}</strong></dd>
+                    
+                    <dt class="col-sm-6">SIT Team:</dt>
+                    <dd class="col-sm-6"><strong>{{ team_counts.SIT }}</strong></dd>
+                    
+                    <dt class="col-sm-6">SLGS Team:</dt>
+                    <dd class="col-sm-6"><strong>{{ team_counts.SLGS }}</strong></dd>
+                    
+                    <dt class="col-sm-6">Other:</dt>
+                    <dd class="col-sm-6"><strong>{{ team_counts.Other }}</strong></dd>
+                    
+                    <dt class="col-sm-6">Active Filter:</dt>
+                    <dd class="col-sm-6">
+                        <span class="badge bg-primary">
+                            {% if team_filter == 'all' %}All Teams{% else %}{{ team_filter }}{% endif %}
+                        </span>
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Information</h5>
+            </div>
+            <div class="card-body">
+                <p><i class="bi bi-check-circle text-success"></i> Users can self-register with @microsoft.com email addresses</p>
+                <p><i class="bi bi-check-circle text-success"></i> Username is automatically generated from email</p>
+                <p><i class="bi bi-check-circle text-success"></i> Users can select their team (SIT, SLGS, or Other)</p>
+                <p class="mb-0"><i class="bi bi-shield text-danger"></i> Admin privileges must be granted manually in the database</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle toggle active/inactive
+    document.querySelectorAll('.toggle-active-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const userId = this.dataset.userId;
+            const username = this.dataset.username;
+            const isActive = this.dataset.isActive === '1';
+            const action = isActive ? 'deactivate' : 'activate';
+            
+            if (confirm(`Are you sure you want to ${action} user "${username}"?`)) {
+                fetch(`/admin/users/${userId}/toggle-active`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Reload the page to show updated status
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while updating the user status.');
+                });
+            }
+        });
+    });
+    
+    // Handle delete user
+    document.querySelectorAll('.delete-user-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const userId = this.dataset.userId;
+            const username = this.dataset.username;
+            
+            if (confirm(`⚠️ WARNING: Are you sure you want to PERMANENTLY DELETE user "${username}"?\n\nThis action cannot be undone!`)) {
+                if (confirm(`Please confirm again: Delete user "${username}" permanently?`)) {
+                    fetch(`/admin/users/${userId}/delete`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Reload the page to show updated list
+                            location.reload();
+                        } else {
+                            alert('Error: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred while deleting the user.');
+                    });
+                }
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

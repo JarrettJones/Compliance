@@ -206,13 +206,22 @@
                     <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
                         <i class="bi bi-house"></i> Dashboard
                     </a>
+                    <a href="{{ url_for('admin_users') }}" class="btn btn-outline-success">
+                        <i class="bi bi-people"></i> Manage Users
+                    </a>
+                    <a href="{{ url_for('admin_access_requests') }}" class="btn btn-outline-warning">
+                        <i class="bi bi-person-check"></i> Access Requests
+                        {% if pending_requests > 0 %}
+                        <span class="badge bg-danger">{{ pending_requests }}</span>
+                        {% endif %}
+                    </a>
                     <a href="{{ url_for('systems') }}" class="btn btn-outline-secondary">
                         <i class="bi bi-server"></i> Manage Systems
                     </a>
-                    <a href="{{ url_for('recipes') }}" class="btn btn-outline-warning">
+                    <a href="{{ url_for('recipes') }}" class="btn btn-outline-info">
                         <i class="bi bi-book"></i> Manage Recipes
                     </a>
-                    <button class="btn btn-outline-info" onclick="refreshPage()">
+                    <button class="btn btn-outline-primary" onclick="refreshPage()">
                         <i class="bi bi-arrow-clockwise"></i> Refresh Page
                     </button>
                 </div>

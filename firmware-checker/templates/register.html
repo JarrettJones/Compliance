@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Register - Firmware Version Checker{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow mt-5">
+            <div class="card-header bg-success text-white text-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-person-plus"></i> {% if is_admin_adding %}Add User{% else %}Create Account{% endif %}
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{% if is_admin_adding %}{{ url_for('admin_add_user') }}{% else %}{{ url_for('register') }}{% endif %}">
+                    {% if is_admin_adding %}
+                    <div class="mb-3">
+                        <label for="username" class="form-label">
+                            <i class="bi bi-person-badge"></i> Username <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="username" 
+                               name="username" 
+                               required 
+                               autofocus
+                               placeholder="Enter username"
+                               maxlength="50">
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">
+                            <i class="bi bi-envelope"></i> {% if is_admin_adding %}Email{% else %}Microsoft Email{% endif %} <span class="text-danger">*</span>
+                        </label>
+                        <input type="email" 
+                               class="form-control" 
+                               id="email" 
+                               name="email" 
+                               required 
+                               {% if not is_admin_adding %}autofocus{% endif %}
+                               placeholder="{% if is_admin_adding %}user@example.com{% else %}yourname@microsoft.com{% endif %}"
+                               {% if not is_admin_adding %}pattern=".*@microsoft\.com$"{% endif %}
+                               title="{% if not is_admin_adding %}Must be a @microsoft.com email address{% endif %}">
+                        {% if not is_admin_adding %}<small class="text-muted">Must end with @microsoft.com</small>{% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="first_name" class="form-label">
+                            <i class="bi bi-person"></i> First Name <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="first_name" 
+                               name="first_name" 
+                               required
+                               placeholder="Enter your first name"
+                               maxlength="50">
+                    </div>
+                    
+                    {% if is_admin_adding %}
+                    <div class="mb-3">
+                        <label for="role" class="form-label">
+                            <i class="bi bi-shield-check"></i> Role <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" 
+                                id="role" 
+                                name="role" 
+                                required>
+                            <option value="viewer">Viewer - Read-only access, can run checks</option>
+                            <option value="editor" selected>Editor - Can add/modify systems and recipes</option>
+                            <option value="admin">Admin - Full access including user management</option>
+                        </select>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="team" class="form-label">
+                            <i class="bi bi-people"></i> Team {% if not is_admin_adding %}<span class="text-danger">*</span>{% endif %}
+                        </label>
+                        <select class="form-select" 
+                                id="team" 
+                                name="team" 
+                                {% if not is_admin_adding %}required{% endif %}>
+                            <option value="">Select team...</option>
+                            <option value="SIT">SIT</option>
+                            <option value="SLGS">SLGS</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="password" class="form-label">
+                            <i class="bi bi-key"></i> Password <span class="text-danger">*</span>
+                        </label>
+                        <input type="password" 
+                               class="form-control" 
+                               id="password" 
+                               name="password" 
+                               required
+                               minlength="6"
+                               placeholder="Enter password (min 6 characters)">
+                        <small class="text-muted">Minimum 6 characters</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="confirm_password" class="form-label">
+                            <i class="bi bi-key-fill"></i> Confirm Password <span class="text-danger">*</span>
+                        </label>
+                        <input type="password" 
+                               class="form-control" 
+                               id="confirm_password" 
+                               name="confirm_password" 
+                               required
+                               minlength="6"
+                               placeholder="Confirm your password">
+                    </div>
+                    
+                    <div class="d-grid gap-2{% if is_admin_adding %} d-md-flex justify-content-md-end{% endif %}">
+                        {% if is_admin_adding %}
+                        <a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                        {% endif %}
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-person-plus"></i> {% if is_admin_adding %}Add User{% else %}Create Account{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+            {% if not is_admin_adding %}
+            <div class="card-footer text-center text-muted small">
+                Already have an account? <a href="{{ url_for('login') }}">Login here</a>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="text-center mt-3">
+            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+// Password match validation
+document.addEventListener('DOMContentLoaded', function() {
+    const password = document.getElementById('password');
+    const confirmPassword = document.getElementById('confirm_password');
+    const form = password.closest('form');
+    
+    function validatePasswords() {
+        if (password.value !== confirmPassword.value) {
+            confirmPassword.setCustomValidity('Passwords do not match');
+        } else {
+            confirmPassword.setCustomValidity('');
+        }
+    }
+    
+    password.addEventListener('change', validatePasswords);
+    confirmPassword.addEventListener('keyup', validatePasswords);
+    
+    form.addEventListener('submit', function(e) {
+        if (password.value !== confirmPassword.value) {
+            e.preventDefault();
+            alert('Passwords do not match!');
+        }
+    });
+});
+</script>
+{% endblock %}

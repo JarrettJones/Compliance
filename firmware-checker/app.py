@@ -102,6 +102,20 @@ def get_db_connection():
 def init_db():
     """Initialize the database with required tables"""
     with get_db_connection() as conn:
+        # Programs table - Different programs that use firmware checking
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS programs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT,
+                check_methodology TEXT NOT NULL,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT valid_methodology CHECK (check_methodology IN ('echo_falls', 'standard', 'custom'))
+            )
+        ''')
+        
         # Systems table
         conn.execute('''
             CREATE TABLE IF NOT EXISTS systems (
@@ -110,9 +124,11 @@ def init_db():
                 rscm_ip TEXT NOT NULL,
                 rscm_port INTEGER NOT NULL DEFAULT 22,
                 description TEXT,
+                program_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(name, rscm_ip, rscm_port)
+                UNIQUE(name, rscm_ip, rscm_port),
+                FOREIGN KEY (program_id) REFERENCES programs (id)
             )
         ''')
         
@@ -143,11 +159,14 @@ def init_db():
         conn.execute('''
             CREATE TABLE IF NOT EXISTS firmware_recipes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
                 description TEXT,
                 firmware_versions TEXT NOT NULL,
+                program_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(name, program_id),
+                FOREIGN KEY (program_id) REFERENCES programs (id)
             )
         ''')
         
@@ -157,17 +176,144 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
-                is_admin INTEGER DEFAULT 1,
+                role TEXT DEFAULT 'viewer',
+                is_active INTEGER DEFAULT 1,
+                email TEXT,
+                first_name TEXT,
+                last_name TEXT,
+                team TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_login TIMESTAMP
+                last_login TIMESTAMP,
+                CONSTRAINT valid_role CHECK (role IN ('admin', 'editor', 'viewer'))
             )
         ''')
+        
+        # Access requests table for user account requests
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS access_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                first_name TEXT NOT NULL,
+                last_name TEXT,
+                team TEXT,
+                business_justification TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                reviewed_by INTEGER,
+                reviewed_at TIMESTAMP,
+                notes TEXT,
+                CONSTRAINT valid_status CHECK (status IN ('pending', 'approved', 'rejected')),
+                FOREIGN KEY (reviewed_by) REFERENCES users (id)
+            )
+        ''')
+        
+        # Migrate existing users: Add new columns and migrate from is_admin
+        try:
+            # Check what columns exist
+            cursor = conn.execute("PRAGMA table_info(users)")
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            # Add missing columns
+            if 'role' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'viewer'")
+                logger.info("Added role column to users table")
+            
+            if 'is_active' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1")
+                logger.info("Added is_active column to users table")
+            
+            if 'email' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
+                logger.info("Added email column to users table")
+            
+            if 'first_name' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
+                logger.info("Added first_name column to users table")
+            
+            if 'last_name' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN last_name TEXT")
+                logger.info("Added last_name column to users table")
+            
+            if 'team' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN team TEXT")
+                logger.info("Added team column to users table")
+            
+            # Migrate data from is_admin to role
+            if 'is_admin' in columns:
+                conn.execute("""
+                    UPDATE users 
+                    SET role = CASE 
+                        WHEN is_admin = 1 THEN 'admin'
+                        ELSE 'editor'
+                    END
+                    WHERE role IS NULL OR role = '' OR role = 'viewer'
+                """)
+                conn.commit()
+                logger.info("Migrated is_admin to role column")
+        except Exception as e:
+            logger.warning(f"Migration warning (may be safe to ignore): {e}")
         
         # Add recipe_id column to firmware_checks if it doesn't exist
         try:
             conn.execute('ALTER TABLE firmware_checks ADD COLUMN recipe_id INTEGER')
         except:
             pass  # Column already exists
+        
+        # Migrate systems table: Add program_id column
+        try:
+            cursor = conn.execute("PRAGMA table_info(systems)")
+            system_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'program_id' not in system_columns:
+                conn.execute("ALTER TABLE systems ADD COLUMN program_id INTEGER")
+                logger.info("Added program_id column to systems table")
+                
+                # Create default Echo Falls program
+                conn.execute("""
+                    INSERT OR IGNORE INTO programs (name, description, check_methodology, is_active)
+                    VALUES ('Echo Falls', 'Echo Falls datacenter program', 'echo_falls', 1)
+                """)
+                
+                # Get the Echo Falls program ID
+                echo_falls = conn.execute("SELECT id FROM programs WHERE name = 'Echo Falls'").fetchone()
+                if echo_falls:
+                    # Assign all existing systems to Echo Falls
+                    conn.execute("""
+                        UPDATE systems 
+                        SET program_id = ?
+                        WHERE program_id IS NULL
+                    """, (echo_falls['id'],))
+                    logger.info("Migrated existing systems to Echo Falls program")
+                    
+                    # Migrate recipes to Echo Falls program
+                    conn.execute("""
+                        UPDATE firmware_recipes 
+                        SET program_id = ?
+                        WHERE program_id IS NULL
+                    """, (echo_falls['id'],))
+                    logger.info("Migrated existing recipes to Echo Falls program")
+        except Exception as e:
+            logger.warning(f"Program migration warning (may be safe to ignore): {e}")
+        
+        # Add program_id column to firmware_recipes if it doesn't exist
+        try:
+            cursor = conn.execute("PRAGMA table_info(firmware_recipes)")
+            recipe_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'program_id' not in recipe_columns:
+                conn.execute("ALTER TABLE firmware_recipes ADD COLUMN program_id INTEGER")
+                logger.info("Added program_id column to firmware_recipes table")
+                
+                # Assign existing recipes to Echo Falls
+                echo_falls = conn.execute("SELECT id FROM programs WHERE name = 'Echo Falls'").fetchone()
+                if echo_falls:
+                    conn.execute("""
+                        UPDATE firmware_recipes 
+                        SET program_id = ?
+                        WHERE program_id IS NULL
+                    """, (echo_falls['id'],))
+        except Exception as e:
+            logger.warning(f"Recipe migration warning (may be safe to ignore): {e}")
         
         conn.commit()
         
@@ -254,6 +400,32 @@ def login_required(f):
         if 'user_id' not in session:
             flash('Please log in to access this page.', 'warning')
             return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    """Decorator to require admin role"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('login', next=request.url))
+        if session.get('role') != 'admin':
+            flash('You need administrator privileges to access this page.', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def editor_required(f):
+    """Decorator to require editor or admin role"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('login', next=request.url))
+        if session.get('role') not in ['admin', 'editor']:
+            flash('You need editor privileges to perform this action.', 'error')
+            return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -709,10 +881,32 @@ def login():
             ).fetchone()
             
             if user and check_password_hash(user['password_hash'], password):
+                # Check if user is active
+                try:
+                    is_active = user['is_active']
+                except (KeyError, IndexError):
+                    is_active = 1  # Default to active for backwards compatibility
+                
+                if not is_active:
+                    flash('Your account has been deactivated. Please contact an administrator.', 'error')
+                    return render_template('login.html')
+                
                 # Login successful
                 session['user_id'] = user['id']
                 session['username'] = user['username']
-                session['is_admin'] = user['is_admin']
+                
+                # Set role - migrate from is_admin if role doesn't exist
+                try:
+                    role = user['role']
+                except (KeyError, IndexError):
+                    # Fallback to is_admin for migration
+                    try:
+                        role = 'admin' if user['is_admin'] else 'editor'
+                    except (KeyError, IndexError):
+                        role = 'viewer'
+                
+                session['role'] = role
+                session['is_admin'] = 1 if role == 'admin' else 0  # Keep for backwards compatibility
                 
                 # Update last login time
                 conn.execute(
@@ -739,41 +933,282 @@ def logout():
     flash(f'Goodbye, {username}!', 'info')
     return redirect(url_for('index'))
 
+# Access Request Routes
+@app.route('/request-access', methods=['GET', 'POST'])
+def request_access():
+    """Request access to the application"""
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
+        team = request.form.get('team', '').strip()
+        business_justification = request.form.get('business_justification', '').strip()
+        
+        if not email or not first_name or not business_justification:
+            flash('Email, first name, and business justification are required', 'error')
+            return redirect(url_for('request_access'))
+        
+        # Check if email already has a pending request
+        with get_db_connection() as conn:
+            existing_request = conn.execute(
+                "SELECT * FROM access_requests WHERE email = ? AND status = 'pending'",
+                (email,)
+            ).fetchone()
+            
+            if existing_request:
+                flash('You already have a pending access request. Please wait for admin approval.', 'warning')
+                return redirect(url_for('login'))
+            
+            # Check if user already exists
+            existing_user = conn.execute(
+                "SELECT * FROM users WHERE email = ?",
+                (email,)
+            ).fetchone()
+            
+            if existing_user:
+                flash('An account with this email already exists. Please try logging in.', 'warning')
+                return redirect(url_for('login'))
+            
+            # Create access request
+            conn.execute('''
+                INSERT INTO access_requests (email, first_name, last_name, team, business_justification)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (email, first_name, last_name, team, business_justification))
+            conn.commit()
+        
+        flash('Access request submitted successfully! An administrator will review your request.', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('request_access.html')
+
+@app.route('/admin/access-requests')
+@admin_required
+def admin_access_requests():
+    """View all access requests"""
+    status_filter = request.args.get('status', 'pending')
+    
+    with get_db_connection() as conn:
+        if status_filter == 'all':
+            requests_list = conn.execute('''
+                SELECT ar.*, u.username as reviewed_by_username
+                FROM access_requests ar
+                LEFT JOIN users u ON ar.reviewed_by = u.id
+                ORDER BY ar.requested_at DESC
+            ''').fetchall()
+        else:
+            requests_list = conn.execute('''
+                SELECT ar.*, u.username as reviewed_by_username
+                FROM access_requests ar
+                LEFT JOIN users u ON ar.reviewed_by = u.id
+                WHERE ar.status = ?
+                ORDER BY ar.requested_at DESC
+            ''', (status_filter,)).fetchall()
+        
+        # Count by status
+        status_counts = {
+            'pending': conn.execute("SELECT COUNT(*) as count FROM access_requests WHERE status = 'pending'").fetchone()['count'],
+            'approved': conn.execute("SELECT COUNT(*) as count FROM access_requests WHERE status = 'approved'").fetchone()['count'],
+            'rejected': conn.execute("SELECT COUNT(*) as count FROM access_requests WHERE status = 'rejected'").fetchone()['count'],
+            'all': conn.execute('SELECT COUNT(*) as count FROM access_requests').fetchone()['count']
+        }
+    
+    return render_template('admin_access_requests.html', 
+                         requests=requests_list, 
+                         status_counts=status_counts,
+                         status_filter=status_filter)
+
+@app.route('/admin/access-requests/<int:request_id>/approve', methods=['POST'])
+@admin_required
+def approve_access_request(request_id):
+    """Approve an access request and create user account"""
+    with get_db_connection() as conn:
+        access_request = conn.execute(
+            'SELECT * FROM access_requests WHERE id = ?',
+            (request_id,)
+        ).fetchone()
+        
+        if not access_request:
+            flash('Access request not found', 'error')
+            return redirect(url_for('admin_access_requests'))
+        
+        if access_request['status'] != 'pending':
+            flash('This request has already been processed', 'warning')
+            return redirect(url_for('admin_access_requests'))
+        
+        # Generate username from email
+        username = access_request['email'].split('@')[0]
+        
+        # Check if username exists, append number if needed
+        base_username = username
+        counter = 1
+        while conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone():
+            username = f"{base_username}{counter}"
+            counter += 1
+        
+        # Generate temporary password
+        import secrets
+        temp_password = secrets.token_urlsafe(12)
+        password_hash = generate_password_hash(temp_password)
+        
+        # Get requested role from form, default to viewer
+        role = request.form.get('role', 'viewer')
+        if role not in ['admin', 'editor', 'viewer']:
+            role = 'viewer'
+        
+        try:
+            # Create user account
+            conn.execute('''
+                INSERT INTO users (username, password_hash, role, email, first_name, last_name, team)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (username, password_hash, role, access_request['email'], 
+                  access_request['first_name'], access_request['last_name'], 
+                  access_request['team']))
+            
+            # Update access request status
+            conn.execute('''
+                UPDATE access_requests
+                SET status = 'approved', reviewed_by = ?, reviewed_at = ?, 
+                    notes = ?
+                WHERE id = ?
+            ''', (session['user_id'], datetime.now().isoformat(), 
+                  f'User account created: {username}', request_id))
+            
+            conn.commit()
+            
+            flash(f'Access request approved! User account created: {username} | Temporary password: {temp_password}', 'success')
+            flash('Please share the temporary password with the user securely.', 'info')
+            
+        except Exception as e:
+            flash(f'Error creating user account: {str(e)}', 'error')
+    
+    return redirect(url_for('admin_access_requests'))
+
+@app.route('/admin/access-requests/<int:request_id>/reject', methods=['POST'])
+@admin_required
+def reject_access_request(request_id):
+    """Reject an access request"""
+    notes = request.form.get('notes', '')
+    
+    with get_db_connection() as conn:
+        access_request = conn.execute(
+            'SELECT * FROM access_requests WHERE id = ?',
+            (request_id,)
+        ).fetchone()
+        
+        if not access_request:
+            flash('Access request not found', 'error')
+            return redirect(url_for('admin_access_requests'))
+        
+        if access_request['status'] != 'pending':
+            flash('This request has already been processed', 'warning')
+            return redirect(url_for('admin_access_requests'))
+        
+        # Update access request status
+        conn.execute('''
+            UPDATE access_requests
+            SET status = 'rejected', reviewed_by = ?, reviewed_at = ?, notes = ?
+            WHERE id = ?
+        ''', (session['user_id'], datetime.now().isoformat(), notes, request_id))
+        conn.commit()
+        
+        flash('Access request rejected', 'info')
+    
+    return redirect(url_for('admin_access_requests'))
+
 # Routes
+@app.route('/select-program')
+@login_required
+def select_program():
+    """Program selection page - shows tiles of available programs"""
+    with get_db_connection() as conn:
+        programs = conn.execute('''
+            SELECT p.*,
+                   COUNT(DISTINCT s.id) as system_count,
+                   COUNT(DISTINCT fc.id) as check_count
+            FROM programs p
+            LEFT JOIN systems s ON p.id = s.program_id
+            LEFT JOIN firmware_checks fc ON s.id = fc.system_id
+            WHERE p.is_active = 1
+            GROUP BY p.id
+            ORDER BY p.name
+        ''').fetchall()
+    
+    return render_template('select_program.html', programs=programs)
+
+@app.route('/set-program/<int:program_id>')
+@login_required
+def set_program(program_id):
+    """Set the active program for the user session"""
+    with get_db_connection() as conn:
+        program = conn.execute('''
+            SELECT * FROM programs WHERE id = ? AND is_active = 1
+        ''', (program_id,)).fetchone()
+        
+        if not program:
+            flash('Invalid program selected', 'error')
+            return redirect(url_for('select_program'))
+        
+        session['program_id'] = program_id
+        session['program_name'] = program['name']
+        flash(f'Now working with {program["name"]}', 'success')
+    
+    return redirect(url_for('index'))
+
 @app.route('/')
 def index():
     """Main dashboard page"""
+    # If user is logged in but hasn't selected a program, redirect to program selector
+    if 'user_id' in session and 'program_id' not in session:
+        return redirect(url_for('select_program'))
+    
     # Debug: Log SCRIPT_NAME for troubleshooting
     from flask import request as flask_request
     logger.info(f"[INDEX] SCRIPT_NAME: {flask_request.environ.get('SCRIPT_NAME', 'NOT SET')}")
     logger.info(f"[INDEX] url_for('systems'): {url_for('systems')}")
     
     with get_db_connection() as conn:
-        # Get recent systems
-        systems = conn.execute('''
+        program_id = session.get('program_id')
+        
+        # Build query filters based on selected program
+        program_filter = ''
+        program_params = []
+        if program_id:
+            program_filter = 'WHERE s.program_id = ?'
+            program_params = [program_id]
+        
+        # Get recent systems for this program
+        systems = conn.execute(f'''
             SELECT s.*, 
                    COUNT(fc.id) as check_count,
                    MAX(fc.check_date) as last_check
             FROM systems s
             LEFT JOIN firmware_checks fc ON s.id = fc.system_id
+            {program_filter}
             GROUP BY s.id
             ORDER BY s.updated_at DESC
             LIMIT 5
-        ''').fetchall()
+        ''', program_params).fetchall()
         
-        # Get recent firmware checks
-        recent_checks = conn.execute('''
+        # Get recent firmware checks for this program
+        recent_checks = conn.execute(f'''
             SELECT fc.*, s.name as system_name
             FROM firmware_checks fc
             JOIN systems s ON fc.system_id = s.id
+            {program_filter}
             ORDER BY fc.check_date DESC
             LIMIT 5
-        ''').fetchall()
+        ''', program_params).fetchall()
         
+        # Get stats for this program
         stats = {
-            'total_systems': conn.execute('SELECT COUNT(*) as count FROM systems').fetchone()['count'],
-            'total_checks': conn.execute('SELECT COUNT(*) as count FROM firmware_checks').fetchone()['count'],
-            'total_recipes': conn.execute('SELECT COUNT(*) as count FROM firmware_recipes').fetchone()['count'],
+            'total_systems': conn.execute(f'SELECT COUNT(*) as count FROM systems s {program_filter}', program_params).fetchone()['count'],
+            'total_checks': conn.execute(f'''
+                SELECT COUNT(*) as count 
+                FROM firmware_checks fc
+                JOIN systems s ON fc.system_id = s.id
+                {program_filter}
+            ''', program_params).fetchone()['count'],
+            'total_recipes': conn.execute(f'SELECT COUNT(*) as count FROM firmware_recipes fr {program_filter.replace("s.program_id", "fr.program_id")}', program_params).fetchone()['count'],
             'recent_systems': systems,
             'recent_checks': recent_checks
         }
@@ -786,7 +1221,7 @@ def help():
     return render_template('help.html')
 
 @app.route('/admin')
-@login_required
+@admin_required
 def admin():
     """Admin panel for application management"""
     # Get app statistics
@@ -807,6 +1242,11 @@ def admin():
             WHERE fc.status = 'running'
             ORDER BY fc.check_date DESC
         ''').fetchall()
+        
+        # Get pending access requests count
+        pending_requests = conn.execute(
+            "SELECT COUNT(*) as count FROM access_requests WHERE status = 'pending'"
+        ).fetchone()['count']
     
     # Get version information
     import flask
@@ -817,9 +1257,186 @@ def admin():
                          stats=stats, 
                          running_checks=running_checks,
                          python_version=python_version,
-                         flask_version=flask_version)
+                         flask_version=flask_version,
+                         pending_requests=pending_requests)
+
+# User Management Routes
+@app.route('/admin/users')
+@admin_required
+def admin_users():
+    """User management page"""
+    team_filter = request.args.get('team', 'all')
+    
+    with get_db_connection() as conn:
+        # Get all users
+        if team_filter == 'all':
+            users = conn.execute('''
+                SELECT id, username, role, is_active, email, first_name, last_name, team,
+                       created_at, last_login
+                FROM users
+                ORDER BY role, username
+            ''').fetchall()
+        else:
+            users = conn.execute('''
+                SELECT id, username, role, is_active, email, first_name, last_name, team,
+                       created_at, last_login
+                FROM users
+                WHERE team = ?
+                ORDER BY role, username
+            ''', (team_filter,)).fetchall()
+        
+        # Count users by team
+        team_counts = {
+            'all': conn.execute('SELECT COUNT(*) as count FROM users').fetchone()['count'],
+            'SIT': conn.execute("SELECT COUNT(*) as count FROM users WHERE team = 'SIT'").fetchone()['count'],
+            'SLGS': conn.execute("SELECT COUNT(*) as count FROM users WHERE team = 'SLGS'").fetchone()['count'],
+            'Other': conn.execute("SELECT COUNT(*) as count FROM users WHERE team = 'Other' OR team IS NULL OR team = ''").fetchone()['count']
+        }
+    
+    return render_template('admin_users.html', users=users, team_counts=team_counts, team_filter=team_filter)
+
+@app.route('/admin/users/add', methods=['GET', 'POST'])
+@admin_required
+def admin_add_user():
+    """Add a new user"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        role = request.form.get('role', 'viewer')
+        email = request.form.get('email', '')
+        first_name = request.form.get('first_name', '')
+        last_name = request.form.get('last_name', '')
+        team = request.form.get('team', '')
+        
+        if not username or not password:
+            flash('Username and password are required', 'error')
+            return redirect(url_for('admin_add_user'))
+        
+        if role not in ['admin', 'editor', 'viewer']:
+            flash('Invalid role', 'error')
+            return redirect(url_for('admin_add_user'))
+        
+        password_hash = generate_password_hash(password)
+        
+        try:
+            with get_db_connection() as conn:
+                conn.execute('''
+                    INSERT INTO users (username, password_hash, role, email, first_name, last_name, team)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (username, password_hash, role, email, first_name, last_name, team))
+                conn.commit()
+            
+            flash(f'User "{username}" created successfully with {role} role!', 'success')
+            return redirect(url_for('admin_users'))
+            
+        except sqlite3.IntegrityError:
+            flash(f'Username "{username}" already exists!', 'error')
+        except Exception as e:
+            flash(f'Error creating user: {str(e)}', 'error')
+    
+    return render_template('register.html', is_admin_adding=True)
+
+@app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def admin_edit_user(user_id):
+    """Edit user details"""
+    with get_db_connection() as conn:
+        user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+        
+        if not user:
+            flash('User not found', 'error')
+            return redirect(url_for('admin_users'))
+        
+        if request.method == 'POST':
+            role = request.form.get('role', user['role'])
+            email = request.form.get('email', '')
+            first_name = request.form.get('first_name', '')
+            last_name = request.form.get('last_name', '')
+            team = request.form.get('team', '')
+            new_password = request.form.get('new_password', '')
+            
+            if role not in ['admin', 'editor', 'viewer']:
+                flash('Invalid role', 'error')
+                return redirect(url_for('admin_edit_user', user_id=user_id))
+            
+            try:
+                if new_password:
+                    password_hash = generate_password_hash(new_password)
+                    conn.execute('''
+                        UPDATE users 
+                        SET role = ?, email = ?, first_name = ?, last_name = ?, team = ?, password_hash = ?
+                        WHERE id = ?
+                    ''', (role, email, first_name, last_name, team, password_hash, user_id))
+                else:
+                    conn.execute('''
+                        UPDATE users 
+                        SET role = ?, email = ?, first_name = ?, last_name = ?, team = ?
+                        WHERE id = ?
+                    ''', (role, email, first_name, last_name, team, user_id))
+                
+                conn.commit()
+                flash(f'User "{user["username"]}" updated successfully!', 'success')
+                return redirect(url_for('admin_users'))
+                
+            except Exception as e:
+                flash(f'Error updating user: {str(e)}', 'error')
+        
+        return render_template('admin_edit_user.html', user=user)
+
+@app.route('/admin/users/<int:user_id>/toggle-active', methods=['POST'])
+@admin_required
+def toggle_user_active(user_id):
+    """Toggle user active/inactive status"""
+    try:
+        with get_db_connection() as conn:
+            user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+            
+            if not user:
+                return jsonify({'success': False, 'error': 'User not found'}), 404
+            
+            # Prevent deactivating yourself
+            if user_id == session.get('user_id'):
+                return jsonify({'success': False, 'error': 'You cannot deactivate your own account'}), 400
+            
+            new_status = 0 if user['is_active'] else 1
+            conn.execute('UPDATE users SET is_active = ? WHERE id = ?', (new_status, user_id))
+            conn.commit()
+            
+            status_text = 'activated' if new_status else 'deactivated'
+            return jsonify({'success': True, 'is_active': new_status, 'message': f'User {status_text} successfully'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@admin_required
+def delete_user(user_id):
+    """Delete a user (non-admin users only)"""
+    try:
+        with get_db_connection() as conn:
+            user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+            
+            if not user:
+                return jsonify({'success': False, 'error': 'User not found'}), 404
+            
+            # Prevent deleting yourself
+            if user_id == session.get('user_id'):
+                return jsonify({'success': False, 'error': 'You cannot delete your own account'}), 400
+            
+            # Prevent deleting other admins
+            if user['role'] == 'admin':
+                return jsonify({'success': False, 'error': 'Cannot delete admin users. Demote them first.'}), 400
+            
+            conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
+            conn.commit()
+            
+            return jsonify({'success': True, 'message': f'User "{user["username"]}" deleted successfully'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/recipes')
+@login_required
 def recipes():
     """List all firmware recipes"""
     with get_db_connection() as conn:
@@ -847,6 +1464,7 @@ def recipes():
     return render_template('recipes.html', recipes=recipes_list)
 
 @app.route('/recipes/add', methods=['GET', 'POST'])
+@editor_required
 def add_recipe():
     """Add a new firmware recipe"""
     if request.method == 'POST':
@@ -902,6 +1520,7 @@ def add_recipe():
     return render_template('add_recipe.html', firmware_types=grouped_types)
 
 @app.route('/recipes/<int:recipe_id>')
+@login_required
 def recipe_detail(recipe_id):
     """View recipe details"""
     with get_db_connection() as conn:
@@ -927,6 +1546,7 @@ def recipe_detail(recipe_id):
                          firmware_versions=firmware_versions, checks=checks)
 
 @app.route('/recipes/<int:recipe_id>/edit', methods=['GET', 'POST'])
+@editor_required
 def edit_recipe(recipe_id):
     """Edit an existing recipe"""
     with get_db_connection() as conn:
@@ -986,6 +1606,7 @@ def edit_recipe(recipe_id):
     return render_template('edit_recipe.html', recipe=recipe, firmware_versions=firmware_versions)
 
 @app.route('/recipes/<int:recipe_id>/delete', methods=['POST'])
+@editor_required
 def delete_recipe(recipe_id):
     """Delete a recipe"""
     try:
@@ -1007,6 +1628,7 @@ def delete_recipe(recipe_id):
     return redirect(url_for('recipes'))
 
 @app.route('/systems')
+@login_required
 def systems():
     """List all systems"""
     with get_db_connection() as conn:
@@ -1026,6 +1648,7 @@ def systems():
     return render_template('systems.html', systems=systems_list)
 
 @app.route('/systems/add', methods=['GET', 'POST'])
+@editor_required
 def add_system():
     """Automated system registration"""
     if request.method == 'POST':
@@ -1103,6 +1726,7 @@ def add_system():
     return render_template('add_system.html')
 
 @app.route('/systems/add-metadata', methods=['GET', 'POST'])
+@editor_required
 def add_system_metadata():
     """Add metadata to automatically discovered system"""
     # Check if we have pending system data
@@ -1173,6 +1797,7 @@ def add_system_metadata():
     return render_template('add_system_metadata.html', system=pending)
 
 @app.route('/systems/<int:system_id>')
+@login_required
 def system_detail(system_id):
     """Show system details and firmware checks"""
     with get_db_connection() as conn:
@@ -1200,6 +1825,7 @@ def system_detail(system_id):
     return render_template('system_detail.html', system=system, checks=checks, active_check=active_check)
 
 @app.route('/systems/<int:system_id>/delete', methods=['POST'])
+@editor_required
 def delete_system(system_id):
     """Delete a system and all its firmware checks"""
     try:
@@ -1225,6 +1851,7 @@ def delete_system(system_id):
     return redirect(url_for('systems'))
 
 @app.route('/systems/<int:system_id>/edit', methods=['GET', 'POST'])
+@editor_required
 def edit_system(system_id):
     """Edit system information"""
     with get_db_connection() as conn:
@@ -1325,6 +1952,7 @@ def edit_system(system_id):
                          additional_notes=additional_notes)
 
 @app.route('/check/<int:system_id>')
+@login_required
 def check_firmware(system_id):
     """Check firmware versions for a system"""
     with get_db_connection() as conn:
@@ -1359,6 +1987,7 @@ def check_firmware(system_id):
                          system_hostname=system_hostname, recipes=recipes)
 
 @app.route('/check/<int:system_id>/progress')
+@login_required
 def check_progress(system_id):
     """View progress of an ongoing firmware check"""
     with get_db_connection() as conn:
@@ -1401,6 +2030,7 @@ def check_progress(system_id):
                          firmware_data=parsed_firmware_data)
 
 @app.route('/check/result/<int:check_id>')
+@login_required
 def check_result(check_id):
     """View specific firmware check result"""
     with get_db_connection() as conn:
@@ -1453,6 +2083,7 @@ def check_result(check_id):
                              recipe=recipe)
 
 @app.route('/api/check/<int:check_id>/firmware-data')
+@login_required
 def api_check_firmware_data(check_id):
     """API endpoint to get firmware data for a specific check"""
     with get_db_connection() as conn:
@@ -1475,6 +2106,7 @@ def api_check_firmware_data(check_id):
             return jsonify({'error': 'Invalid firmware data'}), 500
 
 @app.route('/api/check-status/<int:system_id>')
+@login_required
 def api_check_status(system_id):
     """API endpoint to check status of running firmware check with threading info"""
     try:
@@ -1557,6 +2189,7 @@ def api_check_status(system_id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/check-firmware', methods=['POST'])
+@login_required
 def api_check_firmware():
     """API endpoint to start firmware checks in background thread"""
     try:
@@ -1668,6 +2301,7 @@ def api_check_firmware():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/check-firmware-individual', methods=['POST'])
+@login_required
 def api_check_firmware_individual():
     """API endpoint to check individual firmware types
     
@@ -1817,6 +2451,7 @@ def api_check_firmware_individual():
 
 @app.route('/firmware-types')
 @app.route('/test-redfish')
+@login_required
 def test_redfish():
     """Serve the Redfish connection test page"""
     import os
@@ -1825,6 +2460,7 @@ def test_redfish():
         return f.read(), 200, {'Content-Type': 'text/html'}
 
 @app.route('/api/test-connection', methods=['POST'])
+@login_required
 def test_connection():
     """Test Redfish API connection to a system"""
     try:
@@ -1888,6 +2524,7 @@ def test_connection():
         }), 500
 
 @app.route('/api/active-checks')
+@login_required
 def api_active_checks():
     """API endpoint to get information about active threaded checks"""
     try:
@@ -1935,6 +2572,7 @@ def api_active_checks():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/cleanup-orphaned-checks', methods=['POST'])
+@admin_required
 def api_cleanup_orphaned_checks():
     """API endpoint to manually cleanup orphaned running checks"""
     try:
@@ -1997,6 +2635,7 @@ def api_cleanup_orphaned_checks():
         }), 500
 
 @app.route('/api/restart-application', methods=['POST'])
+@admin_required
 def api_restart_application():
     """API endpoint to restart the Flask application"""
     try:

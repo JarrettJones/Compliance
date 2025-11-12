@@ -31,9 +31,10 @@
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" 
                            href="{{ url_for('index') }}">
-                            <i class="bi bi-house"></i> Dashboard
+                            <i class="bi bi-house"></i> {% if session.get('user_id') %}Dashboard{% else %}Home{% endif %}
                         </a>
                     </li>
+                    {% if session.get('user_id') %}
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'systems' %}active{% endif %}" 
                            href="{{ url_for('systems') }}">
@@ -46,13 +47,14 @@
                             <i class="bi bi-file-earmark-check"></i> Recipes
                         </a>
                     </li>
+                    {% endif %}
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'help' %}active{% endif %}" 
                            href="{{ url_for('help') }}">
                             <i class="bi bi-question-circle"></i> Help
                         </a>
                     </li>
-                    {% if session.get('user_id') %}
+                    {% if session.get('role') == 'admin' %}
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'admin' %}active{% endif %}" 
                            href="{{ url_for('admin') }}">
@@ -63,9 +65,28 @@
                 </ul>
                 <ul class="navbar-nav">
                     {% if session.get('user_id') %}
+                    {% if session.get('program_name') %}
+                    <li class="nav-item dropdown me-2">
+                        <a class="nav-link dropdown-toggle" href="#" id="programDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-building"></i> {{ session.get('program_name') }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="programDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('select_program') }}">
+                                <i class="bi bi-arrow-repeat"></i> Change Program
+                            </a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
                     <li class="nav-item">
                         <span class="navbar-text me-2">
                             <i class="bi bi-person-circle"></i> {{ session.get('username') }}
+                            {% if session.get('role') == 'admin' %}
+                                <span class="badge bg-danger ms-1">Admin</span>
+                            {% elif session.get('role') == 'editor' %}
+                                <span class="badge bg-primary ms-1">Editor</span>
+                            {% elif session.get('role') == 'viewer' %}
+                                <span class="badge bg-secondary ms-1">Viewer</span>
+                            {% endif %}
                         </span>
                     </li>
                     <li class="nav-item">

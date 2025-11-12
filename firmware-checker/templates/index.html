@@ -1,8 +1,199 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Firmware Version Checker{% endblock %}
+{% block title %}{% if session.get('user_id') %}Dashboard{% else %}Welcome{% endif %} - Firmware Version Checker{% endblock %}
 
 {% block content %}
+{% if not session.get('user_id') %}
+<!-- Landing Page for Non-Logged-In Users -->
+<div class="row">
+    <div class="col-12">
+        <div class="jumbotron bg-light p-5 rounded-3 text-center mb-4">
+            <h1 class="display-4">
+                <i class="bi bi-cpu-fill text-primary"></i> Firmware Version Checker
+            </h1>
+            <p class="lead mt-3">
+                Automated firmware verification and compliance tracking for datacenter systems
+            </p>
+            <hr class="my-4">
+            <p class="text-muted">
+                Monitor and verify firmware versions across DC-SCM, OVL2, and other platform components with automated checking and compliance tracking
+            </p>
+            <div class="mt-4">
+                <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg me-2">
+                    <i class="bi bi-box-arrow-in-right"></i> Login
+                </a>
+                <a href="{{ url_for('request_access') }}" class="btn btn-outline-primary btn-lg">
+                    <i class="bi bi-person-plus"></i> Request Access
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Features Section -->
+<div class="row mb-5">
+    <div class="col-12">
+        <h2 class="text-center mb-4">
+            <i class="bi bi-stars"></i> Key Features
+        </h2>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 border-primary">
+            <div class="card-body text-center">
+                <i class="bi bi-server fs-1 text-primary mb-3"></i>
+                <h5 class="card-title">System Management</h5>
+                <p class="card-text text-muted">
+                    Register and manage datacenter systems with RSCM IP addresses. Track system metadata and check history.
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 border-success">
+            <div class="card-body text-center">
+                <i class="bi bi-check-circle fs-1 text-success mb-3"></i>
+                <h5 class="card-title">Automated Verification</h5>
+                <p class="card-text text-muted">
+                    Check 32 firmware types across 3 categories: DC-SCM (16 types), OVL2 (12 types), and Other Platform (4 types).
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 border-info">
+            <div class="card-body text-center">
+                <i class="bi bi-book fs-1 text-info mb-3"></i>
+                <h5 class="card-title">Recipe Management</h5>
+                <p class="card-text text-muted">
+                    Define expected firmware versions (recipes) and compare against actual system configurations for compliance.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Firmware Categories -->
+<div class="row mb-5">
+    <div class="col-12">
+        <h2 class="text-center mb-4">
+            <i class="bi bi-cpu"></i> Supported Firmware Categories
+        </h2>
+    </div>
+    
+    <div class="col-md-4 mb-3">
+        <div class="card border-primary h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-motherboard"></i> DC-SCM</h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text"><strong>16 Firmware Types</strong></p>
+                <ul class="small">
+                    <li>IFWI, UEFI Profile</li>
+                    <li>BMC Firmware & Components</li>
+                    <li>Manticore (HSM)</li>
+                    <li>TPM Module, SCM-CPLD</li>
+                    <li>Power Capping, Fan Tables</li>
+                    <li>And more...</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-3">
+        <div class="card border-success h-100">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-diagram-3"></i> OVL2</h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text"><strong>12 Firmware Types</strong></p>
+                <ul class="small">
+                    <li>FPGA Agilex, Cyclone V</li>
+                    <li>OVL SOC FIP</li>
+                    <li>STOS (SOC Test OS)</li>
+                    <li>Host & SOC FPGA Drivers</li>
+                    <li>Glacier Cerberus FW & CFM</li>
+                    <li>And more...</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-3">
+        <div class="card border-warning h-100">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-hdd-rack"></i> Other Platform</h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text"><strong>4 Firmware Types</strong></p>
+                <ul class="small">
+                    <li>HPMCpld</li>
+                    <li>SOC VR Configs</li>
+                    <li>E.1s Storage</li>
+                    <li>M.2 Storage</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- How It Works -->
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h4 class="mb-0"><i class="bi bi-question-circle"></i> How It Works</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 text-center mb-3">
+                        <div class="display-6 text-primary">1</div>
+                        <h6>Register Systems</h6>
+                        <p class="text-muted small">Add datacenter systems with RSCM IP addresses</p>
+                    </div>
+                    <div class="col-md-3 text-center mb-3">
+                        <div class="display-6 text-success">2</div>
+                        <h6>Run Checks</h6>
+                        <p class="text-muted small">Automatically query and collect firmware versions</p>
+                    </div>
+                    <div class="col-md-3 text-center mb-3">
+                        <div class="display-6 text-info">3</div>
+                        <h6>Compare to Recipes</h6>
+                        <p class="text-muted small">Validate against expected firmware configurations</p>
+                    </div>
+                    <div class="col-md-3 text-center mb-3">
+                        <div class="display-6 text-warning">4</div>
+                        <h6>Track Compliance</h6>
+                        <p class="text-muted small">Monitor results and identify discrepancies</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Call to Action -->
+<div class="row">
+    <div class="col-12">
+        <div class="card bg-primary text-white text-center">
+            <div class="card-body py-5">
+                <h3><i class="bi bi-rocket"></i> Ready to Get Started?</h3>
+                <p class="lead mb-4">Request access to begin managing your firmware compliance</p>
+                <a href="{{ url_for('request_access') }}" class="btn btn-light btn-lg me-2">
+                    <i class="bi bi-person-plus"></i> Request Access
+                </a>
+                <a href="{{ url_for('login') }}" class="btn btn-outline-light btn-lg">
+                    <i class="bi bi-box-arrow-in-right"></i> Login
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- Dashboard for Logged-In Users -->
 <div class="row">
     <div class="col-12">
         <h1><i class="bi bi-speedometer2"></i> Dashboard</h1>
@@ -87,9 +278,11 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="bi bi-server"></i> Recent Systems</h5>
+                {% if session.get('role') in ['admin', 'editor'] %}
                 <a href="{{ url_for('add_system') }}" class="btn btn-primary btn-sm">
                     <i class="bi bi-plus"></i> Add System
                 </a>
+                {% endif %}
             </div>
             <div class="card-body">
                 {% if stats.recent_systems %}
@@ -236,6 +429,9 @@
         </div>
     </div>
 </div>
+
+{% endif %}
+<!-- End Logged-In Dashboard -->
 
 <!-- Firmware Types Modal -->
 <div class="modal fade" id="firmwareTypesModal" tabindex="-1" aria-labelledby="firmwareTypesModalLabel" aria-hidden="true" onclick="if(event.target === this) closeModal()">

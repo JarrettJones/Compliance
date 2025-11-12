@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}Access Requests - Firmware Version Checker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-person-check"></i> Access Requests</h1>
+                <p class="lead">Review and approve user access requests</p>
+            </div>
+            <div>
+                <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Admin Panel
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status Filter Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <a href="{{ url_for('admin_access_requests', status='pending') }}" class="text-decoration-none">
+            <div class="card {% if status_filter == 'pending' %}bg-warning text-dark{% else %}border-warning{% endif %}">
+                <div class="card-body text-center">
+                    <h4 class="card-title">{{ status_counts.pending }}</h4>
+                    <p class="card-text">Pending Requests</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <a href="{{ url_for('admin_access_requests', status='approved') }}" class="text-decoration-none">
+            <div class="card {% if status_filter == 'approved' %}bg-success text-white{% else %}border-success{% endif %}">
+                <div class="card-body text-center">
+                    <h4 class="card-title">{{ status_counts.approved }}</h4>
+                    <p class="card-text">Approved</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <a href="{{ url_for('admin_access_requests', status='rejected') }}" class="text-decoration-none">
+            <div class="card {% if status_filter == 'rejected' %}bg-danger text-white{% else %}border-danger{% endif %}">
+                <div class="card-body text-center">
+                    <h4 class="card-title">{{ status_counts.rejected }}</h4>
+                    <p class="card-text">Rejected</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <a href="{{ url_for('admin_access_requests', status='all') }}" class="text-decoration-none">
+            <div class="card {% if status_filter == 'all' %}bg-primary text-white{% else %}border-primary{% endif %}">
+                <div class="card-body text-center">
+                    <h4 class="card-title">{{ status_counts.all }}</h4>
+                    <p class="card-text">All Requests</p>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- Requests Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-list-check"></i> 
+                    {% if status_filter == 'all' %}All Requests{% else %}{{ status_filter|title }} Requests{% endif %}
+                    <span class="badge bg-secondary ms-2">{{ requests|length }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if requests %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Requested</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Team</th>
+                                    <th>Justification</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for req in requests %}
+                                <tr>
+                                    <td>
+                                        <small class="text-muted">{{ req.requested_at[:19] }}</small>
+                                    </td>
+                                    <td>
+                                        <strong>{{ req.first_name }}{% if req.last_name %} {{ req.last_name }}{% endif %}</strong>
+                                    </td>
+                                    <td>
+                                        <a href="mailto:{{ req.email }}">{{ req.email }}</a>
+                                    </td>
+                                    <td>
+                                        {% if req.team %}
+                                            <span class="badge bg-{% if req.team == 'SIT' %}success{% elif req.team == 'SLGS' %}info{% else %}warning{% endif %}">
+                                                {{ req.team }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small>{{ req.business_justification[:100] }}{% if req.business_justification|length > 100 %}...{% endif %}</small>
+                                    </td>
+                                    <td>
+                                        {% if req.status == 'pending' %}
+                                            <span class="badge bg-warning text-dark">
+                                                <i class="bi bi-clock"></i> Pending
+                                            </span>
+                                        {% elif req.status == 'approved' %}
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-check-circle"></i> Approved
+                                            </span>
+                                            {% if req.reviewed_by_username %}
+                                                <br><small class="text-muted">by {{ req.reviewed_by_username }}</small>
+                                            {% endif %}
+                                        {% elif req.status == 'rejected' %}
+                                            <span class="badge bg-danger">
+                                                <i class="bi bi-x-circle"></i> Rejected
+                                            </span>
+                                            {% if req.reviewed_by_username %}
+                                                <br><small class="text-muted">by {{ req.reviewed_by_username }}</small>
+                                            {% endif %}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if req.status == 'pending' %}
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <!-- Approve button with role selection -->
+                                                <button type="button" 
+                                                        class="btn btn-success approve-request-btn"
+                                                        data-request-id="{{ req.id }}"
+                                                        data-name="{{ req.first_name }}{% if req.last_name %} {{ req.last_name }}{% endif %}"
+                                                        title="Approve request">
+                                                    <i class="bi bi-check-circle"></i> Approve
+                                                </button>
+                                                
+                                                <!-- Reject button -->
+                                                <button type="button" 
+                                                        class="btn btn-danger reject-request-btn"
+                                                        data-request-id="{{ req.id }}"
+                                                        data-name="{{ req.first_name }}{% if req.last_name %} {{ req.last_name }}{% endif %}"
+                                                        title="Reject request">
+                                                    <i class="bi bi-x-circle"></i> Reject
+                                                </button>
+                                            </div>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ req.status|title }}</span>
+                                            {% if req.notes %}
+                                                <br><small class="text-muted">{{ req.notes }}</small>
+                                            {% endif %}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-inbox fs-1"></i>
+                        <p class="mt-2">No {% if status_filter != 'all' %}{{ status_filter }} {% endif %}requests found</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Approve Modal -->
+<div class="modal fade" id="approveModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-check-circle"></i> Approve Access Request
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="approveForm">
+                <div class="modal-body">
+                    <p>Approve access request for <strong id="approveName"></strong>?</p>
+                    <p class="text-muted">A user account will be created with a temporary password.</p>
+                    
+                    <div class="mb-3">
+                        <label for="approveRole" class="form-label">Assign Role <span class="text-danger">*</span></label>
+                        <select class="form-select" id="approveRole" name="role" required>
+                            <option value="viewer" selected>Viewer - Read-only access</option>
+                            <option value="editor">Editor - Can add/modify systems and recipes</option>
+                            <option value="admin">Admin - Full access</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle"></i> Approve & Create Account
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-x-circle"></i> Reject Access Request
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="rejectForm">
+                <div class="modal-body">
+                    <p>Reject access request for <strong id="rejectName"></strong>?</p>
+                    
+                    <div class="mb-3">
+                        <label for="rejectNotes" class="form-label">Reason (optional)</label>
+                        <textarea class="form-control" 
+                                  id="rejectNotes" 
+                                  name="notes" 
+                                  rows="3" 
+                                  placeholder="Optional: Provide a reason for rejection..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-x-circle"></i> Reject Request
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle approve button click
+    document.querySelectorAll('.approve-request-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const requestId = this.dataset.requestId;
+            const name = this.dataset.name;
+            
+            document.getElementById('approveName').textContent = name;
+            document.getElementById('approveForm').action = `/admin/access-requests/${requestId}/approve`;
+            
+            const modal = new bootstrap.Modal(document.getElementById('approveModal'));
+            modal.show();
+        });
+    });
+    
+    // Handle reject button click
+    document.querySelectorAll('.reject-request-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const requestId = this.dataset.requestId;
+            const name = this.dataset.name;
+            
+            document.getElementById('rejectName').textContent = name;
+            document.getElementById('rejectForm').action = `/admin/access-requests/${requestId}/reject`;
+            
+            const modal = new bootstrap.Modal(document.getElementById('rejectModal'));
+            modal.show();
+        });
+    });
+});
+</script>
+{% endblock %}
