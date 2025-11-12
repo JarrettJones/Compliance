@@ -2163,6 +2163,39 @@ def check_firmware(system_id):
             ORDER BY check_date DESC 
             LIMIT 1
         ''', (system_id,)).fetchone()
+        
+        # Get firmware types available for this system's program
+        if system['program_id']:
+            # Filter firmware types by program association
+            firmware_types = conn.execute('''
+                SELECT ft.* 
+                FROM firmware_types ft
+                INNER JOIN program_firmware_types pft ON ft.id = pft.firmware_type_id
+                WHERE pft.program_id = ?
+                ORDER BY ft.category, ft.name
+            ''', (system['program_id'],)).fetchall()
+        else:
+            # No program assigned - show all firmware types
+            firmware_types = conn.execute('''
+                SELECT * FROM firmware_types ORDER BY category, name
+            ''').fetchall()
+        
+        # Group firmware types by category for display
+        firmware_by_category = {}
+        for ft in firmware_types:
+            if ft['category'] not in firmware_by_category:
+                firmware_by_category[ft['category']] = []
+            firmware_by_category[ft['category']].append(ft)
+        
+        # Load available recipes for selection (filtered by program)
+        if system['program_id']:
+            recipes = conn.execute('''
+                SELECT id, name FROM firmware_recipes 
+                WHERE program_id = ? OR program_id IS NULL
+                ORDER BY name
+            ''', (system['program_id'],)).fetchall()
+        else:
+            recipes = conn.execute('SELECT id, name FROM firmware_recipes ORDER BY name').fetchall()
     
     # Extract hostname from description if present
     system_hostname = None
@@ -2174,12 +2207,12 @@ def check_firmware(system_id):
         except (IndexError, AttributeError):
             system_hostname = None
     
-    # Load available recipes for selection
-    with get_db_connection() as conn:
-        recipes = conn.execute('SELECT id, name FROM firmware_recipes ORDER BY name').fetchall()
-    
-    return render_template('check_firmware.html', system=system, active_check=active_check, 
-                         system_hostname=system_hostname, recipes=recipes)
+    return render_template('check_firmware.html', 
+                         system=system, 
+                         active_check=active_check, 
+                         system_hostname=system_hostname, 
+                         recipes=recipes,
+                         firmware_by_category=firmware_by_category)
 
 @app.route('/check/<int:system_id>/progress')
 @login_required

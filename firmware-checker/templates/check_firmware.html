@@ -219,25 +219,51 @@
                                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllFirmware()">
                                             <i class="bi bi-x"></i> Deselect All
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="selectCategory('dc_scm')">
-                                            DC-SCM Only
+                                        {% for category in firmware_by_category.keys() %}
+                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="selectCategory('{{ category.lower().replace('-', '_').replace(' ', '_') }}')">
+                                            {{ category }} Only
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-outline-success" onclick="selectCategory('ovl2')">
-                                            OVL2 Only
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-warning" onclick="selectCategory('other_platform')">
-                                            Other Platform Only
-                                        </button>
+                                        {% endfor %}
                                     </div>
                                     
-                                    <!-- Firmware Type Selection -->
+                                    <!-- Firmware Type Selection - Dynamic based on program -->
                                     <div class="row">
+                                        {% if firmware_by_category %}
+                                            {% for category, firmware_types in firmware_by_category.items() %}
+                                            <div class="col-md-4 mb-3">
+                                                <h6 class="text-primary">{{ category }} ({{ firmware_types|length }} types)</h6>
+                                                {% for fw_type in firmware_types %}
+                                                <div class="form-check">
+                                                    <input class="form-check-input fw-category {{ category.lower().replace('-', '_').replace(' ', '_') }}" 
+                                                           type="checkbox" 
+                                                           value="{{ fw_type.name }}" 
+                                                           id="fw_{{ fw_type.id }}" 
+                                                           checked>
+                                                    <label class="form-check-label small" for="fw_{{ fw_type.id }}">
+                                                        {{ fw_type.name }}
+                                                    </label>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                            {% endfor %}
+                                        {% else %}
+                                        <div class="col-12">
+                                            <div class="alert alert-warning">
+                                                <i class="bi bi-exclamation-triangle"></i>
+                                                No firmware types available for this program. Please contact an administrator to configure firmware types for this program.
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <!-- Keep the old hardcoded section for backwards compatibility (hidden) -->
+                                    <div class="row d-none">
                                         <!-- DC-SCM -->
                                         <div class="col-md-4">
                                             <h6 class="text-primary">DC-SCM (16 types)</h6>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="IFWI" id="fw_ifwi" checked>
-                                                <label class="form-check-label small" for="fw_ifwi">IFWI</label>
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="IFWI" id="fw_ifwi_old" checked>
+                                                <label class="form-check-label small" for="fw_ifwi_old">IFWI</label>
                                             </div>
                                             <div class="form-check">
                                                 <input class="form-check-input fw-category dc_scm" type="checkbox" value="UEFI Profile/Other" id="fw_uefi" checked>
