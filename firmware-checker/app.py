@@ -1869,6 +1869,7 @@ def add_recipe():
     if request.method == 'POST':
         name = request.form['name']
         description = request.form.get('description', '')
+        program_id = session.get('program_id')
         
         # Collect firmware versions from form
         firmware_versions = {}
@@ -1889,9 +1890,9 @@ def add_recipe():
         try:
             with get_db_connection() as conn:
                 conn.execute('''
-                    INSERT INTO firmware_recipes (name, description, firmware_versions)
-                    VALUES (?, ?, ?)
-                ''', (name, description, json.dumps(firmware_versions)))
+                    INSERT INTO firmware_recipes (name, description, firmware_versions, program_id)
+                    VALUES (?, ?, ?, ?)
+                ''', (name, description, json.dumps(firmware_versions), program_id))
                 conn.commit()
             
             flash(f'Recipe "{name}" created successfully!', 'success')
@@ -2537,6 +2538,11 @@ def check_result(check_id):
                 WHERE program_id = ?
                 ORDER BY name
             ''', (program_id,)).fetchall()
+            print(f"[DEBUG] Check ID {check_id}: program_id={program_id}, found {len(available_recipes)} recipes")
+            for rec in available_recipes:
+                print(f"[DEBUG]   Recipe: {rec['name']} (ID: {rec['id']})")
+        else:
+            print(f"[DEBUG] Check ID {check_id}: No program_id found")
         
         # Get recipe if one was used
         recipe = None
