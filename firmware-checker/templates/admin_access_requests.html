@@ -253,6 +253,8 @@
 
 {% block extra_scripts %}
 <script>
+const SCRIPT_ROOT = {{ request.script_root|tojson }};
+
 document.addEventListener('DOMContentLoaded', function() {
     // Handle approve button click
     document.querySelectorAll('.approve-request-btn').forEach(button => {
@@ -261,7 +263,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const name = this.dataset.name;
             
             document.getElementById('approveName').textContent = name;
-            document.getElementById('approveForm').action = `/admin/access-requests/${requestId}/approve`;
+            document.getElementById('approveForm').action = `${SCRIPT_ROOT}/admin/access-requests/${requestId}/approve`;
             
             const modal = new bootstrap.Modal(document.getElementById('approveModal'));
             modal.show();
@@ -275,7 +277,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const name = this.dataset.name;
             
             document.getElementById('rejectName').textContent = name;
-            document.getElementById('rejectForm').action = `/admin/access-requests/${requestId}/reject`;
+            document.getElementById('rejectForm').action = `${SCRIPT_ROOT}/admin/access-requests/${requestId}/reject`;
             
             const modal = new bootstrap.Modal(document.getElementById('rejectModal'));
             modal.show();
