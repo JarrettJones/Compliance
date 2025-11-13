@@ -2517,7 +2517,7 @@ def check_result(check_id):
     with get_db_connection() as conn:
         # Get the specific check
         check = conn.execute('''
-            SELECT fc.*, s.name as system_name, s.rscm_ip, s.rscm_port
+            SELECT fc.*, s.name as system_name, s.rscm_ip, s.rscm_port, s.program_id
             FROM firmware_checks fc
             JOIN systems s ON fc.system_id = s.id
             WHERE fc.id = ?
@@ -2526,6 +2526,17 @@ def check_result(check_id):
         if not check:
             flash('Firmware check not found!', 'error')
             return redirect(url_for('index'))
+        
+        # Get available recipes for this program
+        program_id = check['program_id']
+        available_recipes = []
+        if program_id:
+            available_recipes = conn.execute('''
+                SELECT id, name, description
+                FROM firmware_recipes 
+                WHERE program_id = ?
+                ORDER BY name
+            ''', (program_id,)).fetchall()
         
         # Get recipe if one was used
         recipe = None
@@ -2561,7 +2572,8 @@ def check_result(check_id):
         return render_template('check_result.html', 
                              check=check,
                              firmware_data=parsed_firmware_data,
-                             recipe=recipe)
+                             recipe=recipe,
+                             available_recipes=available_recipes)
 
 @app.route('/api/check/<int:check_id>/firmware-data')
 @login_required
@@ -2585,6 +2597,50 @@ def api_check_firmware_data(check_id):
             return jsonify(firmware_data)
         except json.JSONDecodeError:
             return jsonify({'error': 'Invalid firmware data'}), 500
+
+@app.route('/api/check/<int:check_id>/compare-recipe/<int:recipe_id>')
+@login_required
+def api_compare_check_with_recipe(check_id, recipe_id):
+    """API endpoint to compare a firmware check against a recipe"""
+    with get_db_connection() as conn:
+        # Get firmware check data
+        check = conn.execute('''
+            SELECT firmware_data, status
+            FROM firmware_checks 
+            WHERE id = ?
+        ''', (check_id,)).fetchone()
+        
+        if not check:
+            return jsonify({'error': 'Check not found'}), 404
+        
+        if not check['firmware_data'] or check['firmware_data'] == '{}':
+            return jsonify({'error': 'No firmware data available'}), 404
+        
+        # Get recipe
+        recipe = conn.execute('''
+            SELECT * FROM firmware_recipes WHERE id = ?
+        ''', (recipe_id,)).fetchone()
+        
+        if not recipe:
+            return jsonify({'error': 'Recipe not found'}), 404
+        
+        try:
+            firmware_data = json.loads(check['firmware_data'])
+            recipe_versions = json.loads(recipe['firmware_versions'])
+            
+            # Perform comparison
+            comparison_results = compare_firmware_with_recipe(firmware_data, recipe_versions)
+            
+            return jsonify({
+                'recipe': {
+                    'id': recipe['id'],
+                    'name': recipe['name'],
+                    'description': recipe['description']
+                },
+                'comparison': comparison_results
+            })
+        except json.JSONDecodeError as e:
+            return jsonify({'error': f'Invalid data format: {str(e)}'}), 500
 
 @app.route('/api/check-status/<int:system_id>')
 @login_required
