@@ -423,8 +423,8 @@ def create_default_admin():
             password_hash = generate_password_hash(default_password)
             
             conn.execute('''
-                INSERT INTO users (username, password_hash, is_admin)
-                VALUES (?, ?, 1)
+                INSERT INTO users (username, password_hash, role)
+                VALUES (?, ?, 'admin')
             ''', (default_username, password_hash))
             conn.commit()
             
