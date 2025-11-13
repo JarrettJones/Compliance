@@ -162,12 +162,10 @@
                                     </td>
                                     <td>
                                         {% if check.firmware_data and check.firmware_data != '{}' %}
-                                            <button class="btn btn-outline-info btn-sm" 
-                                                    data-check-id="{{ check.id }}" 
-                                                    data-firmware-data="{{ check.firmware_data|escape }}"
-                                                    onclick="showFirmwareData(this)">
-                                                <i class="bi bi-eye"></i> View Data
-                                            </button>
+                                            <a href="{{ url_for('check_result', check_id=check.id) }}" 
+                                               class="btn btn-outline-info btn-sm">
+                                                <i class="bi bi-eye"></i> View Results
+                                            </a>
                                         {% else %}
                                             <span class="text-muted">No data</span>
                                         {% endif %}
@@ -182,16 +180,16 @@
                                     <td>
                                         <div class="btn-group" role="group">
                                             {% if check.firmware_data and check.firmware_data != '{}' %}
-                                                <button class="btn btn-outline-primary btn-sm" 
-                                                        data-check-id="{{ check.id }}" 
-                                                        data-firmware-data="{{ check.firmware_data|escape }}"
-                                                        onclick="showFirmwareData(this)">
+                                                <a href="{{ url_for('check_result', check_id=check.id) }}" 
+                                                   class="btn btn-outline-primary btn-sm"
+                                                   title="View Results">
                                                     <i class="bi bi-eye"></i>
-                                                </button>
+                                                </a>
                                             {% endif %}
                                             <button class="btn btn-outline-danger btn-sm" 
                                                     data-check-id="{{ check.id }}"
-                                                    onclick="deleteCheck(this)">
+                                                    onclick="deleteCheck(this)"
+                                                    title="Delete Check">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </div>
