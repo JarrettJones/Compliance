@@ -15,13 +15,17 @@ import sqlite3
 import os
 import sys
 import signal
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 from contextlib import contextmanager
 import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+import secrets
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Import firmware checking modules
 from firmware_modules.dc_scm import DCScmChecker
@@ -98,6 +102,91 @@ def get_db_connection():
         yield conn
     finally:
         conn.close()
+
+def send_email(to_email, subject, body_html, body_text=None):
+    """Send an email using SMTP configuration from environment variables"""
+    smtp_server = os.getenv('SMTP_SERVER')
+    smtp_port = int(os.getenv('SMTP_PORT', 587))
+    smtp_username = os.getenv('SMTP_USERNAME')
+    smtp_password = os.getenv('SMTP_PASSWORD')
+    from_email = os.getenv('SMTP_FROM_EMAIL')
+    from_name = os.getenv('SMTP_FROM_NAME', 'Firmware Checker')
+    
+    # Check if email is configured
+    if not all([smtp_server, smtp_username, smtp_password, from_email]):
+        logger.warning("Email not configured. Skipping email send.")
+        return False
+    
+    try:
+        # Create message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = f"{from_name} <{from_email}>"
+        msg['To'] = to_email
+        
+        # Add text and HTML parts
+        if body_text:
+            msg.attach(MIMEText(body_text, 'plain'))
+        msg.attach(MIMEText(body_html, 'html'))
+        
+        # Send email
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_username, smtp_password)
+            server.send_message(msg)
+        
+        logger.info(f"Email sent successfully to {to_email}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to send email to {to_email}: {str(e)}")
+        return False
+
+def generate_password_reset_token(user_id):
+    """Generate a secure password reset token that expires in 2 hours"""
+    token = secrets.token_urlsafe(32)
+    expiration_hours = int(os.getenv('PASSWORD_RESET_TOKEN_EXPIRATION', 2))
+    expires_at = datetime.now() + timedelta(hours=expiration_hours)
+    
+    with get_db_connection() as conn:
+        conn.execute('''
+            INSERT INTO password_reset_tokens (user_id, token, expires_at)
+            VALUES (?, ?, ?)
+        ''', (user_id, token, expires_at.isoformat()))
+        conn.commit()
+    
+    return token
+
+def verify_password_reset_token(token):
+    """Verify a password reset token and return user_id if valid"""
+    with get_db_connection() as conn:
+        token_row = conn.execute('''
+            SELECT user_id, expires_at, used
+            FROM password_reset_tokens
+            WHERE token = ?
+        ''', (token,)).fetchone()
+        
+        if not token_row:
+            return None
+        
+        if token_row['used']:
+            return None
+        
+        expires_at = datetime.fromisoformat(token_row['expires_at'])
+        if datetime.now() > expires_at:
+            return None
+        
+        return token_row['user_id']
+
+def mark_token_as_used(token):
+    """Mark a password reset token as used"""
+    with get_db_connection() as conn:
+        conn.execute('''
+            UPDATE password_reset_tokens
+            SET used = 1
+            WHERE token = ?
+        ''', (token,))
+        conn.commit()
 
 def init_db():
     """Initialize the database with required tables"""
@@ -248,6 +337,19 @@ def init_db():
                 notes TEXT,
                 CONSTRAINT valid_status CHECK (status IN ('pending', 'approved', 'rejected')),
                 FOREIGN KEY (reviewed_by) REFERENCES users (id)
+            )
+        ''')
+        
+        # Password reset tokens table
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token TEXT NOT NULL UNIQUE,
+                expires_at TIMESTAMP NOT NULL,
+                used INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
             )
         ''')
         
@@ -1034,6 +1136,78 @@ def change_password():
     
     return render_template('change_password.html', force=force)
 
+@app.route('/set-password/<token>', methods=['GET', 'POST'])
+def set_password(token):
+    """Set password using a token (for new users)"""
+    user_id = verify_password_reset_token(token)
+    
+    if not user_id:
+        flash('Invalid or expired password setup link. Please request a new one.', 'error')
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if not all([new_password, confirm_password]):
+            flash('All fields are required', 'error')
+            return redirect(url_for('set_password', token=token))
+        
+        if new_password != confirm_password:
+            flash('Passwords do not match', 'error')
+            return redirect(url_for('set_password', token=token))
+        
+        if len(new_password) < 8:
+            flash('Password must be at least 8 characters long', 'error')
+            return redirect(url_for('set_password', token=token))
+        
+        with get_db_connection() as conn:
+            # Update password and clear must_change_password flag
+            new_password_hash = generate_password_hash(new_password)
+            conn.execute('''
+                UPDATE users 
+                SET password_hash = ?, must_change_password = 0
+                WHERE id = ?
+            ''', (new_password_hash, user_id))
+            conn.commit()
+            
+            # Mark token as used
+            mark_token_as_used(token)
+            
+            # Get username for display
+            user = conn.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
+            
+            flash(f'Password set successfully! You can now log in with username: {user["username"]}', 'success')
+            return redirect(url_for('login'))
+    
+    # Get user info for display
+    with get_db_connection() as conn:
+        user = conn.execute('SELECT username, email FROM users WHERE id = ?', (user_id,)).fetchone()
+    
+    return render_template('set_password.html', token=token, user=user)
+            user = conn.execute(
+                'SELECT * FROM users WHERE id = ?',
+                (session['user_id'],)
+            ).fetchone()
+            
+            if not user or not check_password_hash(user['password_hash'], current_password):
+                flash('Current password is incorrect', 'error')
+                return redirect(url_for('change_password', force=force))
+            
+            # Update password and clear must_change_password flag
+            new_password_hash = generate_password_hash(new_password)
+            conn.execute('''
+                UPDATE users 
+                SET password_hash = ?, must_change_password = 0
+                WHERE id = ?
+            ''', (new_password_hash, session['user_id']))
+            conn.commit()
+            
+            flash('Password changed successfully!', 'success')
+            return redirect(url_for('select_program'))
+    
+    return render_template('change_password.html', force=force)
+
 # Access Request Routes
 @app.route('/request-access', methods=['GET', 'POST'])
 def request_access():
@@ -1157,13 +1331,22 @@ def approve_access_request(request_id):
             role = 'viewer'
         
         try:
+            # Create user account with a random unusable password initially
+            initial_password = secrets.token_urlsafe(32)
+            password_hash = generate_password_hash(initial_password)
+            
             # Create user account
-            conn.execute('''
+            cursor = conn.execute('''
                 INSERT INTO users (username, password_hash, role, email, first_name, last_name, team, must_change_password)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 1)
             ''', (username, password_hash, role, access_request['email'], 
                   access_request['first_name'], access_request['last_name'], 
                   access_request['team']))
+            
+            user_id = cursor.lastrowid
+            
+            # Generate password reset token (expires in 2 hours)
+            token = generate_password_reset_token(user_id)
             
             # Update access request status
             conn.execute('''
@@ -1176,8 +1359,59 @@ def approve_access_request(request_id):
             
             conn.commit()
             
-            flash(f'Access request approved! User account created: {username} | Temporary password: {temp_password}', 'success')
-            flash('Please share the temporary password with the user securely.', 'info')
+            # Generate password setup link
+            reset_url = url_for('set_password', token=token, _external=True)
+            
+            # Send email with password setup link
+            email_sent = send_email(
+                to_email=access_request['email'],
+                subject='Welcome to Firmware Checker - Set Your Password',
+                body_html=f'''
+                <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                    <h2>Welcome to Firmware Checker!</h2>
+                    <p>Hello {access_request['first_name']},</p>
+                    <p>Your access request has been approved. Your account has been created with the following details:</p>
+                    <ul>
+                        <li><strong>Username:</strong> {username}</li>
+                        <li><strong>Role:</strong> {role.title()}</li>
+                    </ul>
+                    <p>To complete your account setup, please click the link below to set your password:</p>
+                    <p><a href="{reset_url}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Set My Password</a></p>
+                    <p>Or copy and paste this URL into your browser:<br>
+                    <code>{reset_url}</code></p>
+                    <p><strong>Important:</strong> This link will expire in 2 hours for security reasons.</p>
+                    <p>If you did not request access, please ignore this email.</p>
+                    <p>Best regards,<br>Firmware Checker Team</p>
+                </body>
+                </html>
+                ''',
+                body_text=f'''
+Welcome to Firmware Checker!
+
+Hello {access_request['first_name']},
+
+Your access request has been approved. Your account has been created with the following details:
+
+Username: {username}
+Role: {role.title()}
+
+To complete your account setup, please visit this link to set your password:
+{reset_url}
+
+Important: This link will expire in 2 hours for security reasons.
+
+If you did not request access, please ignore this email.
+
+Best regards,
+Firmware Checker Team
+                '''
+            )
+            
+            if email_sent:
+                flash(f'Access request approved! User account created: {username}. Password setup email sent to {access_request["email"]}', 'success')
+            else:
+                flash(f'Access request approved! User account created: {username}. ⚠️ Email not configured - provide this link to user: {reset_url}', 'warning')
             
         except Exception as e:
             flash(f'Error creating user account: {str(e)}', 'error')
