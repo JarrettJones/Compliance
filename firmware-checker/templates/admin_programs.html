@@ -68,6 +68,10 @@
                                class="btn btn-outline-primary" title="Edit">
                                 <i class="bi bi-pencil"></i>
                             </a>
+                            <a href="{{ url_for('admin_program_custom_fields', program_id=program.id) }}" 
+                               class="btn btn-outline-info" title="Custom Fields">
+                                <i class="bi bi-sliders"></i>
+                            </a>
                             <form method="POST" action="{{ url_for('admin_toggle_program', program_id=program.id) }}" 
                                   class="d-inline"
                                   onsubmit="return confirm('Are you sure you want to {% if program.is_active %}deactivate{% else %}activate{% endif %} this program?');">

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Custom Fields - {{ program.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin') }}">Admin</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin_programs') }}">Programs</a></li>
+                    <li class="breadcrumb-item active">{{ program.name }} - Custom Fields</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="bi bi-sliders"></i> Custom System Fields</h2>
+            <p class="text-muted">Define additional fields for systems in the <strong>{{ program.name }}</strong> program</p>
+        </div>
+        <a href="{{ url_for('admin_add_custom_field', program_id=program.id) }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Add Custom Field
+        </a>
+    </div>
+
+    {% if custom_fields %}
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Order</th>
+                            <th>Field Label</th>
+                            <th>Field Name</th>
+                            <th>Type</th>
+                            <th>Required</th>
+                            <th>Placeholder</th>
+                            <th>Help Text</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for field in custom_fields %}
+                        <tr>
+                            <td>{{ field.display_order }}</td>
+                            <td><strong>{{ field.field_label }}</strong></td>
+                            <td><code>{{ field.field_name }}</code></td>
+                            <td>
+                                <span class="badge bg-secondary">
+                                    {% if field.field_type == 'text' %}Text
+                                    {% elif field.field_type == 'number' %}Number
+                                    {% elif field.field_type == 'ip' %}IP Address
+                                    {% elif field.field_type == 'email' %}Email
+                                    {% elif field.field_type == 'url' %}URL
+                                    {% elif field.field_type == 'textarea' %}Text Area
+                                    {% else %}{{ field.field_type }}
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                {% if field.is_required %}
+                                <span class="badge bg-danger">Required</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Optional</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if field.placeholder %}
+                                <small class="text-muted">{{ field.placeholder }}</small>
+                                {% else %}
+                                <small class="text-muted">-</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if field.help_text %}
+                                <small class="text-muted">{{ field.help_text[:50] }}{% if field.help_text|length > 50 %}...{% endif %}</small>
+                                {% else %}
+                                <small class="text-muted">-</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('admin_edit_custom_field', program_id=program.id, field_id=field.id) }}" 
+                                       class="btn btn-outline-primary">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <button type="button" 
+                                            class="btn btn-outline-danger" 
+                                            onclick="if(confirm('Delete custom field \'{{ field.field_label }}\'? This will also delete all stored values for this field.')) { document.getElementById('delete-form-{{ field.id }}').submit(); }">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                <form id="delete-form-{{ field.id }}" 
+                                      method="POST" 
+                                      action="{{ url_for('admin_delete_custom_field', program_id=program.id, field_id=field.id) }}" 
+                                      style="display: none;">
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i> No custom fields defined for this program yet. 
+        Custom fields allow you to capture program-specific information for systems 
+        (e.g., AMC ports, additional IP addresses, hardware identifiers).
+    </div>
+    {% endif %}
+
+    <div class="mt-4">
+        <a href="{{ url_for('admin_programs') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Programs
+        </a>
+    </div>
+</div>
+{% endblock %}

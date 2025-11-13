@@ -61,6 +61,25 @@
                     <dt class="col-sm-5">Description:</dt>
                     <dd class="col-sm-7">{{ system.description or 'No description' }}</dd>
                     
+                    {% if custom_field_values %}
+                    <dt class="col-12 mt-3 mb-2"><hr><strong><i class="bi bi-sliders"></i> Program-Specific Fields:</strong></dt>
+                    {% for field in custom_field_values %}
+                    <dt class="col-sm-5">{{ field.field_label }}:</dt>
+                    <dd class="col-sm-7">
+                        {% if field.field_type == 'url' %}
+                        <a href="{{ field.field_value }}" target="_blank">{{ field.field_value }}</a>
+                        {% elif field.field_type == 'email' %}
+                        <a href="mailto:{{ field.field_value }}">{{ field.field_value }}</a>
+                        {% elif field.field_type == 'ip' %}
+                        <code>{{ field.field_value }}</code>
+                        {% else %}
+                        {{ field.field_value }}
+                        {% endif %}
+                    </dd>
+                    {% endfor %}
+                    {% endif %}
+                    
+                    <dt class="col-12 mt-3"><hr></dt>
                     <dt class="col-sm-5">Created:</dt>
                     <dd class="col-sm-7">{{ system.created_at[:19] if system.created_at else 'Unknown' }}</dd>
                     

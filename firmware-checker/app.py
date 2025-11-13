@@ -166,6 +166,39 @@ def init_db():
             )
         ''')
         
+        # Program custom fields - defines what custom fields a program requires
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS program_custom_fields (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                program_id INTEGER NOT NULL,
+                field_name TEXT NOT NULL,
+                field_label TEXT NOT NULL,
+                field_type TEXT NOT NULL DEFAULT 'text',
+                is_required INTEGER DEFAULT 0,
+                placeholder TEXT,
+                help_text TEXT,
+                display_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(program_id, field_name),
+                FOREIGN KEY (program_id) REFERENCES programs (id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # System custom field values - stores actual values for custom fields
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS system_custom_field_values (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                system_id INTEGER NOT NULL,
+                field_id INTEGER NOT NULL,
+                field_value TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(system_id, field_id),
+                FOREIGN KEY (system_id) REFERENCES systems (id) ON DELETE CASCADE,
+                FOREIGN KEY (field_id) REFERENCES program_custom_fields (id) ON DELETE CASCADE
+            )
+        ''')
+        
         # Firmware recipes table
         conn.execute('''
             CREATE TABLE IF NOT EXISTS firmware_recipes (
@@ -1310,6 +1343,145 @@ def admin_toggle_program(program_id):
     
     return redirect(url_for('admin_programs'))
 
+@app.route('/admin/programs/<int:program_id>/custom-fields')
+@admin_required
+def admin_program_custom_fields(program_id):
+    """Manage custom fields for a program"""
+    with get_db_connection() as conn:
+        program = conn.execute('SELECT * FROM programs WHERE id = ?', (program_id,)).fetchone()
+        
+        if not program:
+            flash('Program not found', 'error')
+            return redirect(url_for('admin_programs'))
+        
+        custom_fields = conn.execute('''
+            SELECT * FROM program_custom_fields 
+            WHERE program_id = ? 
+            ORDER BY display_order, field_label
+        ''', (program_id,)).fetchall()
+        
+        return render_template('admin_custom_fields.html', 
+                             program=program, 
+                             custom_fields=custom_fields)
+
+@app.route('/admin/programs/<int:program_id>/custom-fields/add', methods=['GET', 'POST'])
+@admin_required
+def admin_add_custom_field(program_id):
+    """Add a custom field to a program"""
+    with get_db_connection() as conn:
+        program = conn.execute('SELECT * FROM programs WHERE id = ?', (program_id,)).fetchone()
+        
+        if not program:
+            flash('Program not found', 'error')
+            return redirect(url_for('admin_programs'))
+        
+        if request.method == 'POST':
+            field_name = request.form.get('field_name', '').strip()
+            field_label = request.form.get('field_label', '').strip()
+            field_type = request.form.get('field_type', 'text')
+            is_required = 1 if request.form.get('is_required') else 0
+            placeholder = request.form.get('placeholder', '').strip()
+            help_text = request.form.get('help_text', '').strip()
+            display_order = request.form.get('display_order', 0)
+            
+            if not field_name or not field_label:
+                flash('Field name and label are required', 'error')
+                return render_template('admin_custom_field_form.html', 
+                                     program=program, 
+                                     action='Add')
+            
+            # Convert field name to snake_case (lowercase with underscores)
+            field_name = field_name.lower().replace(' ', '_').replace('-', '_')
+            
+            try:
+                conn.execute('''
+                    INSERT INTO program_custom_fields 
+                    (program_id, field_name, field_label, field_type, is_required, 
+                     placeholder, help_text, display_order)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (program_id, field_name, field_label, field_type, is_required,
+                     placeholder or None, help_text or None, display_order))
+                conn.commit()
+                
+                flash(f'Custom field "{field_label}" added successfully', 'success')
+                return redirect(url_for('admin_program_custom_fields', program_id=program_id))
+            
+            except sqlite3.IntegrityError:
+                flash(f'A field with the name "{field_name}" already exists for this program', 'error')
+                return render_template('admin_custom_field_form.html', 
+                                     program=program, 
+                                     action='Add')
+        
+        return render_template('admin_custom_field_form.html', 
+                             program=program, 
+                             action='Add')
+
+@app.route('/admin/programs/<int:program_id>/custom-fields/edit/<int:field_id>', methods=['GET', 'POST'])
+@admin_required
+def admin_edit_custom_field(program_id, field_id):
+    """Edit a custom field"""
+    with get_db_connection() as conn:
+        program = conn.execute('SELECT * FROM programs WHERE id = ?', (program_id,)).fetchone()
+        field = conn.execute('''
+            SELECT * FROM program_custom_fields WHERE id = ? AND program_id = ?
+        ''', (field_id, program_id)).fetchone()
+        
+        if not program or not field:
+            flash('Program or field not found', 'error')
+            return redirect(url_for('admin_programs'))
+        
+        if request.method == 'POST':
+            field_label = request.form.get('field_label', '').strip()
+            field_type = request.form.get('field_type', 'text')
+            is_required = 1 if request.form.get('is_required') else 0
+            placeholder = request.form.get('placeholder', '').strip()
+            help_text = request.form.get('help_text', '').strip()
+            display_order = request.form.get('display_order', 0)
+            
+            if not field_label:
+                flash('Field label is required', 'error')
+                return render_template('admin_custom_field_form.html', 
+                                     program=program,
+                                     field=field,
+                                     action='Edit')
+            
+            conn.execute('''
+                UPDATE program_custom_fields 
+                SET field_label = ?, field_type = ?, is_required = ?,
+                    placeholder = ?, help_text = ?, display_order = ?
+                WHERE id = ?
+            ''', (field_label, field_type, is_required,
+                 placeholder or None, help_text or None, display_order, field_id))
+            conn.commit()
+            
+            flash(f'Custom field "{field_label}" updated successfully', 'success')
+            return redirect(url_for('admin_program_custom_fields', program_id=program_id))
+        
+        return render_template('admin_custom_field_form.html', 
+                             program=program,
+                             field=field,
+                             action='Edit')
+
+@app.route('/admin/programs/<int:program_id>/custom-fields/delete/<int:field_id>', methods=['POST'])
+@admin_required
+def admin_delete_custom_field(program_id, field_id):
+    """Delete a custom field"""
+    with get_db_connection() as conn:
+        field = conn.execute('''
+            SELECT * FROM program_custom_fields WHERE id = ? AND program_id = ?
+        ''', (field_id, program_id)).fetchone()
+        
+        if not field:
+            flash('Field not found', 'error')
+            return redirect(url_for('admin_program_custom_fields', program_id=program_id))
+        
+        conn.execute('DELETE FROM program_custom_fields WHERE id = ?', (field_id,))
+        conn.commit()
+        
+        flash(f'Custom field "{field["field_label"]}" deleted successfully', 'success')
+    
+    return redirect(url_for('admin_program_custom_fields', program_id=program_id))
+
 # Routes
 @app.route('/select-program')
 @login_required
@@ -1962,9 +2134,31 @@ def add_system_metadata():
         return redirect(url_for('add_system'))
     
     pending = session['pending_system']
+    program_id = session.get('program_id')
+    
+    # Get custom fields for the program if one is selected
+    custom_fields = []
+    if program_id:
+        with get_db_connection() as conn:
+            custom_fields = conn.execute('''
+                SELECT * FROM program_custom_fields 
+                WHERE program_id = ? 
+                ORDER BY display_order, field_label
+            ''', (program_id,)).fetchall()
     
     if request.method == 'POST':
         try:
+            # Validate required custom fields
+            if custom_fields:
+                for field in custom_fields:
+                    if field['is_required']:
+                        field_value = request.form.get(f'custom_{field["field_name"]}', '').strip()
+                        if not field_value:
+                            flash(f'{field["field_label"]} is required', 'error')
+                            return render_template('add_system_metadata.html', 
+                                                 system=pending,
+                                                 custom_fields=custom_fields)
+            
             # Get metadata from form
             system_hostname = request.form.get('system_hostname', '')
             geo_location = request.form.get('geo_location', '')
@@ -1995,18 +2189,31 @@ def add_system_metadata():
             
             # Create system record with serial number and metadata
             with get_db_connection() as conn:
-                conn.execute('''
+                cursor = conn.execute('''
                     INSERT INTO systems (
                         name, rscm_ip, rscm_port, 
-                        description
+                        description, program_id
                     )
-                    VALUES (?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?)
                 ''', (
                     pending['serial_number'],
                     pending['rscm_ip'],
                     pending['system_port'],
-                    full_description
+                    full_description,
+                    program_id
                 ))
+                system_id = cursor.lastrowid
+                
+                # Save custom field values
+                for field in custom_fields:
+                    field_value = request.form.get(f'custom_{field["field_name"]}', '').strip()
+                    if field_value:  # Only save if there's a value
+                        conn.execute('''
+                            INSERT INTO system_custom_field_values 
+                            (system_id, field_id, field_value)
+                            VALUES (?, ?, ?)
+                        ''', (system_id, field['id'], field_value))
+                
                 conn.commit()
             
             # Clear session data
@@ -2021,7 +2228,9 @@ def add_system_metadata():
             logger.error(f"Error saving system metadata: {str(e)}")
             flash(f'Error saving system: {str(e)}', 'error')
     
-    return render_template('add_system_metadata.html', system=pending)
+    return render_template('add_system_metadata.html', 
+                         system=pending,
+                         custom_fields=custom_fields)
 
 @app.route('/systems/<int:system_id>')
 @login_required
@@ -2047,9 +2256,21 @@ def system_detail(system_id):
             LIMIT 1
         ''', (system_id,)).fetchone()
         
+        # Get custom field values for this system
+        custom_field_values = conn.execute('''
+            SELECT pcf.field_label, pcf.field_name, pcf.field_type, scfv.field_value
+            FROM system_custom_field_values scfv
+            JOIN program_custom_fields pcf ON scfv.field_id = pcf.id
+            WHERE scfv.system_id = ?
+            ORDER BY pcf.display_order, pcf.field_label
+        ''', (system_id,)).fetchall()
 
     
-    return render_template('system_detail.html', system=system, checks=checks, active_check=active_check)
+    return render_template('system_detail.html', 
+                         system=system, 
+                         checks=checks, 
+                         active_check=active_check,
+                         custom_field_values=custom_field_values)
 
 @app.route('/systems/<int:system_id>/delete', methods=['POST'])
 @editor_required
