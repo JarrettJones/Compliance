@@ -555,9 +555,14 @@ function exportResults() {
         const dataStr = JSON.stringify(firmwareData, null, 2);
         const dataBlob = new Blob([dataStr], {type: 'application/json'});
         
+        // Get system name from page title or use system serial number from firmware data
+        const systemName = '{{ check.system_name|replace(" ", "_")|replace(":", "-") }}' || 'unknown';
+        const checkId = firmwareData.check_id || 'unknown';
+        const date = new Date().toISOString().split('T')[0];
+        
         const link = document.createElement('a');
         link.href = URL.createObjectURL(dataBlob);
-        link.download = `firmware_check_${firmwareData.check_id || 'unknown'}_${new Date().toISOString().split('T')[0]}.json`;
+        link.download = `firmware_check_${systemName}_${checkId}_${date}.json`;
         
         document.body.appendChild(link);
         link.click();
