@@ -3,18 +3,32 @@ import sqlite3
 
 # Connect to database
 conn = sqlite3.connect('firmware_checker.db')
-cursor = conn.cursor()
+conn.row_factory = sqlite3.Row
 
-print("Status values in database:")
-for row in cursor.execute('SELECT DISTINCT status FROM firmware_checks'):
-    print(f' - {row[0]}')
+print("Programs:")
+programs = conn.execute('SELECT * FROM programs').fetchall()
+for p in programs:
+    print(f"  ID: {p['id']}, Name: {p['name']}")
 
-print("\nRecent checks for system 1:")
-for row in cursor.execute('SELECT id, status, check_date FROM firmware_checks WHERE system_id = 1 ORDER BY check_date DESC LIMIT 5'):
-    print(f'  Check {row[0]}: {row[1]} at {row[2]}')
+print("\nRecipe 1 (before fix):")
+recipes = conn.execute('SELECT id, name, program_id FROM firmware_recipes WHERE id=1').fetchall()
+for r in recipes:
+    print(f"  ID: {r['id']}, Name: {r['name']}, Program ID: {r['program_id']}")
 
-print("\nAll checks for system 1:")
-for row in cursor.execute('SELECT id, status, check_date FROM firmware_checks WHERE system_id = 1 ORDER BY check_date DESC'):
-    print(f'  Check {row[0]}: {row[1]} at {row[2]}')
+print("\nSystem 5 (from check 70):")
+systems = conn.execute('SELECT id, name, program_id FROM systems WHERE id=5').fetchall()
+for s in systems:
+    print(f"  ID: {s['id']}, Name: {s['name']}, Program ID: {s['program_id']}")
+
+# Fix recipe 1 to be assigned to Echo Falls (program_id=1)
+print("\n--- Fixing recipe 1 to be assigned to Echo Falls (program_id=1) ---")
+conn.execute('UPDATE firmware_recipes SET program_id = 1 WHERE id = 1')
+conn.commit()
+
+print("\nRecipe 1 (after fix):")
+recipes = conn.execute('SELECT id, name, program_id FROM firmware_recipes WHERE id=1').fetchall()
+for r in recipes:
+    print(f"  ID: {r['id']}, Name: {r['name']}, Program ID: {r['program_id']}")
 
 conn.close()
+print("\n✅ Recipe fixed! Refresh the check result page to see the 'Compare with Recipe' button.")
