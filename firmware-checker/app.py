@@ -282,6 +282,10 @@ def init_db():
                 conn.execute("ALTER TABLE users ADD COLUMN team TEXT")
                 logger.info("Added team column to users table")
             
+            if 'must_change_password' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0")
+                logger.info("Added must_change_password column to users table")
+            
             # Migrate data from is_admin to role
             if 'is_admin' in columns:
                 conn.execute("""
@@ -961,6 +965,12 @@ def login():
                 
                 flash(f'Welcome back, {username}!', 'success')
                 
+                # Check if user must change password
+                must_change = user.get('must_change_password', 0)
+                if must_change:
+                    flash('You must change your password before continuing.', 'warning')
+                    return redirect(url_for('change_password', force=1))
+                
                 # Redirect to next page or admin panel
                 next_page = request.args.get('next')
                 return redirect(next_page if next_page else url_for('admin'))
@@ -976,6 +986,53 @@ def logout():
     session.clear()
     flash(f'Goodbye, {username}!', 'info')
     return redirect(url_for('index'))
+
+@app.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    """Change user password"""
+    force = request.args.get('force', 0, type=int)
+    
+    if request.method == 'POST':
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if not all([current_password, new_password, confirm_password]):
+            flash('All fields are required', 'error')
+            return redirect(url_for('change_password', force=force))
+        
+        if new_password != confirm_password:
+            flash('New passwords do not match', 'error')
+            return redirect(url_for('change_password', force=force))
+        
+        if len(new_password) < 8:
+            flash('Password must be at least 8 characters long', 'error')
+            return redirect(url_for('change_password', force=force))
+        
+        with get_db_connection() as conn:
+            user = conn.execute(
+                'SELECT * FROM users WHERE id = ?',
+                (session['user_id'],)
+            ).fetchone()
+            
+            if not user or not check_password_hash(user['password_hash'], current_password):
+                flash('Current password is incorrect', 'error')
+                return redirect(url_for('change_password', force=force))
+            
+            # Update password and clear must_change_password flag
+            new_password_hash = generate_password_hash(new_password)
+            conn.execute('''
+                UPDATE users 
+                SET password_hash = ?, must_change_password = 0
+                WHERE id = ?
+            ''', (new_password_hash, session['user_id']))
+            conn.commit()
+            
+            flash('Password changed successfully!', 'success')
+            return redirect(url_for('select_program'))
+    
+    return render_template('change_password.html', force=force)
 
 # Access Request Routes
 @app.route('/request-access', methods=['GET', 'POST'])
@@ -1102,8 +1159,8 @@ def approve_access_request(request_id):
         try:
             # Create user account
             conn.execute('''
-                INSERT INTO users (username, password_hash, role, email, first_name, last_name, team)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO users (username, password_hash, role, email, first_name, last_name, team, must_change_password)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
             ''', (username, password_hash, role, access_request['email'], 
                   access_request['first_name'], access_request['last_name'], 
                   access_request['team']))
