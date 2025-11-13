@@ -64,6 +64,11 @@
                             <button class="btn btn-outline-primary" onclick="exportResults()">
                                 <i class="bi bi-download"></i> Export Results
                             </button>
+                            {% if available_recipes %}
+                            <button class="btn btn-outline-info" onclick="showRecipeComparison()">
+                                <i class="bi bi-clipboard-check"></i> Compare with Recipe
+                            </button>
+                            {% endif %}
                             {% else %}
                             <div class="text-muted">
                                 <i class="bi bi-info-circle"></i> No firmware data available
@@ -125,17 +130,15 @@
                 </div>
 
                 <!-- Post-Check Recipe Comparison Tool -->
-                {% if available_recipes and not recipe %}
-                <div class="row mb-4">
+                <div class="row mb-4" id="recipeComparisonSection" style="display: none;">
                     <div class="col-12">
                         <div class="card border-info">
                             <div class="card-header bg-info text-white">
-                                <h6 class="mb-0"><i class="bi bi-clipboard-check"></i> Compare with Recipe (Post-Check)</h6>
+                                <h6 class="mb-0"><i class="bi bi-clipboard-check"></i> Compare with Recipe</h6>
                             </div>
                             <div class="card-body">
                                 <p class="text-muted mb-3">
-                                    <i class="bi bi-info-circle"></i> This check was run without a recipe. 
-                                    You can compare the results against any recipe now.
+                                    <i class="bi bi-info-circle"></i> Compare this check's results against any recipe.
                                 </p>
                                 <div class="row">
                                     <div class="col-md-8">
@@ -158,7 +161,6 @@
                         </div>
                     </div>
                 </div>
-                {% endif %}
 
                 <!-- Recipe Comparison Section -->
                 {% if recipe and firmware_data and firmware_data.recipe_comparison %}
@@ -797,6 +799,16 @@ function compareWithRecipe() {
             console.error('Error comparing with recipe:', error);
             resultsDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Error: ${error.message}</div>`;
         });
+}
+
+function showRecipeComparison() {
+    const section = document.getElementById('recipeComparisonSection');
+    if (section.style.display === 'none') {
+        section.style.display = 'block';
+        section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else {
+        section.style.display = 'none';
+    }
 }
 
 function displayComparisonResults(data) {
