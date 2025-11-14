@@ -415,11 +415,39 @@ function renderGrouped(systems, groupBy) {
     });
 }
 
+// Save filter preferences to localStorage
+function saveFilterPreferences() {
+    const preferences = {
+        searchTerm: document.getElementById('searchInput').value,
+        groupBy: document.getElementById('groupByFilter').value,
+        sortBy: document.getElementById('sortByFilter').value
+    };
+    localStorage.setItem('systemsFilterPreferences', JSON.stringify(preferences));
+}
+
+// Load filter preferences from localStorage
+function loadFilterPreferences() {
+    const saved = localStorage.getItem('systemsFilterPreferences');
+    if (saved) {
+        try {
+            const preferences = JSON.parse(saved);
+            document.getElementById('searchInput').value = preferences.searchTerm || '';
+            document.getElementById('groupByFilter').value = preferences.groupBy || 'none';
+            document.getElementById('sortByFilter').value = preferences.sortBy || 'name-asc';
+        } catch (e) {
+            console.error('Error loading filter preferences:', e);
+        }
+    }
+}
+
 // Filter and sort systems
 function filterAndSortSystems() {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
     const groupBy = document.getElementById('groupByFilter').value;
     const sortBy = document.getElementById('sortByFilter').value;
+    
+    // Save preferences
+    saveFilterPreferences();
     
     // Filter systems
     let filtered = systemsData.filter(system => {
@@ -484,6 +512,7 @@ function clearFilters() {
     document.getElementById('searchInput').value = '';
     document.getElementById('groupByFilter').value = 'none';
     document.getElementById('sortByFilter').value = 'name-asc';
+    saveFilterPreferences(); // Save cleared state
     filterAndSortSystems();
 }
 
@@ -492,7 +521,8 @@ document.getElementById('searchInput').addEventListener('input', filterAndSortSy
 document.getElementById('groupByFilter').addEventListener('change', filterAndSortSystems);
 document.getElementById('sortByFilter').addEventListener('change', filterAndSortSystems);
 
-// Initial render
+// Load preferences and initial render
+loadFilterPreferences();
 filterAndSortSystems();
 
 function confirmDelete(button) {
