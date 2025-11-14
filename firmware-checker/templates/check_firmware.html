@@ -228,7 +228,7 @@
                                     
                                     <!-- Firmware Type Selection - Dynamic based on program -->
                                     <div class="row">
-                                        {% if firmware_by_category %}
+                                        {% if firmware_by_category and firmware_by_category|length > 0 %}
                                             {% for category, firmware_types in firmware_by_category.items() %}
                                             <div class="col-md-4 mb-3">
                                                 <h6 class="text-primary">{{ category }} ({{ firmware_types|length }} types)</h6>
@@ -236,11 +236,11 @@
                                                 <div class="form-check">
                                                     <input class="form-check-input fw-category {{ category.lower().replace('-', '_').replace(' ', '_') }}" 
                                                            type="checkbox" 
-                                                           value="{{ fw_type.name }}" 
-                                                           id="fw_{{ fw_type.id }}" 
+                                                           value="{{ fw_type['name'] }}" 
+                                                           id="fw_{{ fw_type['id'] }}" 
                                                            checked>
-                                                    <label class="form-check-label small" for="fw_{{ fw_type.id }}">
-                                                        {{ fw_type.name }}
+                                                    <label class="form-check-label small" for="fw_{{ fw_type['id'] }}">
+                                                        {{ fw_type['name'] }}
                                                     </label>
                                                 </div>
                                                 {% endfor %}
@@ -250,7 +250,7 @@
                                         <div class="col-12">
                                             <div class="alert alert-warning">
                                                 <i class="bi bi-exclamation-triangle"></i>
-                                                No firmware types available for this program. Please contact an administrator to configure firmware types for this program.
+                                                No firmware types configured for this program. Please contact an administrator to assign firmware types to this program.
                                             </div>
                                         </div>
                                         {% endif %}
