@@ -31,6 +31,7 @@ def assign_implemented_firmware_types():
         'SOC VR Configs',
         'E.1s',
         'M.2',
+        'Windows OS Version',
         
         # OVL2 - implemented
         'FPGA Agilex (App Image w/ OpRom)',
