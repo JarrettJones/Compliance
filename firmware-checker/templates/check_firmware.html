@@ -507,26 +507,48 @@ let checkResults = null;
 
 // Firmware Selection Functions
 function updateSelectedCount() {
-    const checkboxes = document.querySelectorAll('.fw-category:checked');
-    const count = checkboxes.length;
+    // Only count visible checkboxes (exclude d-none hidden section)
+    const checkboxes = document.querySelectorAll('.fw-category:checked:not(.d-none .fw-category)');
+    const visibleChecked = Array.from(checkboxes).filter(cb => {
+        return !cb.closest('.d-none');
+    });
+    const count = visibleChecked.length;
     document.getElementById('selectedCount').textContent = `${count} firmware type${count !== 1 ? 's' : ''}`;
 }
 
 function selectAllFirmware() {
-    document.querySelectorAll('.fw-category').forEach(cb => cb.checked = true);
+    // Only select visible checkboxes
+    document.querySelectorAll('.fw-category').forEach(cb => {
+        if (!cb.closest('.d-none')) {
+            cb.checked = true;
+        }
+    });
     updateSelectedCount();
 }
 
 function deselectAllFirmware() {
-    document.querySelectorAll('.fw-category').forEach(cb => cb.checked = false);
+    // Only deselect visible checkboxes
+    document.querySelectorAll('.fw-category').forEach(cb => {
+        if (!cb.closest('.d-none')) {
+            cb.checked = false;
+        }
+    });
     updateSelectedCount();
 }
 
 function selectCategory(category) {
-    // Deselect all first
-    document.querySelectorAll('.fw-category').forEach(cb => cb.checked = false);
-    // Select only the specified category
-    document.querySelectorAll(`.fw-category.${category}`).forEach(cb => cb.checked = true);
+    // Deselect all visible checkboxes first
+    document.querySelectorAll('.fw-category').forEach(cb => {
+        if (!cb.closest('.d-none')) {
+            cb.checked = false;
+        }
+    });
+    // Select only the specified category (visible only)
+    document.querySelectorAll(`.fw-category.${category}`).forEach(cb => {
+        if (!cb.closest('.d-none')) {
+            cb.checked = true;
+        }
+    });
     updateSelectedCount();
 }
 
@@ -537,10 +559,13 @@ function getSelectedFirmwareTypes() {
         other_platform: []
     };
     
+    // Only get visible checked checkboxes
     document.querySelectorAll('.fw-category:checked').forEach(cb => {
-        const category = Array.from(cb.classList).find(c => ['dc_scm', 'ovl2', 'other_platform'].includes(c));
-        if (category) {
-            selected[category].push(cb.value);
+        if (!cb.closest('.d-none')) {
+            const category = Array.from(cb.classList).find(c => ['dc_scm', 'ovl2', 'other_platform'].includes(c));
+            if (category) {
+                selected[category].push(cb.value);
+            }
         }
     });
     
