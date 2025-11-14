@@ -286,7 +286,7 @@ def init_db():
                 conn.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0")
                 logger.info("Added must_change_password column to users table")
             
-            # Migrate data from is_admin to role
+            # Migrate data from is_admin to role (only for users without a role set)
             if 'is_admin' in columns:
                 conn.execute("""
                     UPDATE users 
@@ -294,7 +294,7 @@ def init_db():
                         WHEN is_admin = 1 THEN 'admin'
                         ELSE 'editor'
                     END
-                    WHERE role IS NULL OR role = '' OR role = 'viewer'
+                    WHERE role IS NULL OR role = ''
                 """)
                 conn.commit()
                 logger.info("Migrated is_admin to role column")
@@ -981,14 +981,23 @@ def login():
                 flash(f'Welcome back, {username}!', 'success')
                 
                 # Check if user must change password
-                must_change = user.get('must_change_password', 0)
+                try:
+                    must_change = user['must_change_password']
+                except (KeyError, IndexError):
+                    must_change = 0
+                
                 if must_change:
                     flash('You must change your password before continuing.', 'warning')
                     return redirect(url_for('change_password', force=1))
                 
-                # Redirect to next page or admin panel
+                # Redirect to next page, admin panel for admins, or program selector for others
                 next_page = request.args.get('next')
-                return redirect(next_page if next_page else url_for('admin'))
+                if next_page:
+                    return redirect(next_page)
+                elif role == 'admin':
+                    return redirect(url_for('admin'))
+                else:
+                    return redirect(url_for('select_program'))
             else:
                 flash('Invalid username or password', 'error')
     
