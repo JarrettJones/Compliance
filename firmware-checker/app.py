@@ -307,6 +307,21 @@ def init_db():
         except:
             pass  # Column already exists
         
+        # Add password_hash and username columns to access_requests if they don't exist
+        try:
+            cursor = conn.execute("PRAGMA table_info(access_requests)")
+            access_request_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'password_hash' not in access_request_columns:
+                conn.execute("ALTER TABLE access_requests ADD COLUMN password_hash TEXT")
+                logger.info("Added password_hash column to access_requests table")
+            
+            if 'username' not in access_request_columns:
+                conn.execute("ALTER TABLE access_requests ADD COLUMN username TEXT")
+                logger.info("Added username column to access_requests table")
+        except Exception as e:
+            logger.warning(f"Access requests migration warning (may be safe to ignore): {e}")
+        
         # Migrate systems table: Add program_id column
         try:
             cursor = conn.execute("PRAGMA table_info(systems)")
@@ -1040,13 +1055,25 @@ def request_access():
     """Request access to the application"""
     if request.method == 'POST':
         email = request.form.get('email', '').strip()
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        confirm_password = request.form.get('confirm_password', '').strip()
         first_name = request.form.get('first_name', '').strip()
         last_name = request.form.get('last_name', '').strip()
         team = request.form.get('team', '').strip()
         business_justification = request.form.get('business_justification', '').strip()
         
-        if not email or not first_name or not business_justification:
-            flash('Email, first name, and business justification are required', 'error')
+        # Validation
+        if not all([email, username, password, first_name, business_justification]):
+            flash('Email, username, password, first name, and business justification are required', 'error')
+            return redirect(url_for('request_access'))
+        
+        if password != confirm_password:
+            flash('Passwords do not match', 'error')
+            return redirect(url_for('request_access'))
+        
+        if len(password) < 8:
+            flash('Password must be at least 8 characters long', 'error')
             return redirect(url_for('request_access'))
         
         # Check if email already has a pending request
@@ -1060,7 +1087,7 @@ def request_access():
                 flash('You already have a pending access request. Please wait for admin approval.', 'warning')
                 return redirect(url_for('login'))
             
-            # Check if user already exists
+            # Check if user already exists with this email
             existing_user = conn.execute(
                 "SELECT * FROM users WHERE email = ?",
                 (email,)
@@ -1070,14 +1097,27 @@ def request_access():
                 flash('An account with this email already exists. Please try logging in.', 'warning')
                 return redirect(url_for('login'))
             
-            # Create access request
+            # Check if username is already taken
+            existing_username = conn.execute(
+                "SELECT * FROM users WHERE username = ?",
+                (username,)
+            ).fetchone()
+            
+            if existing_username:
+                flash('Username is already taken. Please choose a different username.', 'error')
+                return redirect(url_for('request_access'))
+            
+            # Hash the password
+            password_hash = generate_password_hash(password)
+            
+            # Create access request with username and hashed password
             conn.execute('''
-                INSERT INTO access_requests (email, first_name, last_name, team, business_justification)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (email, first_name, last_name, team, business_justification))
+                INSERT INTO access_requests (email, username, password_hash, first_name, last_name, team, business_justification)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (email, username, password_hash, first_name, last_name, team, business_justification))
             conn.commit()
         
-        flash('Access request submitted successfully! An administrator will review your request.', 'success')
+        flash('Access request submitted successfully! An administrator will review your request. If approved, you can log in with your chosen username and password.', 'success')
         return redirect(url_for('login'))
     
     return render_template('request_access.html')
@@ -1136,20 +1176,17 @@ def approve_access_request(request_id):
             flash('This request has already been processed', 'warning')
             return redirect(url_for('admin_access_requests'))
         
-        # Generate username from email
-        username = access_request['email'].split('@')[0]
+        # Use username from access request
+        username = access_request['username']
         
-        # Check if username exists, append number if needed
-        base_username = username
-        counter = 1
-        while conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone():
-            username = f"{base_username}{counter}"
-            counter += 1
+        # Verify username doesn't exist (double-check even though we validated during request)
+        existing_user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        if existing_user:
+            flash(f'Username {username} is already taken. Please contact the user to submit a new request with a different username.', 'error')
+            return redirect(url_for('admin_access_requests'))
         
-        # Generate temporary password
-        import secrets
-        temp_password = secrets.token_urlsafe(12)
-        password_hash = generate_password_hash(temp_password)
+        # Use password hash from access request (user chose their own password)
+        password_hash = access_request['password_hash']
         
         # Get requested role from form, default to viewer
         role = request.form.get('role', 'viewer')
@@ -1157,10 +1194,10 @@ def approve_access_request(request_id):
             role = 'viewer'
         
         try:
-            # Create user account
+            # Create user account with their chosen password (no must_change_password needed!)
             conn.execute('''
-                INSERT INTO users (username, password_hash, role, email, first_name, last_name, team, must_change_password)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                INSERT INTO users (username, password_hash, role, email, first_name, last_name, team)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (username, password_hash, role, access_request['email'], 
                   access_request['first_name'], access_request['last_name'], 
                   access_request['team']))
@@ -1172,12 +1209,11 @@ def approve_access_request(request_id):
                     notes = ?
                 WHERE id = ?
             ''', (session['user_id'], datetime.now().isoformat(), 
-                  f'User account created: {username}', request_id))
+                  f'User account activated: {username}', request_id))
             
             conn.commit()
             
-            flash(f'Access request approved! User account created: {username} | Temporary password: {temp_password}', 'success')
-            flash('Please share the temporary password with the user securely.', 'info')
+            flash(f'Access request approved! User account activated: {username}. User can now log in with their chosen credentials.', 'success')
             
         except Exception as e:
             flash(f'Error creating user account: {str(e)}', 'error')
