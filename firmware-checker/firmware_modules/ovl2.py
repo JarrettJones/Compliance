@@ -128,8 +128,8 @@ class OVL2Checker:
                     print(f"[OVL2] Skipping MANA driver check: {skip_reason}")
                     
                     results['firmware_versions']['MANA Driver (Windows)'] = {
-                        'version': 'NOT_CHECKED',
-                        'status': 'not_checked',
+                        'version': 'NOT CONFIGURED - OS Credentials Required',
+                        'status': 'error',
                         'error': skip_reason,
                         'checked_at': datetime.now().isoformat(),
                         'method': 'mana_driver_check'
@@ -1875,8 +1875,8 @@ class OVL2Checker:
                         skip_reason = "No target computer specified for MANA driver check"
                     
                     return {
-                        'version': 'NOT_CHECKED',
-                        'status': 'not_checked',
+                        'version': 'NOT CONFIGURED - OS Credentials Required',
+                        'status': 'error',
                         'error': skip_reason,
                         'checked_at': datetime.now().isoformat(),
                         'method': 'mana_driver_check'
