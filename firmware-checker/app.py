@@ -141,7 +141,9 @@ def init_db():
                 firmware_data TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'success',
                 error_message TEXT,
-                FOREIGN KEY (system_id) REFERENCES systems (id)
+                user_id INTEGER,
+                FOREIGN KEY (system_id) REFERENCES systems (id),
+                FOREIGN KEY (user_id) REFERENCES users (id)
             )
         ''')
         
@@ -298,6 +300,15 @@ def init_db():
                 """)
                 conn.commit()
                 logger.info("Migrated is_admin to role column")
+            
+            # Add user_id column to firmware_checks if it doesn't exist
+            cursor = conn.execute("PRAGMA table_info(firmware_checks)")
+            fc_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'user_id' not in fc_columns:
+                conn.execute("ALTER TABLE firmware_checks ADD COLUMN user_id INTEGER")
+                logger.info("Added user_id column to firmware_checks table")
+                conn.commit()
         except Exception as e:
             logger.warning(f"Migration warning (may be safe to ignore): {e}")
         
@@ -1660,9 +1671,11 @@ def index():
         
         # Get recent firmware checks for this program
         recent_checks = conn.execute(f'''
-            SELECT fc.*, s.name as system_name
+            SELECT fc.*, s.name as system_name, u.username as checked_by_username,
+                   u.first_name as checked_by_first_name, u.last_name as checked_by_last_name
             FROM firmware_checks fc
             JOIN systems s ON fc.system_id = s.id
+            LEFT JOIN users u ON fc.user_id = u.id
             {program_filter}
             ORDER BY fc.check_date DESC
             LIMIT 5
@@ -2620,9 +2633,13 @@ def check_result(check_id):
     with get_db_connection() as conn:
         # Get the specific check
         check = conn.execute('''
-            SELECT fc.*, s.name as system_name, s.rscm_ip, s.rscm_port, s.program_id
+            SELECT fc.*, s.name as system_name, s.rscm_ip, s.rscm_port, s.program_id,
+                   u.username as checked_by_username,
+                   u.first_name as checked_by_first_name, 
+                   u.last_name as checked_by_last_name
             FROM firmware_checks fc
             JOIN systems s ON fc.system_id = s.id
+            LEFT JOIN users u ON fc.user_id = u.id
             WHERE fc.id = ?
         ''', (check_id,)).fetchone()
         
@@ -2886,9 +2903,9 @@ def api_check_firmware():
         # Create initial "running" entry in database
         with get_db_connection() as conn:
             cursor = conn.execute('''
-                INSERT INTO firmware_checks (system_id, firmware_data, status, recipe_id)
-                VALUES (?, ?, ?, ?)
-            ''', (system_id, '{"status": "initializing", "message": "Preparing firmware check..."}', 'running', recipe_id))
+                INSERT INTO firmware_checks (system_id, firmware_data, status, recipe_id, user_id)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (system_id, '{"status": "initializing", "message": "Preparing firmware check..."}', 'running', recipe_id, session.get('user_id')))
             check_id = cursor.lastrowid
             conn.commit()
         

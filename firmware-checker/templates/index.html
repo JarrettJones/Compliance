@@ -318,6 +318,18 @@
                                     <h6 class="mb-1">{{ check.system_name }}</h6>
                                     <small class="text-muted">{{ check.check_date[:19] }}</small>
                                 </div>
+                                {% if check.checked_by_username %}
+                                <div class="mb-1">
+                                    <small class="text-muted">
+                                        <i class="bi bi-person"></i> 
+                                        {% if check.checked_by_first_name and check.checked_by_last_name %}
+                                            {{ check.checked_by_first_name }} {{ check.checked_by_last_name }}
+                                        {% else %}
+                                            {{ check.checked_by_username }}
+                                        {% endif %}
+                                    </small>
+                                </div>
+                                {% endif %}
                                 <div class="d-flex justify-content-between align-items-center">
                                     <span class="badge bg-{{ 'warning' if check.status == 'running' else ('success' if check.status == 'success' else 'danger') }}">
                                         {% if check.status == 'running' %}

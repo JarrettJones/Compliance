@@ -46,6 +46,15 @@
                                 </span>
                             </li>
                             <li><strong>Date:</strong> {{ check.check_date[:19] }}</li>
+                            {% if check.checked_by_username %}
+                            <li><strong>Run By:</strong> 
+                                {% if check.checked_by_first_name and check.checked_by_last_name %}
+                                    {{ check.checked_by_first_name }} {{ check.checked_by_last_name }} ({{ check.checked_by_username }})
+                                {% else %}
+                                    {{ check.checked_by_username }}
+                                {% endif %}
+                            </li>
+                            {% endif %}
                             {% if check.error_message %}
                             <li><strong>Error:</strong> <span class="text-danger">{{ check.error_message }}</span></li>
                             {% endif %}
