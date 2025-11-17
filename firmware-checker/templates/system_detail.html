@@ -83,6 +83,17 @@
                     <dt class="col-sm-5">Created:</dt>
                     <dd class="col-sm-7">{{ system.created_at[:19] if system.created_at else 'Unknown' }}</dd>
                     
+                    {% if system.created_by_username %}
+                    <dt class="col-sm-5">Created By:</dt>
+                    <dd class="col-sm-7">
+                        {% if system.created_by_first_name and system.created_by_last_name %}
+                            {{ system.created_by_first_name }} {{ system.created_by_last_name }}
+                        {% else %}
+                            {{ system.created_by_username }}
+                        {% endif %}
+                    </dd>
+                    {% endif %}
+                    
                     <dt class="col-sm-5">Updated:</dt>
                     <dd class="col-sm-7">{{ system.updated_at[:19] if system.updated_at else 'Unknown' }}</dd>
                 </dl>

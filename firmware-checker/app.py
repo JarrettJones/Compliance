@@ -125,10 +125,12 @@ def init_db():
                 rscm_port INTEGER NOT NULL DEFAULT 22,
                 description TEXT,
                 program_id INTEGER,
+                created_by INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(name, rscm_ip, rscm_port),
-                FOREIGN KEY (program_id) REFERENCES programs (id)
+                FOREIGN KEY (program_id) REFERENCES programs (id),
+                FOREIGN KEY (created_by) REFERENCES users (id)
             )
         ''')
         
@@ -308,6 +310,15 @@ def init_db():
             if 'user_id' not in fc_columns:
                 conn.execute("ALTER TABLE firmware_checks ADD COLUMN user_id INTEGER")
                 logger.info("Added user_id column to firmware_checks table")
+                conn.commit()
+            
+            # Add created_by column to systems if it doesn't exist
+            cursor = conn.execute("PRAGMA table_info(systems)")
+            sys_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'created_by' not in sys_columns:
+                conn.execute("ALTER TABLE systems ADD COLUMN created_by INTEGER")
+                logger.info("Added created_by column to systems table")
                 conn.commit()
         except Exception as e:
             logger.warning(f"Migration warning (may be safe to ignore): {e}")
@@ -2150,9 +2161,13 @@ def systems():
         systems_rows = conn.execute('''
             SELECT s.*, 
                    COUNT(fc.id) as check_count,
-                   MAX(fc.check_date) as last_check
+                   MAX(fc.check_date) as last_check,
+                   u.username as created_by_username,
+                   u.first_name as created_by_first_name,
+                   u.last_name as created_by_last_name
             FROM systems s
             LEFT JOIN firmware_checks fc ON s.id = fc.system_id
+            LEFT JOIN users u ON s.created_by = u.id
             GROUP BY s.id
             ORDER BY s.name
         ''').fetchall()
@@ -2308,15 +2323,16 @@ def add_system_metadata():
                 cursor = conn.execute('''
                     INSERT INTO systems (
                         name, rscm_ip, rscm_port, 
-                        description, program_id
+                        description, program_id, created_by
                     )
-                    VALUES (?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 ''', (
                     pending['serial_number'],
                     pending['rscm_ip'],
                     pending['system_port'],
                     full_description,
-                    program_id
+                    program_id,
+                    session.get('user_id')
                 ))
                 system_id = cursor.lastrowid
                 
@@ -2353,7 +2369,15 @@ def add_system_metadata():
 def system_detail(system_id):
     """Show system details and firmware checks"""
     with get_db_connection() as conn:
-        system = conn.execute('SELECT * FROM systems WHERE id = ?', (system_id,)).fetchone()
+        system = conn.execute('''
+            SELECT s.*,
+                   u.username as created_by_username,
+                   u.first_name as created_by_first_name,
+                   u.last_name as created_by_last_name
+            FROM systems s
+            LEFT JOIN users u ON s.created_by = u.id
+            WHERE s.id = ?
+        ''', (system_id,)).fetchone()
         if not system:
             flash('System not found!', 'error')
             return redirect(url_for('systems'))

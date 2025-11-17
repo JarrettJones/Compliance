@@ -310,11 +310,22 @@ function generateTableRow(system) {
     const locationInfo = [metadata.location, metadata.building, metadata.room].filter(x => x).join(', ') || 'Not specified';
     const lastCheck = system.last_check ? system.last_check.substring(0, 19) : '<small class="text-warning">Never</small>';
     
+    // Format created by info
+    let createdByInfo = '';
+    if (system.created_by_username) {
+        if (system.created_by_first_name && system.created_by_last_name) {
+            createdByInfo = `<br><small class="text-muted"><i class="bi bi-person-plus"></i> ${system.created_by_first_name} ${system.created_by_last_name}</small>`;
+        } else {
+            createdByInfo = `<br><small class="text-muted"><i class="bi bi-person-plus"></i> ${system.created_by_username}</small>`;
+        }
+    }
+    
     return `
         <tr>
             <td>
                 <strong>${system.name}</strong>
                 ${metadata.hostname ? `<br><small class="text-muted">(${metadata.hostname})</small>` : ''}
+                ${createdByInfo}
             </td>
             <td><code>${system.rscm_ip}</code></td>
             <td><span class="badge bg-secondary">${system.rscm_port}</span></td>
