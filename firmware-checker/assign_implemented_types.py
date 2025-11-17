@@ -33,19 +33,19 @@ def assign_implemented_firmware_types():
         'M.2',
         'Windows OS Version',
         
-        # OVL2 - implemented
+        # OVL2 - implemented (11 types)
         'FPGA Agilex (App Image w/ OpRom)',
         'Cyclone V Image',
         'Cyclone V PFMID',
         'OVL SOC FIP',
         'OVL SOC FIP PFMID',
         'SOC Test OS (STOS)',
-        'Host FPGA Driver & Tools',
         'SOC FPGA Driver',
         'MANA Driver (Windows)',
         'Glacier Cerberus FW',
         'Glacier Cerberus Utility',
         'Glacier Peak CFM',
+        # Note: 'Host FPGA Driver & Tools' removed until implementation is complete
     ]
     
     # Get Echo Falls program
