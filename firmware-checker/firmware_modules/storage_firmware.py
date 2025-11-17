@@ -119,7 +119,19 @@ class StorageFirmwareChecker:
             }
             
         except Exception as e:
+            error_str = str(e).lower()
             logger.error(f"Error checking storage firmware on {computer_name}: {str(e)}")
+            
+            # Check if it's a connection/network error
+            if any(keyword in error_str for keyword in ['connection', 'network', 'unreachable', 'timeout', 'wsman', 'winrm', 'refused']):
+                return {
+                    'status': 'error',
+                    'error': f'Cannot connect to {computer_name}: {str(e)}',
+                    'version': 'UNREACHABLE - Check Network',
+                    'raw_output': '',
+                    'storage_devices': {}
+                }
+            
             return {
                 'status': 'error',
                 'error': str(e),
