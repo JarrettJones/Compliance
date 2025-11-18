@@ -1735,7 +1735,7 @@ def index():
                 WHERE fc.user_id = ?
                 {' AND ' + program_filter.replace('WHERE ', '') if program_filter else ''}
                 ORDER BY fc.check_date DESC
-                LIMIT 10
+                LIMIT 5
             ''', [user_id] + program_params).fetchall()
         
         stats = {
