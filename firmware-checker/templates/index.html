@@ -256,9 +256,9 @@
                 <h5 class="mb-0"><i class="bi bi-person-check"></i> My Recent Checks</h5>
                 <small>Firmware checks you've run</small>
             </div>
-            <div class="card-body">
+            <div class="card-body d-flex flex-column">
                 {% if stats.my_recent_checks %}
-                    <div class="list-group list-group-flush">
+                    <div class="list-group list-group-flush flex-grow-1">
                         {% for check in stats.my_recent_checks %}
                             <a href="{% if check.status == 'running' %}{{ url_for('check_firmware', system_id=check.system_id) }}{% else %}{{ url_for('check_result', check_id=check.id) }}{% endif %}" class="list-group-item list-group-item-action">
                                 <div class="d-flex w-100 justify-content-between">
@@ -288,7 +288,7 @@
                             </a>
                         {% endfor %}
                     </div>
-                    <div class="text-center mt-3">
+                    <div class="text-center mt-3 mt-auto">
                         <small class="text-muted">
                             <i class="bi bi-info-circle"></i> Click any check above to view detailed results
                         </small>
@@ -311,9 +311,9 @@
                 <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Firmware Checks</h5>
                 <small class="text-muted">Status indicates check completion, not firmware health</small>
             </div>
-            <div class="card-body recent-checks">
+            <div class="card-body recent-checks d-flex flex-column">
                 {% if stats.recent_checks %}
-                    <div class="list-group list-group-flush">
+                    <div class="list-group list-group-flush flex-grow-1">
                         {% for check in stats.recent_checks %}
                             <a href="{% if check.status == 'running' %}{{ url_for('check_firmware', system_id=check.system_id) }}{% else %}{{ url_for('check_result', check_id=check.id) }}{% endif %}" class="list-group-item list-group-item-action">
                                 <div class="d-flex w-100 justify-content-between">
@@ -355,7 +355,7 @@
                             </a>
                         {% endfor %}
                     </div>
-                    <div class="text-center mt-3">
+                    <div class="text-center mt-3 mt-auto">
                         <small class="text-muted">
                             <i class="bi bi-info-circle"></i> Click any check above to view detailed results
                         </small>
