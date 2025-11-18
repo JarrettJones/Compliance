@@ -7,6 +7,7 @@ let checkInterval = null;
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     initializeApp();
+    initializeThemeToggle();
 });
 
 function initializeApp() {
@@ -234,12 +235,41 @@ function setupSearch(inputId, tableId) {
 
 // Theme management (if needed for future dark mode)
 function setTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute('data-bs-theme', theme);
     localStorage.setItem('theme', theme);
+    updateThemeIcon(theme);
 }
 
 function getTheme() {
     return localStorage.getItem('theme') || 'light';
+}
+
+function initializeThemeToggle() {
+    // Apply saved theme on load
+    const savedTheme = getTheme();
+    document.documentElement.setAttribute('data-bs-theme', savedTheme);
+    updateThemeIcon(savedTheme);
+    
+    // Add click handler to theme toggle button
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', function() {
+            const currentTheme = getTheme();
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            setTheme(newTheme);
+        });
+    }
+}
+
+function updateThemeIcon(theme) {
+    const themeIcon = document.getElementById('themeIcon');
+    if (themeIcon) {
+        if (theme === 'dark') {
+            themeIcon.className = 'bi bi-sun-fill';
+        } else {
+            themeIcon.className = 'bi bi-moon-fill';
+        }
+    }
 }
 
 // Error handling

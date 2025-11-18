@@ -259,3 +259,108 @@ pre {
 .modal-body::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
 }
+
+/* Dark Mode Styles */
+[data-bs-theme="dark"] {
+    color-scheme: dark;
+}
+
+[data-bs-theme="dark"] body {
+    background-color: #212529;
+    color: #dee2e6;
+}
+
+[data-bs-theme="dark"] .card {
+    background-color: #2b3035;
+    color: #dee2e6;
+}
+
+[data-bs-theme="dark"] .card-header {
+    background-color: #343a40;
+    border-bottom-color: #495057;
+}
+
+[data-bs-theme="dark"] .list-group-item {
+    background-color: #2b3035;
+    border-color: #495057;
+    color: #dee2e6;
+}
+
+[data-bs-theme="dark"] .list-group-item-action:hover,
+[data-bs-theme="dark"] .list-group-item-action:focus {
+    background-color: #343a40;
+    color: #fff;
+}
+
+[data-bs-theme="dark"] .table {
+    color: #dee2e6;
+    border-color: #495057;
+}
+
+[data-bs-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: #2b3035;
+}
+
+[data-bs-theme="dark"] .table-hover > tbody > tr:hover > * {
+    background-color: #343a40;
+}
+
+[data-bs-theme="dark"] footer {
+    background-color: #212529 !important;
+    border-top: 1px solid #495057;
+}
+
+[data-bs-theme="dark"] .form-control,
+[data-bs-theme="dark"] .form-select {
+    background-color: #343a40;
+    border-color: #495057;
+    color: #dee2e6;
+}
+
+[data-bs-theme="dark"] .form-control:focus,
+[data-bs-theme="dark"] .form-select:focus {
+    background-color: #343a40;
+    border-color: #0d6efd;
+    color: #dee2e6;
+}
+
+[data-bs-theme="dark"] .modal-content {
+    background-color: #2b3035;
+    color: #dee2e6;
+}
+
+[data-bs-theme="dark"] .modal-header {
+    border-bottom-color: #495057;
+}
+
+[data-bs-theme="dark"] .modal-footer {
+    border-top-color: #495057;
+}
+
+[data-bs-theme="dark"] .text-muted {
+    color: #adb5bd !important;
+}
+
+[data-bs-theme="dark"] .alert {
+    background-color: #343a40;
+    border-color: #495057;
+    color: #dee2e6;
+}
+
+[data-bs-theme="dark"] code {
+    background-color: #343a40;
+    color: #f8f9fa;
+}
+
+[data-bs-theme="dark"] pre {
+    background-color: #2b3035;
+    border-color: #495057;
+}
+
+[data-bs-theme="dark"] .badge {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-bs-theme="dark"] .navbar-text {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
