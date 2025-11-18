@@ -102,9 +102,9 @@ http {
         server_name $hostname localhost;
         
         # SSL Certificate Configuration
-        # Absolute paths to your organization's certificate
-        ssl_certificate      ssl/server.crt;
-        ssl_certificate_key  ssl/server.key;
+        # Using Microsoft-signed certificate from C:\nginx\ssl
+        ssl_certificate      C:/nginx/ssl/server.crt;
+        ssl_certificate_key  C:/nginx/ssl/server.key;
         
         # SSL Settings
         ssl_protocols TLSv1.2 TLSv1.3;
