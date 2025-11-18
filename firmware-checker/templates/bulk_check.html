@@ -150,32 +150,39 @@ async function pollCheckStatus(systemId, checkId) {
         attempts++;
         
         try {
-            const response = await fetch(`${SCRIPT_ROOT}/api/check-status/${checkId}`);
+            // Use the existing system status endpoint
+            const response = await fetch(`${SCRIPT_ROOT}/api/check-status/${systemId}`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
             const data = await response.json();
             
-            if (data.status === 'success') {
+            // Check status
+            if (data.status === 'completed' || data.status === 'success') {
                 clearInterval(pollInterval);
                 updateCheckStatus(systemId, 'success', 'Completed', 
                     `Check completed successfully`, 'bg-success');
                 
                 // Enable view button
                 const viewBtn = document.getElementById(`view-btn-${systemId}`);
-                viewBtn.href = `${SCRIPT_ROOT}/check-result/${checkId}`;
+                viewBtn.href = `${SCRIPT_ROOT}/check-result/${data.check_id}`;
                 viewBtn.style.display = 'inline-block';
                 
                 incrementCompleted();
-            } else if (data.status === 'failed' || data.status === 'error') {
+            } else if (data.status === 'error') {
                 clearInterval(pollInterval);
                 updateCheckStatus(systemId, 'failed', 'Failed', 
-                    data.error_message || 'Check failed', 'bg-danger');
+                    data.error || 'Check failed', 'bg-danger');
                 incrementFailed();
             } else if (data.status === 'running') {
+                const runtime = data.thread_info ? Math.floor(data.thread_info.runtime_seconds) : 0;
                 updateCheckStatus(systemId, 'running', 'Running', 
-                    data.progress_message || 'Check in progress...', 'bg-warning');
+                    `Running... (${runtime}s)`, 'bg-warning');
+            } else if (data.status === 'none') {
+                // No check found yet, keep waiting
+                updateCheckStatus(systemId, 'running', 'Starting', 
+                    'Initializing check...', 'bg-warning');
             }
             
             if (attempts >= maxAttempts) {

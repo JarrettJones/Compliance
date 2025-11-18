@@ -2595,26 +2595,6 @@ def bulk_check():
                          systems=systems,
                          system_ids=system_ids)
 
-@app.route('/api/check-status/<int:check_id>')
-@login_required
-def api_check_status(check_id):
-    """API endpoint to get check status"""
-    with get_db_connection() as conn:
-        check = conn.execute('''
-            SELECT status, error_message 
-            FROM firmware_checks 
-            WHERE id = ?
-        ''', (check_id,)).fetchone()
-        
-        if not check:
-            return jsonify({'error': 'Check not found'}), 404
-        
-        return jsonify({
-            'status': check['status'],
-            'error_message': check['error_message'],
-            'progress_message': 'Check in progress...' if check['status'] == 'running' else None
-        })
-
 @app.route('/check/<int:system_id>')
 @login_required
 def check_firmware(system_id):
