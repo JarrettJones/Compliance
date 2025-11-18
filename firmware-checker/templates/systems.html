@@ -11,6 +11,9 @@
                 <p class="lead">Manage your systems and their firmware checking</p>
             </div>
             <div>
+                <button id="bulkCheckBtn" class="btn btn-success me-2" style="display: none;" onclick="startBulkCheck()">
+                    <i class="bi bi-check-circle-fill"></i> Check Selected (<span id="selectedCount">0</span>)
+                </button>
                 <a href="{{ url_for('add_system') }}" class="btn btn-primary">
                     <i class="bi bi-plus"></i> Add System
                 </a>
@@ -113,6 +116,9 @@
                 <table class="table table-hover">
                     <thead>
                         <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)">
+                            </th>
                             <th>System Name</th>
                             <th>RSCM IP</th>
                             <th>Port</th>
@@ -339,6 +345,9 @@ function generateTableRow(system) {
     
     return `
         <tr>
+            <td>
+                <input type="checkbox" class="system-checkbox" value="${system.id}" onchange="updateSelectedCount()">
+            </td>
             <td>
                 <strong>${system.name}</strong>
                 ${metadata.hostname ? `<br><small class="text-muted">(${metadata.hostname})</small>` : ''}
@@ -586,6 +595,43 @@ function confirmDelete(button) {
     
     var deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
     deleteModal.show();
+}
+
+// Bulk check functionality
+function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('.system-checkbox:checked');
+    const count = checkboxes.length;
+    document.getElementById('selectedCount').textContent = count;
+    document.getElementById('bulkCheckBtn').style.display = count > 0 ? 'inline-block' : 'none';
+    
+    // Update select all checkbox state
+    const allCheckboxes = document.querySelectorAll('.system-checkbox');
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.checked = count === allCheckboxes.length && count > 0;
+        selectAllCheckbox.indeterminate = count > 0 && count < allCheckboxes.length;
+    }
+}
+
+function toggleSelectAll(checkbox) {
+    const checkboxes = document.querySelectorAll('.system-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = checkbox.checked;
+    });
+    updateSelectedCount();
+}
+
+function startBulkCheck() {
+    const checkboxes = document.querySelectorAll('.system-checkbox:checked');
+    const systemIds = Array.from(checkboxes).map(cb => cb.value);
+    
+    if (systemIds.length === 0) {
+        alert('Please select at least one system');
+        return;
+    }
+    
+    // Redirect to bulk check page with selected system IDs
+    window.location.href = `${SCRIPT_ROOT}/bulk-check?systems=${systemIds.join(',')}`;
 }
 </script>
 {% endblock %}

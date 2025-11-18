@@ -2562,6 +2562,59 @@ def edit_system(system_id):
                          u_height=u_height,
                          additional_notes=additional_notes)
 
+@app.route('/bulk-check')
+@login_required
+def bulk_check():
+    """Bulk firmware check page"""
+    system_ids_str = request.args.get('systems', '')
+    if not system_ids_str:
+        flash('No systems selected', 'error')
+        return redirect(url_for('systems'))
+    
+    try:
+        system_ids = [int(sid) for sid in system_ids_str.split(',')]
+    except ValueError:
+        flash('Invalid system IDs', 'error')
+        return redirect(url_for('systems'))
+    
+    with get_db_connection() as conn:
+        # Get system details for selected systems
+        placeholders = ','.join('?' * len(system_ids))
+        systems = conn.execute(f'''
+            SELECT id, name, rscm_ip, rscm_port 
+            FROM systems 
+            WHERE id IN ({placeholders})
+            ORDER BY name
+        ''', system_ids).fetchall()
+        
+        if not systems:
+            flash('No valid systems found', 'error')
+            return redirect(url_for('systems'))
+    
+    return render_template('bulk_check.html', 
+                         systems=systems,
+                         system_ids=system_ids)
+
+@app.route('/api/check-status/<int:check_id>')
+@login_required
+def api_check_status(check_id):
+    """API endpoint to get check status"""
+    with get_db_connection() as conn:
+        check = conn.execute('''
+            SELECT status, error_message 
+            FROM firmware_checks 
+            WHERE id = ?
+        ''', (check_id,)).fetchone()
+        
+        if not check:
+            return jsonify({'error': 'Check not found'}), 404
+        
+        return jsonify({
+            'status': check['status'],
+            'error_message': check['error_message'],
+            'progress_message': 'Check in progress...' if check['status'] == 'running' else None
+        })
+
 @app.route('/check/<int:system_id>')
 @login_required
 def check_firmware(system_id):

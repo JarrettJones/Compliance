@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Firmware Check - Firmware Version Checker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-check-circle-fill"></i> Bulk Firmware Check</h1>
+                <p class="lead">Checking {{ systems|length }} systems in parallel</p>
+            </div>
+            <div>
+                <a href="{{ url_for('systems') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Systems
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Overall Progress -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="mb-3">Overall Progress</h5>
+                <div class="progress" style="height: 30px;">
+                    <div id="overallProgress" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%">
+                        <span id="progressText">0 / {{ systems|length }} complete</span>
+                    </div>
+                </div>
+                <div class="mt-3 text-center">
+                    <span class="badge bg-success me-2">
+                        <i class="bi bi-check-circle"></i> <span id="successCount">0</span> Completed
+                    </span>
+                    <span class="badge bg-warning me-2">
+                        <i class="bi bi-clock"></i> <span id="runningCount">{{ systems|length }}</span> Running
+                    </span>
+                    <span class="badge bg-danger">
+                        <i class="bi bi-x-circle"></i> <span id="failedCount">0</span> Failed
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Individual System Checks -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list-check"></i> System Check Status</h5>
+            </div>
+            <div class="card-body">
+                <div id="checkStatusContainer">
+                    {% for system in systems %}
+                    <div class="check-item mb-3 pb-3 border-bottom" id="check-{{ system.id }}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">
+                                    <span class="status-icon" id="status-icon-{{ system.id }}">
+                                        <i class="bi bi-clock text-warning"></i>
+                                    </span>
+                                    {{ system.name }}
+                                </h6>
+                                <small class="text-muted">{{ system.rscm_ip }}:{{ system.rscm_port }}</small>
+                                <div class="mt-2">
+                                    <span class="badge bg-secondary" id="badge-{{ system.id }}">Queued</span>
+                                    <span class="text-muted small ms-2" id="message-{{ system.id }}">Waiting to start...</span>
+                                </div>
+                            </div>
+                            <div>
+                                <a href="#" class="btn btn-sm btn-outline-primary view-result-btn" 
+                                   id="view-btn-{{ system.id }}" style="display: none;">
+                                    <i class="bi bi-eye"></i> View Result
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const SCRIPT_ROOT = {{ request.script_root|tojson }};
+const systemIds = {{ system_ids|tojson }};
+const checkIds = new Map(); // Map system_id to check_id
+let completedCount = 0;
+let failedCount = 0;
+const totalCount = systemIds.length;
+
+// Start all checks
+async function startAllChecks() {
+    // Start all checks in parallel
+    const promises = systemIds.map(systemId => startCheck(systemId));
+    await Promise.all(promises);
+}
+
+// Start individual check
+async function startCheck(systemId) {
+    try {
+        // Update UI: Starting
+        updateCheckStatus(systemId, 'running', 'Running', 'Starting firmware check...', 'bg-warning');
+        
+        // Initiate check via API
+        const response = await fetch(`${SCRIPT_ROOT}/api/check-firmware`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                system_id: systemId,
+                bulk: true 
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const checkId = data.check_id;
+        checkIds.set(systemId, checkId);
+        
+        // Poll for results
+        pollCheckStatus(systemId, checkId);
+        
+    } catch (error) {
+        console.error(`Error starting check for system ${systemId}:`, error);
+        updateCheckStatus(systemId, 'failed', 'Failed', error.message, 'bg-danger');
+        incrementFailed();
+    }
+}
+
+// Poll check status
+async function pollCheckStatus(systemId, checkId) {
+    const maxAttempts = 120; // 10 minutes max (5 second intervals)
+    let attempts = 0;
+    
+    const pollInterval = setInterval(async () => {
+        attempts++;
+        
+        try {
+            const response = await fetch(`${SCRIPT_ROOT}/api/check-status/${checkId}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                clearInterval(pollInterval);
+                updateCheckStatus(systemId, 'success', 'Completed', 
+                    `Check completed successfully`, 'bg-success');
+                
+                // Enable view button
+                const viewBtn = document.getElementById(`view-btn-${systemId}`);
+                viewBtn.href = `${SCRIPT_ROOT}/check-result/${checkId}`;
+                viewBtn.style.display = 'inline-block';
+                
+                incrementCompleted();
+            } else if (data.status === 'failed' || data.status === 'error') {
+                clearInterval(pollInterval);
+                updateCheckStatus(systemId, 'failed', 'Failed', 
+                    data.error_message || 'Check failed', 'bg-danger');
+                incrementFailed();
+            } else if (data.status === 'running') {
+                updateCheckStatus(systemId, 'running', 'Running', 
+                    data.progress_message || 'Check in progress...', 'bg-warning');
+            }
+            
+            if (attempts >= maxAttempts) {
+                clearInterval(pollInterval);
+                updateCheckStatus(systemId, 'failed', 'Timeout', 
+                    'Check timed out after 10 minutes', 'bg-danger');
+                incrementFailed();
+            }
+        } catch (error) {
+            console.error(`Error polling status for system ${systemId}:`, error);
+            clearInterval(pollInterval);
+            updateCheckStatus(systemId, 'failed', 'Error', 
+                'Failed to get check status', 'bg-danger');
+            incrementFailed();
+        }
+    }, 5000); // Poll every 5 seconds
+}
+
+// Update check status UI
+function updateCheckStatus(systemId, status, badgeText, message, badgeClass) {
+    const statusIcon = document.getElementById(`status-icon-${systemId}`);
+    const badge = document.getElementById(`badge-${systemId}`);
+    const messageEl = document.getElementById(`message-${systemId}`);
+    
+    // Update icon
+    let iconHtml = '';
+    if (status === 'success') {
+        iconHtml = '<i class="bi bi-check-circle-fill text-success"></i>';
+    } else if (status === 'failed') {
+        iconHtml = '<i class="bi bi-x-circle-fill text-danger"></i>';
+    } else if (status === 'running') {
+        iconHtml = '<i class="bi bi-clock text-warning"></i>';
+    }
+    statusIcon.innerHTML = iconHtml;
+    
+    // Update badge
+    badge.className = `badge ${badgeClass}`;
+    badge.textContent = badgeText;
+    
+    // Update message
+    messageEl.textContent = message;
+}
+
+// Increment counters
+function incrementCompleted() {
+    completedCount++;
+    document.getElementById('successCount').textContent = completedCount;
+    document.getElementById('runningCount').textContent = totalCount - completedCount - failedCount;
+    updateOverallProgress();
+}
+
+function incrementFailed() {
+    failedCount++;
+    document.getElementById('failedCount').textContent = failedCount;
+    document.getElementById('runningCount').textContent = totalCount - completedCount - failedCount;
+    updateOverallProgress();
+}
+
+function updateOverallProgress() {
+    const progress = ((completedCount + failedCount) / totalCount) * 100;
+    const progressBar = document.getElementById('overallProgress');
+    const progressText = document.getElementById('progressText');
+    
+    progressBar.style.width = progress + '%';
+    progressBar.setAttribute('aria-valuenow', progress);
+    progressText.textContent = `${completedCount + failedCount} / ${totalCount} complete`;
+    
+    // Change color based on status
+    if (progress === 100) {
+        progressBar.classList.remove('progress-bar-animated');
+        if (failedCount === 0) {
+            progressBar.classList.add('bg-success');
+        } else if (completedCount === 0) {
+            progressBar.classList.add('bg-danger');
+        } else {
+            progressBar.classList.add('bg-warning');
+        }
+    }
+}
+
+// Start checks when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    startAllChecks();
+});
+</script>
+{% endblock %}
