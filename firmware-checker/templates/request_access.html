@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}Request Access - Firmware Version Checker{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow mt-5">
+            <div class="card-header bg-info text-white text-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-person-check"></i> Request Access
+                </h4>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">
+                    Fill out this form to request access to the Firmware Checker application. 
+                    Choose your own username and password - an administrator will review and activate your account.
+                </p>
+                
+                <form method="POST" action="{{ url_for('request_access') }}">
+                    <div class="mb-3">
+                        <label for="email" class="form-label">
+                            <i class="bi bi-envelope"></i> Email <span class="text-danger">*</span>
+                        </label>
+                        <input type="email" 
+                               class="form-control" 
+                               id="email" 
+                               name="email" 
+                               required 
+                               autofocus
+                               placeholder="your.email@microsoft.com">
+                        <small class="text-muted">Use your Microsoft email address</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="username" class="form-label">
+                            <i class="bi bi-person-badge"></i> Username <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="username" 
+                               name="username" 
+                               required
+                               placeholder="Choose a username"
+                               pattern="[a-zA-Z0-9_-]{3,20}"
+                               title="3-20 characters: letters, numbers, underscore, or hyphen"
+                               maxlength="20">
+                        <small class="text-muted">3-20 characters: letters, numbers, underscore, or hyphen</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="password" class="form-label">
+                            <i class="bi bi-key"></i> Password <span class="text-danger">*</span>
+                        </label>
+                        <input type="password" 
+                               class="form-control" 
+                               id="password" 
+                               name="password" 
+                               required
+                               minlength="8"
+                               autocomplete="new-password"
+                               placeholder="Choose a secure password">
+                        <small class="text-muted">Minimum 8 characters</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="confirm_password" class="form-label">
+                            <i class="bi bi-key-fill"></i> Confirm Password <span class="text-danger">*</span>
+                        </label>
+                        <input type="password" 
+                               class="form-control" 
+                               id="confirm_password" 
+                               name="confirm_password" 
+                               required
+                               minlength="8"
+                               autocomplete="new-password"
+                               placeholder="Confirm your password">
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="mb-3">
+                        <label for="first_name" class="form-label">
+                            <i class="bi bi-person"></i> First Name <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="first_name" 
+                               name="first_name" 
+                               required
+                               placeholder="Enter your first name"
+                               maxlength="50">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="last_name" class="form-label">
+                            <i class="bi bi-person"></i> Last Name
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="last_name" 
+                               name="last_name" 
+                               placeholder="Enter your last name"
+                               maxlength="50">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="team" class="form-label">
+                            <i class="bi bi-people"></i> Team
+                        </label>
+                        <select class="form-select" id="team" name="team">
+                            <option value="">Select your team...</option>
+                            <option value="SIT">SIT</option>
+                            <option value="SLGS">SLGS</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="business_justification" class="form-label">
+                            <i class="bi bi-card-text"></i> Business Justification <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control" 
+                                  id="business_justification" 
+                                  name="business_justification" 
+                                  rows="4" 
+                                  required
+                                  placeholder="Please explain why you need access to this application and how you will use it..."
+                                  maxlength="500"></textarea>
+                        <small class="text-muted">Maximum 500 characters</small>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> 
+                        <strong>Note:</strong> Your password is securely hashed and will never be visible to administrators. 
+                        Once approved, you can log in immediately with your chosen credentials.
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-info">
+                            <i class="bi bi-send"></i> Submit Request
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer text-center text-muted small">
+                Already have an account? <a href="{{ url_for('login') }}">Login here</a>
+            </div>
+        </div>
+        
+        <div class="text-center mt-3">
+            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Password matching validation
+document.getElementById('confirm_password').addEventListener('input', function() {
+    const password = document.getElementById('password').value;
+    const confirmPassword = this.value;
+    
+    if (password && confirmPassword && password !== confirmPassword) {
+        this.setCustomValidity('Passwords do not match');
+    } else {
+        this.setCustomValidity('');
+    }
+});
+
+// Also check when main password changes
+document.getElementById('password').addEventListener('input', function() {
+    const confirmPassword = document.getElementById('confirm_password');
+    if (confirmPassword.value) {
+        confirmPassword.dispatchEvent(new Event('input'));
+    }
+});
+</script>
+{% endblock %}

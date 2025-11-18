@@ -9,8 +9,12 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.wrappers import Response
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
 import sqlite3
 import os
+import sys
+import signal
 from datetime import datetime
 import logging
 from contextlib import contextmanager
@@ -98,6 +102,20 @@ def get_db_connection():
 def init_db():
     """Initialize the database with required tables"""
     with get_db_connection() as conn:
+        # Programs table - Different programs that use firmware checking
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS programs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT,
+                check_methodology TEXT NOT NULL,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT valid_methodology CHECK (check_methodology IN ('echo_falls', 'standard', 'custom'))
+            )
+        ''')
+        
         # Systems table
         conn.execute('''
             CREATE TABLE IF NOT EXISTS systems (
@@ -106,9 +124,13 @@ def init_db():
                 rscm_ip TEXT NOT NULL,
                 rscm_port INTEGER NOT NULL DEFAULT 22,
                 description TEXT,
+                program_id INTEGER,
+                created_by INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(name, rscm_ip, rscm_port)
+                UNIQUE(name, rscm_ip, rscm_port),
+                FOREIGN KEY (program_id) REFERENCES programs (id),
+                FOREIGN KEY (created_by) REFERENCES users (id)
             )
         ''')
         
@@ -121,7 +143,9 @@ def init_db():
                 firmware_data TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'success',
                 error_message TEXT,
-                FOREIGN KEY (system_id) REFERENCES systems (id)
+                user_id INTEGER,
+                FOREIGN KEY (system_id) REFERENCES systems (id),
+                FOREIGN KEY (user_id) REFERENCES users (id)
             )
         ''')
         
@@ -135,23 +159,246 @@ def init_db():
             )
         ''')
         
+        # Junction table for program-firmware type associations
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS program_firmware_types (
+                program_id INTEGER NOT NULL,
+                firmware_type_id INTEGER NOT NULL,
+                PRIMARY KEY (program_id, firmware_type_id),
+                FOREIGN KEY (program_id) REFERENCES programs (id) ON DELETE CASCADE,
+                FOREIGN KEY (firmware_type_id) REFERENCES firmware_types (id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Program custom fields - defines what custom fields a program requires
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS program_custom_fields (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                program_id INTEGER NOT NULL,
+                field_name TEXT NOT NULL,
+                field_label TEXT NOT NULL,
+                field_type TEXT NOT NULL DEFAULT 'text',
+                is_required INTEGER DEFAULT 0,
+                placeholder TEXT,
+                help_text TEXT,
+                display_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(program_id, field_name),
+                FOREIGN KEY (program_id) REFERENCES programs (id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # System custom field values - stores actual values for custom fields
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS system_custom_field_values (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                system_id INTEGER NOT NULL,
+                field_id INTEGER NOT NULL,
+                field_value TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(system_id, field_id),
+                FOREIGN KEY (system_id) REFERENCES systems (id) ON DELETE CASCADE,
+                FOREIGN KEY (field_id) REFERENCES program_custom_fields (id) ON DELETE CASCADE
+            )
+        ''')
+        
         # Firmware recipes table
         conn.execute('''
             CREATE TABLE IF NOT EXISTS firmware_recipes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
                 description TEXT,
                 firmware_versions TEXT NOT NULL,
+                program_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(name, program_id),
+                FOREIGN KEY (program_id) REFERENCES programs (id)
             )
         ''')
+        
+        # Users table for authentication
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'viewer',
+                is_active INTEGER DEFAULT 1,
+                email TEXT,
+                first_name TEXT,
+                last_name TEXT,
+                team TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP,
+                CONSTRAINT valid_role CHECK (role IN ('admin', 'editor', 'viewer'))
+            )
+        ''')
+        
+        # Access requests table for user account requests
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS access_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                first_name TEXT NOT NULL,
+                last_name TEXT,
+                team TEXT,
+                business_justification TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                reviewed_by INTEGER,
+                reviewed_at TIMESTAMP,
+                notes TEXT,
+                CONSTRAINT valid_status CHECK (status IN ('pending', 'approved', 'rejected')),
+                FOREIGN KEY (reviewed_by) REFERENCES users (id)
+            )
+        ''')
+        
+        # Migrate existing users: Add new columns and migrate from is_admin
+        try:
+            # Check what columns exist
+            cursor = conn.execute("PRAGMA table_info(users)")
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            # Add missing columns
+            if 'role' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'viewer'")
+                logger.info("Added role column to users table")
+            
+            if 'is_active' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1")
+                logger.info("Added is_active column to users table")
+            
+            if 'email' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
+                logger.info("Added email column to users table")
+            
+            if 'first_name' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
+                logger.info("Added first_name column to users table")
+            
+            if 'last_name' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN last_name TEXT")
+                logger.info("Added last_name column to users table")
+            
+            if 'team' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN team TEXT")
+                logger.info("Added team column to users table")
+            
+            if 'must_change_password' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0")
+                logger.info("Added must_change_password column to users table")
+            
+            # Migrate data from is_admin to role (only for users without a role set)
+            if 'is_admin' in columns:
+                conn.execute("""
+                    UPDATE users 
+                    SET role = CASE 
+                        WHEN is_admin = 1 THEN 'admin'
+                        ELSE 'editor'
+                    END
+                    WHERE role IS NULL OR role = ''
+                """)
+                conn.commit()
+                logger.info("Migrated is_admin to role column")
+            
+            # Add user_id column to firmware_checks if it doesn't exist
+            cursor = conn.execute("PRAGMA table_info(firmware_checks)")
+            fc_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'user_id' not in fc_columns:
+                conn.execute("ALTER TABLE firmware_checks ADD COLUMN user_id INTEGER")
+                logger.info("Added user_id column to firmware_checks table")
+                conn.commit()
+            
+            # Add created_by column to systems if it doesn't exist
+            cursor = conn.execute("PRAGMA table_info(systems)")
+            sys_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'created_by' not in sys_columns:
+                conn.execute("ALTER TABLE systems ADD COLUMN created_by INTEGER")
+                logger.info("Added created_by column to systems table")
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"Migration warning (may be safe to ignore): {e}")
         
         # Add recipe_id column to firmware_checks if it doesn't exist
         try:
             conn.execute('ALTER TABLE firmware_checks ADD COLUMN recipe_id INTEGER')
         except:
             pass  # Column already exists
+        
+        # Add password_hash and username columns to access_requests if they don't exist
+        try:
+            cursor = conn.execute("PRAGMA table_info(access_requests)")
+            access_request_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'password_hash' not in access_request_columns:
+                conn.execute("ALTER TABLE access_requests ADD COLUMN password_hash TEXT")
+                logger.info("Added password_hash column to access_requests table")
+            
+            if 'username' not in access_request_columns:
+                conn.execute("ALTER TABLE access_requests ADD COLUMN username TEXT")
+                logger.info("Added username column to access_requests table")
+        except Exception as e:
+            logger.warning(f"Access requests migration warning (may be safe to ignore): {e}")
+        
+        # Migrate systems table: Add program_id column
+        try:
+            cursor = conn.execute("PRAGMA table_info(systems)")
+            system_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'program_id' not in system_columns:
+                conn.execute("ALTER TABLE systems ADD COLUMN program_id INTEGER")
+                logger.info("Added program_id column to systems table")
+                
+                # Create default Echo Falls program
+                conn.execute("""
+                    INSERT OR IGNORE INTO programs (name, description, check_methodology, is_active)
+                    VALUES ('Echo Falls', 'Echo Falls datacenter program', 'echo_falls', 1)
+                """)
+                
+                # Get the Echo Falls program ID
+                echo_falls = conn.execute("SELECT id FROM programs WHERE name = 'Echo Falls'").fetchone()
+                if echo_falls:
+                    # Assign all existing systems to Echo Falls
+                    conn.execute("""
+                        UPDATE systems 
+                        SET program_id = ?
+                        WHERE program_id IS NULL
+                    """, (echo_falls['id'],))
+                    logger.info("Migrated existing systems to Echo Falls program")
+                    
+                    # Migrate recipes to Echo Falls program
+                    conn.execute("""
+                        UPDATE firmware_recipes 
+                        SET program_id = ?
+                        WHERE program_id IS NULL
+                    """, (echo_falls['id'],))
+                    logger.info("Migrated existing recipes to Echo Falls program")
+        except Exception as e:
+            logger.warning(f"Program migration warning (may be safe to ignore): {e}")
+        
+        # Add program_id column to firmware_recipes if it doesn't exist
+        try:
+            cursor = conn.execute("PRAGMA table_info(firmware_recipes)")
+            recipe_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'program_id' not in recipe_columns:
+                conn.execute("ALTER TABLE firmware_recipes ADD COLUMN program_id INTEGER")
+                logger.info("Added program_id column to firmware_recipes table")
+                
+                # Assign existing recipes to Echo Falls
+                echo_falls = conn.execute("SELECT id FROM programs WHERE name = 'Echo Falls'").fetchone()
+                if echo_falls:
+                    conn.execute("""
+                        UPDATE firmware_recipes 
+                        SET program_id = ?
+                        WHERE program_id IS NULL
+                    """, (echo_falls['id'],))
+        except Exception as e:
+            logger.warning(f"Recipe migration warning (may be safe to ignore): {e}")
         
         conn.commit()
         
@@ -204,6 +451,68 @@ def init_db():
                 firmware_types
             )
             conn.commit()
+
+def create_default_admin():
+    """Create default admin user if no users exist"""
+    with get_db_connection() as conn:
+        user_count = conn.execute('SELECT COUNT(*) as count FROM users').fetchone()['count']
+        
+        if user_count == 0:
+            # Create default admin user: username = admin, password = admin
+            default_username = 'admin'
+            default_password = 'admin'
+            password_hash = generate_password_hash(default_password)
+            
+            conn.execute('''
+                INSERT INTO users (username, password_hash, role)
+                VALUES (?, ?, 'admin')
+            ''', (default_username, password_hash))
+            conn.commit()
+            
+            print("=" * 80)
+            print("DEFAULT ADMIN USER CREATED")
+            print("=" * 80)
+            print(f"Username: {default_username}")
+            print(f"Password: {default_password}")
+            print("=" * 80)
+            print("IMPORTANT: Please change the default password after first login!")
+            print("=" * 80)
+
+def login_required(f):
+    """Decorator to require login for routes"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    """Decorator to require admin role"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('login', next=request.url))
+        if session.get('role') != 'admin':
+            flash('You need administrator privileges to access this page.', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def editor_required(f):
+    """Decorator to require editor or admin role"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('login', next=request.url))
+        if session.get('role') not in ['admin', 'editor']:
+            flash('You need editor privileges to perform this action.', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 def cleanup_orphaned_checks():
     """Clean up orphaned 'running' firmware checks on server startup"""
@@ -642,53 +951,1017 @@ def compare_firmware_with_recipe(firmware_data, recipe_versions):
     
     return comparison
 
+# Authentication Routes
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        with get_db_connection() as conn:
+            user = conn.execute(
+                'SELECT * FROM users WHERE username = ?',
+                (username,)
+            ).fetchone()
+            
+            if user and check_password_hash(user['password_hash'], password):
+                # Check if user is active
+                try:
+                    is_active = user['is_active']
+                except (KeyError, IndexError):
+                    is_active = 1  # Default to active for backwards compatibility
+                
+                if not is_active:
+                    flash('Your account has been deactivated. Please contact an administrator.', 'error')
+                    return render_template('login.html')
+                
+                # Login successful
+                session['user_id'] = user['id']
+                session['username'] = user['username']
+                
+                # Set role - migrate from is_admin if role doesn't exist
+                try:
+                    role = user['role']
+                except (KeyError, IndexError):
+                    # Fallback to is_admin for migration
+                    try:
+                        role = 'admin' if user['is_admin'] else 'editor'
+                    except (KeyError, IndexError):
+                        role = 'viewer'
+                
+                session['role'] = role
+                session['is_admin'] = 1 if role == 'admin' else 0  # Keep for backwards compatibility
+                
+                # Update last login time
+                conn.execute(
+                    'UPDATE users SET last_login = ? WHERE id = ?',
+                    (datetime.now().isoformat(), user['id'])
+                )
+                conn.commit()
+                
+                flash(f'Welcome back, {username}!', 'success')
+                
+                # Check if user must change password
+                try:
+                    must_change = user['must_change_password']
+                except (KeyError, IndexError):
+                    must_change = 0
+                
+                if must_change:
+                    flash('You must change your password before continuing.', 'warning')
+                    return redirect(url_for('change_password', force=1))
+                
+                # Redirect to next page, admin panel for admins, or program selector for others
+                next_page = request.args.get('next')
+                if next_page:
+                    return redirect(next_page)
+                elif role == 'admin':
+                    return redirect(url_for('admin'))
+                else:
+                    return redirect(url_for('select_program'))
+            else:
+                flash('Invalid username or password', 'error')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """Logout user"""
+    username = session.get('username', 'User')
+    session.clear()
+    flash(f'Goodbye, {username}!', 'info')
+    return redirect(url_for('index'))
+
+@app.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    """Change user password"""
+    force = request.args.get('force', 0, type=int)
+    
+    if request.method == 'POST':
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if not all([current_password, new_password, confirm_password]):
+            flash('All fields are required', 'error')
+            return redirect(url_for('change_password', force=force))
+        
+        if new_password != confirm_password:
+            flash('New passwords do not match', 'error')
+            return redirect(url_for('change_password', force=force))
+        
+        if len(new_password) < 8:
+            flash('Password must be at least 8 characters long', 'error')
+            return redirect(url_for('change_password', force=force))
+        
+        with get_db_connection() as conn:
+            user = conn.execute(
+                'SELECT * FROM users WHERE id = ?',
+                (session['user_id'],)
+            ).fetchone()
+            
+            if not user or not check_password_hash(user['password_hash'], current_password):
+                flash('Current password is incorrect', 'error')
+                return redirect(url_for('change_password', force=force))
+            
+            # Update password and clear must_change_password flag
+            new_password_hash = generate_password_hash(new_password)
+            conn.execute('''
+                UPDATE users 
+                SET password_hash = ?, must_change_password = 0
+                WHERE id = ?
+            ''', (new_password_hash, session['user_id']))
+            conn.commit()
+            
+            flash('Password changed successfully!', 'success')
+            return redirect(url_for('select_program'))
+    
+    return render_template('change_password.html', force=force)
+
+# Access Request Routes
+@app.route('/request-access', methods=['GET', 'POST'])
+def request_access():
+    """Request access to the application"""
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        confirm_password = request.form.get('confirm_password', '').strip()
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
+        team = request.form.get('team', '').strip()
+        business_justification = request.form.get('business_justification', '').strip()
+        
+        # Validation
+        if not all([email, username, password, first_name, business_justification]):
+            flash('Email, username, password, first name, and business justification are required', 'error')
+            return redirect(url_for('request_access'))
+        
+        if password != confirm_password:
+            flash('Passwords do not match', 'error')
+            return redirect(url_for('request_access'))
+        
+        if len(password) < 8:
+            flash('Password must be at least 8 characters long', 'error')
+            return redirect(url_for('request_access'))
+        
+        # Check if email already has a pending request
+        with get_db_connection() as conn:
+            existing_request = conn.execute(
+                "SELECT * FROM access_requests WHERE email = ? AND status = 'pending'",
+                (email,)
+            ).fetchone()
+            
+            if existing_request:
+                flash('You already have a pending access request. Please wait for admin approval.', 'warning')
+                return redirect(url_for('login'))
+            
+            # Check if user already exists with this email
+            existing_user = conn.execute(
+                "SELECT * FROM users WHERE email = ?",
+                (email,)
+            ).fetchone()
+            
+            if existing_user:
+                flash('An account with this email already exists. Please try logging in.', 'warning')
+                return redirect(url_for('login'))
+            
+            # Check if username is already taken
+            existing_username = conn.execute(
+                "SELECT * FROM users WHERE username = ?",
+                (username,)
+            ).fetchone()
+            
+            if existing_username:
+                flash('Username is already taken. Please choose a different username.', 'error')
+                return redirect(url_for('request_access'))
+            
+            # Hash the password
+            password_hash = generate_password_hash(password)
+            
+            # Create access request with username and hashed password
+            conn.execute('''
+                INSERT INTO access_requests (email, username, password_hash, first_name, last_name, team, business_justification)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (email, username, password_hash, first_name, last_name, team, business_justification))
+            conn.commit()
+        
+        flash('Access request submitted successfully! An administrator will review your request. If approved, you can log in with your chosen username and password.', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('request_access.html')
+
+@app.route('/admin/access-requests')
+@admin_required
+def admin_access_requests():
+    """View all access requests"""
+    status_filter = request.args.get('status', 'pending')
+    
+    with get_db_connection() as conn:
+        if status_filter == 'all':
+            requests_list = conn.execute('''
+                SELECT ar.*, u.username as reviewed_by_username
+                FROM access_requests ar
+                LEFT JOIN users u ON ar.reviewed_by = u.id
+                ORDER BY ar.requested_at DESC
+            ''').fetchall()
+        else:
+            requests_list = conn.execute('''
+                SELECT ar.*, u.username as reviewed_by_username
+                FROM access_requests ar
+                LEFT JOIN users u ON ar.reviewed_by = u.id
+                WHERE ar.status = ?
+                ORDER BY ar.requested_at DESC
+            ''', (status_filter,)).fetchall()
+        
+        # Count by status
+        status_counts = {
+            'pending': conn.execute("SELECT COUNT(*) as count FROM access_requests WHERE status = 'pending'").fetchone()['count'],
+            'approved': conn.execute("SELECT COUNT(*) as count FROM access_requests WHERE status = 'approved'").fetchone()['count'],
+            'rejected': conn.execute("SELECT COUNT(*) as count FROM access_requests WHERE status = 'rejected'").fetchone()['count'],
+            'all': conn.execute('SELECT COUNT(*) as count FROM access_requests').fetchone()['count']
+        }
+    
+    return render_template('admin_access_requests.html', 
+                         requests=requests_list, 
+                         status_counts=status_counts,
+                         status_filter=status_filter)
+
+@app.route('/admin/access-requests/<int:request_id>/approve', methods=['POST'])
+@admin_required
+def approve_access_request(request_id):
+    """Approve an access request and create user account"""
+    with get_db_connection() as conn:
+        access_request = conn.execute(
+            'SELECT * FROM access_requests WHERE id = ?',
+            (request_id,)
+        ).fetchone()
+        
+        if not access_request:
+            flash('Access request not found', 'error')
+            return redirect(url_for('admin_access_requests'))
+        
+        if access_request['status'] != 'pending':
+            flash('This request has already been processed', 'warning')
+            return redirect(url_for('admin_access_requests'))
+        
+        # Use username from access request
+        username = access_request['username']
+        
+        # Verify username doesn't exist (double-check even though we validated during request)
+        existing_user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        if existing_user:
+            flash(f'Username {username} is already taken. Please contact the user to submit a new request with a different username.', 'error')
+            return redirect(url_for('admin_access_requests'))
+        
+        # Use password hash from access request (user chose their own password)
+        password_hash = access_request['password_hash']
+        
+        # Get requested role from form, default to viewer
+        role = request.form.get('role', 'viewer')
+        if role not in ['admin', 'editor', 'viewer']:
+            role = 'viewer'
+        
+        try:
+            # Create user account with their chosen password (no must_change_password needed!)
+            conn.execute('''
+                INSERT INTO users (username, password_hash, role, email, first_name, last_name, team)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (username, password_hash, role, access_request['email'], 
+                  access_request['first_name'], access_request['last_name'], 
+                  access_request['team']))
+            
+            # Update access request status
+            conn.execute('''
+                UPDATE access_requests
+                SET status = 'approved', reviewed_by = ?, reviewed_at = ?, 
+                    notes = ?
+                WHERE id = ?
+            ''', (session['user_id'], datetime.now().isoformat(), 
+                  f'User account activated: {username}', request_id))
+            
+            conn.commit()
+            
+            flash(f'Access request approved! User account activated: {username}. User can now log in with their chosen credentials.', 'success')
+            
+        except Exception as e:
+            flash(f'Error creating user account: {str(e)}', 'error')
+    
+    return redirect(url_for('admin_access_requests'))
+
+@app.route('/admin/access-requests/<int:request_id>/reject', methods=['POST'])
+@admin_required
+def reject_access_request(request_id):
+    """Reject an access request"""
+    notes = request.form.get('notes', '')
+    
+    with get_db_connection() as conn:
+        access_request = conn.execute(
+            'SELECT * FROM access_requests WHERE id = ?',
+            (request_id,)
+        ).fetchone()
+        
+        if not access_request:
+            flash('Access request not found', 'error')
+            return redirect(url_for('admin_access_requests'))
+        
+        if access_request['status'] != 'pending':
+            flash('This request has already been processed', 'warning')
+            return redirect(url_for('admin_access_requests'))
+        
+        # Update access request status
+        conn.execute('''
+            UPDATE access_requests
+            SET status = 'rejected', reviewed_by = ?, reviewed_at = ?, notes = ?
+            WHERE id = ?
+        ''', (session['user_id'], datetime.now().isoformat(), notes, request_id))
+        conn.commit()
+        
+        flash('Access request rejected', 'info')
+    
+    return redirect(url_for('admin_access_requests'))
+
+# Program Management Routes
+@app.route('/admin/programs')
+@admin_required
+def admin_programs():
+    """Program management page"""
+    with get_db_connection() as conn:
+        programs = conn.execute('''
+            SELECT p.*,
+                   COUNT(DISTINCT s.id) as system_count,
+                   COUNT(DISTINCT fc.id) as check_count,
+                   COUNT(DISTINCT fr.id) as recipe_count
+            FROM programs p
+            LEFT JOIN systems s ON p.id = s.program_id
+            LEFT JOIN firmware_checks fc ON s.id = fc.system_id
+            LEFT JOIN firmware_recipes fr ON p.id = fr.program_id
+            GROUP BY p.id
+            ORDER BY p.is_active DESC, p.name
+        ''').fetchall()
+    
+    return render_template('admin_programs.html', programs=programs)
+
+@app.route('/admin/programs/add', methods=['GET', 'POST'])
+@admin_required
+def admin_add_program():
+    """Add a new program"""
+    with get_db_connection() as conn:
+        if request.method == 'POST':
+            name = request.form.get('name', '').strip()
+            description = request.form.get('description', '').strip()
+            check_methodology = request.form.get('check_methodology', 'standard')
+            is_active = 1 if request.form.get('is_active') == 'on' else 0
+            firmware_type_ids = request.form.getlist('firmware_types')  # Get selected firmware types
+            
+            if not name:
+                flash('Program name is required', 'error')
+                return redirect(url_for('admin_add_program'))
+            
+            if check_methodology not in ['echo_falls', 'standard', 'custom']:
+                flash('Invalid check methodology', 'error')
+                return redirect(url_for('admin_add_program'))
+            
+            try:
+                # Insert program
+                cursor = conn.execute('''
+                    INSERT INTO programs (name, description, check_methodology, is_active)
+                    VALUES (?, ?, ?, ?)
+                ''', (name, description, check_methodology, is_active))
+                program_id = cursor.lastrowid
+                
+                # Associate firmware types with the program
+                for firmware_type_id in firmware_type_ids:
+                    conn.execute('''
+                        INSERT INTO program_firmware_types (program_id, firmware_type_id)
+                        VALUES (?, ?)
+                    ''', (program_id, int(firmware_type_id)))
+                
+                conn.commit()
+                
+                flash(f'Program "{name}" created successfully with {len(firmware_type_ids)} firmware type(s)', 'success')
+                return redirect(url_for('admin_programs'))
+            
+            except sqlite3.IntegrityError:
+                flash(f'A program with the name "{name}" already exists', 'error')
+                return redirect(url_for('admin_add_program'))
+        
+        # GET request - show form with all firmware types
+        firmware_types = conn.execute('''
+            SELECT * FROM firmware_types ORDER BY category, name
+        ''').fetchall()
+        
+        # Group firmware types by category
+        firmware_by_category = {}
+        for ft in firmware_types:
+            if ft['category'] not in firmware_by_category:
+                firmware_by_category[ft['category']] = []
+            firmware_by_category[ft['category']].append(ft)
+        
+        return render_template('admin_program_form.html', 
+                             program=None, 
+                             action='Add',
+                             firmware_by_category=firmware_by_category,
+                             selected_firmware_types=[])
+
+@app.route('/admin/programs/edit/<int:program_id>', methods=['GET', 'POST'])
+@admin_required
+def admin_edit_program(program_id):
+    """Edit an existing program"""
+    with get_db_connection() as conn:
+        program = conn.execute('SELECT * FROM programs WHERE id = ?', (program_id,)).fetchone()
+        
+        if not program:
+            flash('Program not found', 'error')
+            return redirect(url_for('admin_programs'))
+        
+        if request.method == 'POST':
+            name = request.form.get('name', '').strip()
+            description = request.form.get('description', '').strip()
+            check_methodology = request.form.get('check_methodology', 'standard')
+            is_active = 1 if request.form.get('is_active') == 'on' else 0
+            firmware_type_ids = request.form.getlist('firmware_types')  # Get selected firmware types
+            
+            if not name:
+                flash('Program name is required', 'error')
+                return render_template('admin_program_form.html', program=program, action='Edit')
+            
+            if check_methodology not in ['echo_falls', 'standard', 'custom']:
+                flash('Invalid check methodology', 'error')
+                return render_template('admin_program_form.html', program=program, action='Edit')
+            
+            try:
+                # Update program
+                conn.execute('''
+                    UPDATE programs
+                    SET name = ?, description = ?, check_methodology = ?, 
+                        is_active = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (name, description, check_methodology, is_active, program_id))
+                
+                # Update firmware type associations - delete old ones and add new ones
+                conn.execute('DELETE FROM program_firmware_types WHERE program_id = ?', (program_id,))
+                for firmware_type_id in firmware_type_ids:
+                    conn.execute('''
+                        INSERT INTO program_firmware_types (program_id, firmware_type_id)
+                        VALUES (?, ?)
+                    ''', (program_id, int(firmware_type_id)))
+                
+                conn.commit()
+                
+                flash(f'Program "{name}" updated successfully', 'success')
+                return redirect(url_for('admin_programs'))
+            
+            except sqlite3.IntegrityError:
+                flash(f'A program with the name "{name}" already exists', 'error')
+                return render_template('admin_program_form.html', program=program, action='Edit')
+        
+        # GET request - show form with all firmware types and current selections
+        firmware_types = conn.execute('''
+            SELECT * FROM firmware_types ORDER BY category, name
+        ''').fetchall()
+        
+        # Group firmware types by category
+        firmware_by_category = {}
+        for ft in firmware_types:
+            if ft['category'] not in firmware_by_category:
+                firmware_by_category[ft['category']] = []
+            firmware_by_category[ft['category']].append(ft)
+        
+        # Get currently selected firmware types for this program
+        selected_firmware_types = [
+            row['firmware_type_id'] for row in conn.execute('''
+                SELECT firmware_type_id FROM program_firmware_types WHERE program_id = ?
+            ''', (program_id,)).fetchall()
+        ]
+        
+        return render_template('admin_program_form.html', 
+                             program=program, 
+                             action='Edit',
+                             firmware_by_category=firmware_by_category,
+                             selected_firmware_types=selected_firmware_types)
+
+@app.route('/admin/programs/toggle/<int:program_id>', methods=['POST'])
+@admin_required
+def admin_toggle_program(program_id):
+    """Toggle program active status"""
+    with get_db_connection() as conn:
+        program = conn.execute('SELECT * FROM programs WHERE id = ?', (program_id,)).fetchone()
+        
+        if not program:
+            flash('Program not found', 'error')
+            return redirect(url_for('admin_programs'))
+        
+        new_status = 0 if program['is_active'] else 1
+        conn.execute('''
+            UPDATE programs
+            SET is_active = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (new_status, program_id))
+        conn.commit()
+        
+        status_text = 'activated' if new_status else 'deactivated'
+        flash(f'Program "{program["name"]}" has been {status_text}', 'success')
+    
+    return redirect(url_for('admin_programs'))
+
+@app.route('/admin/programs/<int:program_id>/custom-fields')
+@admin_required
+def admin_program_custom_fields(program_id):
+    """Manage custom fields for a program"""
+    with get_db_connection() as conn:
+        program = conn.execute('SELECT * FROM programs WHERE id = ?', (program_id,)).fetchone()
+        
+        if not program:
+            flash('Program not found', 'error')
+            return redirect(url_for('admin_programs'))
+        
+        custom_fields = conn.execute('''
+            SELECT * FROM program_custom_fields 
+            WHERE program_id = ? 
+            ORDER BY display_order, field_label
+        ''', (program_id,)).fetchall()
+        
+        return render_template('admin_custom_fields.html', 
+                             program=program, 
+                             custom_fields=custom_fields)
+
+@app.route('/admin/programs/<int:program_id>/custom-fields/add', methods=['GET', 'POST'])
+@admin_required
+def admin_add_custom_field(program_id):
+    """Add a custom field to a program"""
+    with get_db_connection() as conn:
+        program = conn.execute('SELECT * FROM programs WHERE id = ?', (program_id,)).fetchone()
+        
+        if not program:
+            flash('Program not found', 'error')
+            return redirect(url_for('admin_programs'))
+        
+        if request.method == 'POST':
+            field_name = request.form.get('field_name', '').strip()
+            field_label = request.form.get('field_label', '').strip()
+            field_type = request.form.get('field_type', 'text')
+            is_required = 1 if request.form.get('is_required') else 0
+            placeholder = request.form.get('placeholder', '').strip()
+            help_text = request.form.get('help_text', '').strip()
+            display_order = request.form.get('display_order', 0)
+            
+            if not field_name or not field_label:
+                flash('Field name and label are required', 'error')
+                return render_template('admin_custom_field_form.html', 
+                                     program=program, 
+                                     action='Add')
+            
+            # Convert field name to snake_case (lowercase with underscores)
+            field_name = field_name.lower().replace(' ', '_').replace('-', '_')
+            
+            try:
+                conn.execute('''
+                    INSERT INTO program_custom_fields 
+                    (program_id, field_name, field_label, field_type, is_required, 
+                     placeholder, help_text, display_order)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (program_id, field_name, field_label, field_type, is_required,
+                     placeholder or None, help_text or None, display_order))
+                conn.commit()
+                
+                flash(f'Custom field "{field_label}" added successfully', 'success')
+                return redirect(url_for('admin_program_custom_fields', program_id=program_id))
+            
+            except sqlite3.IntegrityError:
+                flash(f'A field with the name "{field_name}" already exists for this program', 'error')
+                return render_template('admin_custom_field_form.html', 
+                                     program=program, 
+                                     action='Add')
+        
+        return render_template('admin_custom_field_form.html', 
+                             program=program, 
+                             action='Add')
+
+@app.route('/admin/programs/<int:program_id>/custom-fields/edit/<int:field_id>', methods=['GET', 'POST'])
+@admin_required
+def admin_edit_custom_field(program_id, field_id):
+    """Edit a custom field"""
+    with get_db_connection() as conn:
+        program = conn.execute('SELECT * FROM programs WHERE id = ?', (program_id,)).fetchone()
+        field = conn.execute('''
+            SELECT * FROM program_custom_fields WHERE id = ? AND program_id = ?
+        ''', (field_id, program_id)).fetchone()
+        
+        if not program or not field:
+            flash('Program or field not found', 'error')
+            return redirect(url_for('admin_programs'))
+        
+        if request.method == 'POST':
+            field_label = request.form.get('field_label', '').strip()
+            field_type = request.form.get('field_type', 'text')
+            is_required = 1 if request.form.get('is_required') else 0
+            placeholder = request.form.get('placeholder', '').strip()
+            help_text = request.form.get('help_text', '').strip()
+            display_order = request.form.get('display_order', 0)
+            
+            if not field_label:
+                flash('Field label is required', 'error')
+                return render_template('admin_custom_field_form.html', 
+                                     program=program,
+                                     field=field,
+                                     action='Edit')
+            
+            conn.execute('''
+                UPDATE program_custom_fields 
+                SET field_label = ?, field_type = ?, is_required = ?,
+                    placeholder = ?, help_text = ?, display_order = ?
+                WHERE id = ?
+            ''', (field_label, field_type, is_required,
+                 placeholder or None, help_text or None, display_order, field_id))
+            conn.commit()
+            
+            flash(f'Custom field "{field_label}" updated successfully', 'success')
+            return redirect(url_for('admin_program_custom_fields', program_id=program_id))
+        
+        return render_template('admin_custom_field_form.html', 
+                             program=program,
+                             field=field,
+                             action='Edit')
+
+@app.route('/admin/programs/<int:program_id>/custom-fields/delete/<int:field_id>', methods=['POST'])
+@admin_required
+def admin_delete_custom_field(program_id, field_id):
+    """Delete a custom field"""
+    with get_db_connection() as conn:
+        field = conn.execute('''
+            SELECT * FROM program_custom_fields WHERE id = ? AND program_id = ?
+        ''', (field_id, program_id)).fetchone()
+        
+        if not field:
+            flash('Field not found', 'error')
+            return redirect(url_for('admin_program_custom_fields', program_id=program_id))
+        
+        conn.execute('DELETE FROM program_custom_fields WHERE id = ?', (field_id,))
+        conn.commit()
+        
+        flash(f'Custom field "{field["field_label"]}" deleted successfully', 'success')
+    
+    return redirect(url_for('admin_program_custom_fields', program_id=program_id))
+
 # Routes
+@app.route('/select-program')
+@login_required
+def select_program():
+    """Program selection page - shows tiles of available programs"""
+    with get_db_connection() as conn:
+        programs = conn.execute('''
+            SELECT p.*,
+                   COUNT(DISTINCT s.id) as system_count,
+                   COUNT(DISTINCT fc.id) as check_count
+            FROM programs p
+            LEFT JOIN systems s ON p.id = s.program_id
+            LEFT JOIN firmware_checks fc ON s.id = fc.system_id
+            WHERE p.is_active = 1
+            GROUP BY p.id
+            ORDER BY p.name
+        ''').fetchall()
+    
+    return render_template('select_program.html', programs=programs)
+
+@app.route('/set-program/<int:program_id>')
+@login_required
+def set_program(program_id):
+    """Set the active program for the user session"""
+    with get_db_connection() as conn:
+        program = conn.execute('''
+            SELECT * FROM programs WHERE id = ? AND is_active = 1
+        ''', (program_id,)).fetchone()
+        
+        if not program:
+            flash('Invalid program selected', 'error')
+            return redirect(url_for('select_program'))
+        
+        session['program_id'] = program_id
+        session['program_name'] = program['name']
+        flash(f'Now working with {program["name"]}', 'success')
+    
+    return redirect(url_for('index'))
+
 @app.route('/')
 def index():
     """Main dashboard page"""
+    # If user is logged in but hasn't selected a program, redirect to program selector
+    if 'user_id' in session and 'program_id' not in session:
+        return redirect(url_for('select_program'))
+    
     # Debug: Log SCRIPT_NAME for troubleshooting
     from flask import request as flask_request
     logger.info(f"[INDEX] SCRIPT_NAME: {flask_request.environ.get('SCRIPT_NAME', 'NOT SET')}")
     logger.info(f"[INDEX] url_for('systems'): {url_for('systems')}")
     
     with get_db_connection() as conn:
-        # Get recent systems
-        systems = conn.execute('''
+        program_id = session.get('program_id')
+        
+        # Build query filters based on selected program
+        program_filter = ''
+        program_params = []
+        if program_id:
+            program_filter = 'WHERE s.program_id = ?'
+            program_params = [program_id]
+        
+        # Get recent systems for this program
+        systems = conn.execute(f'''
             SELECT s.*, 
                    COUNT(fc.id) as check_count,
                    MAX(fc.check_date) as last_check
             FROM systems s
             LEFT JOIN firmware_checks fc ON s.id = fc.system_id
+            {program_filter}
             GROUP BY s.id
             ORDER BY s.updated_at DESC
             LIMIT 5
-        ''').fetchall()
+        ''', program_params).fetchall()
         
-        # Get recent firmware checks
-        recent_checks = conn.execute('''
-            SELECT fc.*, s.name as system_name, s.description as system_description
+        # Get recent firmware checks for this program
+        recent_checks = conn.execute(f'''
+            SELECT fc.*, s.name as system_name, u.username as checked_by_username,
+                   u.first_name as checked_by_first_name, u.last_name as checked_by_last_name
             FROM firmware_checks fc
             JOIN systems s ON fc.system_id = s.id
+            LEFT JOIN users u ON fc.user_id = u.id
+            {program_filter}
             ORDER BY fc.check_date DESC
             LIMIT 5
-        ''').fetchall()
+        ''', program_params).fetchall()
+        
+        # Get stats for this program
+        # Count firmware types assigned to this program
+        if program_id:
+            firmware_types_count = conn.execute('''
+                SELECT COUNT(*) as count 
+                FROM program_firmware_types 
+                WHERE program_id = ?
+            ''', (program_id,)).fetchone()['count']
+            
+            # Get firmware types grouped by category for this program
+            firmware_types = conn.execute('''
+                SELECT ft.category, COUNT(ft.id) as count
+                FROM firmware_types ft
+                INNER JOIN program_firmware_types pft ON ft.id = pft.firmware_type_id
+                WHERE pft.program_id = ?
+                GROUP BY ft.category
+                ORDER BY ft.category
+            ''', (program_id,)).fetchall()
+        else:
+            firmware_types_count = conn.execute('SELECT COUNT(*) as count FROM firmware_types').fetchone()['count']
+            
+            # Get all firmware types grouped by category
+            firmware_types = conn.execute('''
+                SELECT category, COUNT(id) as count
+                FROM firmware_types
+                GROUP BY category
+                ORDER BY category
+            ''').fetchall()
+        
+        # Convert to dict for easier template access
+        firmware_by_category = {row['category']: row['count'] for row in firmware_types}
         
         stats = {
-            'total_systems': conn.execute('SELECT COUNT(*) as count FROM systems').fetchone()['count'],
-            'total_checks': conn.execute('SELECT COUNT(*) as count FROM firmware_checks').fetchone()['count'],
-            'total_recipes': conn.execute('SELECT COUNT(*) as count FROM firmware_recipes').fetchone()['count'],
+            'total_systems': conn.execute(f'SELECT COUNT(*) as count FROM systems s {program_filter}', program_params).fetchone()['count'],
+            'total_checks': conn.execute(f'''
+                SELECT COUNT(*) as count 
+                FROM firmware_checks fc
+                JOIN systems s ON fc.system_id = s.id
+                {program_filter}
+            ''', program_params).fetchone()['count'],
+            'total_recipes': conn.execute(f'SELECT COUNT(*) as count FROM firmware_recipes fr {program_filter.replace("s.program_id", "fr.program_id")}', program_params).fetchone()['count'],
+            'total_firmware_types': firmware_types_count,
             'recent_systems': systems,
             'recent_checks': recent_checks
         }
     
-    return render_template('index.html', stats=stats)
+    return render_template('index.html', stats=stats, firmware_by_category=firmware_by_category)
 
 @app.route('/help')
 def help():
     """Help and instructions page"""
     return render_template('help.html')
 
+@app.route('/admin')
+@admin_required
+def admin():
+    """Admin panel for application management"""
+    # Get app statistics
+    with get_db_connection() as conn:
+        stats = {
+            'total_systems': conn.execute('SELECT COUNT(*) as count FROM systems').fetchone()['count'],
+            'total_checks': conn.execute('SELECT COUNT(*) as count FROM firmware_checks').fetchone()['count'],
+            'total_recipes': conn.execute('SELECT COUNT(*) as count FROM firmware_recipes').fetchone()['count'],
+            'running_checks': conn.execute("SELECT COUNT(*) as count FROM firmware_checks WHERE status = 'running'").fetchone()['count']
+        }
+        
+        # Get running checks details
+        running_checks = conn.execute('''
+            SELECT fc.id, fc.check_date, s.name as system_name, s.rscm_ip,
+                   (julianday('now') - julianday(fc.check_date)) * 24 * 60 as minutes_running
+            FROM firmware_checks fc
+            JOIN systems s ON fc.system_id = s.id
+            WHERE fc.status = 'running'
+            ORDER BY fc.check_date DESC
+        ''').fetchall()
+        
+        # Get pending access requests count
+        pending_requests = conn.execute(
+            "SELECT COUNT(*) as count FROM access_requests WHERE status = 'pending'"
+        ).fetchone()['count']
+    
+    # Get version information
+    import flask
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    flask_version = flask.__version__
+    
+    return render_template('admin.html', 
+                         stats=stats, 
+                         running_checks=running_checks,
+                         python_version=python_version,
+                         flask_version=flask_version,
+                         pending_requests=pending_requests)
+
+# User Management Routes
+@app.route('/admin/users')
+@admin_required
+def admin_users():
+    """User management page"""
+    team_filter = request.args.get('team', 'all')
+    
+    with get_db_connection() as conn:
+        # Get all users
+        if team_filter == 'all':
+            users = conn.execute('''
+                SELECT id, username, role, is_active, email, first_name, last_name, team,
+                       created_at, last_login
+                FROM users
+                ORDER BY role, username
+            ''').fetchall()
+        else:
+            users = conn.execute('''
+                SELECT id, username, role, is_active, email, first_name, last_name, team,
+                       created_at, last_login
+                FROM users
+                WHERE team = ?
+                ORDER BY role, username
+            ''', (team_filter,)).fetchall()
+        
+        # Count users by team
+        team_counts = {
+            'all': conn.execute('SELECT COUNT(*) as count FROM users').fetchone()['count'],
+            'SIT': conn.execute("SELECT COUNT(*) as count FROM users WHERE team = 'SIT'").fetchone()['count'],
+            'SLGS': conn.execute("SELECT COUNT(*) as count FROM users WHERE team = 'SLGS'").fetchone()['count'],
+            'Other': conn.execute("SELECT COUNT(*) as count FROM users WHERE team = 'Other' OR team IS NULL OR team = ''").fetchone()['count']
+        }
+    
+    return render_template('admin_users.html', users=users, team_counts=team_counts, team_filter=team_filter)
+
+@app.route('/admin/users/add', methods=['GET', 'POST'])
+@admin_required
+def admin_add_user():
+    """Add a new user"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        role = request.form.get('role', 'viewer')
+        email = request.form.get('email', '')
+        first_name = request.form.get('first_name', '')
+        last_name = request.form.get('last_name', '')
+        team = request.form.get('team', '')
+        
+        if not username or not password:
+            flash('Username and password are required', 'error')
+            return redirect(url_for('admin_add_user'))
+        
+        if role not in ['admin', 'editor', 'viewer']:
+            flash('Invalid role', 'error')
+            return redirect(url_for('admin_add_user'))
+        
+        password_hash = generate_password_hash(password)
+        
+        try:
+            with get_db_connection() as conn:
+                conn.execute('''
+                    INSERT INTO users (username, password_hash, role, email, first_name, last_name, team)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (username, password_hash, role, email, first_name, last_name, team))
+                conn.commit()
+            
+            flash(f'User "{username}" created successfully with {role} role!', 'success')
+            return redirect(url_for('admin_users'))
+            
+        except sqlite3.IntegrityError:
+            flash(f'Username "{username}" already exists!', 'error')
+        except Exception as e:
+            flash(f'Error creating user: {str(e)}', 'error')
+    
+    return render_template('register.html', is_admin_adding=True)
+
+@app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def admin_edit_user(user_id):
+    """Edit user details"""
+    with get_db_connection() as conn:
+        user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+        
+        if not user:
+            flash('User not found', 'error')
+            return redirect(url_for('admin_users'))
+        
+        if request.method == 'POST':
+            role = request.form.get('role', user['role'])
+            email = request.form.get('email', '')
+            first_name = request.form.get('first_name', '')
+            last_name = request.form.get('last_name', '')
+            team = request.form.get('team', '')
+            new_password = request.form.get('new_password', '')
+            
+            if role not in ['admin', 'editor', 'viewer']:
+                flash('Invalid role', 'error')
+                return redirect(url_for('admin_edit_user', user_id=user_id))
+            
+            try:
+                if new_password:
+                    password_hash = generate_password_hash(new_password)
+                    conn.execute('''
+                        UPDATE users 
+                        SET role = ?, email = ?, first_name = ?, last_name = ?, team = ?, password_hash = ?
+                        WHERE id = ?
+                    ''', (role, email, first_name, last_name, team, password_hash, user_id))
+                else:
+                    conn.execute('''
+                        UPDATE users 
+                        SET role = ?, email = ?, first_name = ?, last_name = ?, team = ?
+                        WHERE id = ?
+                    ''', (role, email, first_name, last_name, team, user_id))
+                
+                conn.commit()
+                flash(f'User "{user["username"]}" updated successfully!', 'success')
+                return redirect(url_for('admin_users'))
+                
+            except Exception as e:
+                flash(f'Error updating user: {str(e)}', 'error')
+        
+        return render_template('admin_edit_user.html', user=user)
+
+@app.route('/admin/users/<int:user_id>/toggle-active', methods=['POST'])
+@admin_required
+def toggle_user_active(user_id):
+    """Toggle user active/inactive status"""
+    try:
+        with get_db_connection() as conn:
+            user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+            
+            if not user:
+                return jsonify({'success': False, 'error': 'User not found'}), 404
+            
+            # Prevent deactivating yourself
+            if user_id == session.get('user_id'):
+                return jsonify({'success': False, 'error': 'You cannot deactivate your own account'}), 400
+            
+            new_status = 0 if user['is_active'] else 1
+            conn.execute('UPDATE users SET is_active = ? WHERE id = ?', (new_status, user_id))
+            conn.commit()
+            
+            status_text = 'activated' if new_status else 'deactivated'
+            return jsonify({'success': True, 'is_active': new_status, 'message': f'User {status_text} successfully'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@admin_required
+def delete_user(user_id):
+    """Delete a user (non-admin users only)"""
+    try:
+        with get_db_connection() as conn:
+            user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+            
+            if not user:
+                return jsonify({'success': False, 'error': 'User not found'}), 404
+            
+            # Prevent deleting yourself
+            if user_id == session.get('user_id'):
+                return jsonify({'success': False, 'error': 'You cannot delete your own account'}), 400
+            
+            # Prevent deleting other admins
+            if user['role'] == 'admin':
+                return jsonify({'success': False, 'error': 'Cannot delete admin users. Demote them first.'}), 400
+            
+            conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
+            conn.commit()
+            
+            return jsonify({'success': True, 'message': f'User "{user["username"]}" deleted successfully'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/recipes')
+@login_required
 def recipes():
     """List all firmware recipes"""
     with get_db_connection() as conn:
@@ -716,11 +1989,13 @@ def recipes():
     return render_template('recipes.html', recipes=recipes_list)
 
 @app.route('/recipes/add', methods=['GET', 'POST'])
+@editor_required
 def add_recipe():
     """Add a new firmware recipe"""
     if request.method == 'POST':
         name = request.form['name']
         description = request.form.get('description', '')
+        program_id = session.get('program_id')
         
         # Collect firmware versions from form
         firmware_versions = {}
@@ -741,9 +2016,9 @@ def add_recipe():
         try:
             with get_db_connection() as conn:
                 conn.execute('''
-                    INSERT INTO firmware_recipes (name, description, firmware_versions)
-                    VALUES (?, ?, ?)
-                ''', (name, description, json.dumps(firmware_versions)))
+                    INSERT INTO firmware_recipes (name, description, firmware_versions, program_id)
+                    VALUES (?, ?, ?, ?)
+                ''', (name, description, json.dumps(firmware_versions), program_id))
                 conn.commit()
             
             flash(f'Recipe "{name}" created successfully!', 'success')
@@ -771,6 +2046,7 @@ def add_recipe():
     return render_template('add_recipe.html', firmware_types=grouped_types)
 
 @app.route('/recipes/<int:recipe_id>')
+@login_required
 def recipe_detail(recipe_id):
     """View recipe details"""
     with get_db_connection() as conn:
@@ -796,6 +2072,7 @@ def recipe_detail(recipe_id):
                          firmware_versions=firmware_versions, checks=checks)
 
 @app.route('/recipes/<int:recipe_id>/edit', methods=['GET', 'POST'])
+@editor_required
 def edit_recipe(recipe_id):
     """Edit an existing recipe"""
     with get_db_connection() as conn:
@@ -855,6 +2132,7 @@ def edit_recipe(recipe_id):
     return render_template('edit_recipe.html', recipe=recipe, firmware_versions=firmware_versions)
 
 @app.route('/recipes/<int:recipe_id>/delete', methods=['POST'])
+@editor_required
 def delete_recipe(recipe_id):
     """Delete a recipe"""
     try:
@@ -876,15 +2154,20 @@ def delete_recipe(recipe_id):
     return redirect(url_for('recipes'))
 
 @app.route('/systems')
+@login_required
 def systems():
     """List all systems"""
     with get_db_connection() as conn:
         systems_rows = conn.execute('''
             SELECT s.*, 
                    COUNT(fc.id) as check_count,
-                   MAX(fc.check_date) as last_check
+                   MAX(fc.check_date) as last_check,
+                   u.username as created_by_username,
+                   u.first_name as created_by_first_name,
+                   u.last_name as created_by_last_name
             FROM systems s
             LEFT JOIN firmware_checks fc ON s.id = fc.system_id
+            LEFT JOIN users u ON s.created_by = u.id
             GROUP BY s.id
             ORDER BY s.name
         ''').fetchall()
@@ -895,6 +2178,7 @@ def systems():
     return render_template('systems.html', systems=systems_list)
 
 @app.route('/systems/add', methods=['GET', 'POST'])
+@editor_required
 def add_system():
     """Automated system registration"""
     if request.method == 'POST':
@@ -972,6 +2256,7 @@ def add_system():
     return render_template('add_system.html')
 
 @app.route('/systems/add-metadata', methods=['GET', 'POST'])
+@editor_required
 def add_system_metadata():
     """Add metadata to automatically discovered system"""
     # Check if we have pending system data
@@ -980,9 +2265,31 @@ def add_system_metadata():
         return redirect(url_for('add_system'))
     
     pending = session['pending_system']
+    program_id = session.get('program_id')
+    
+    # Get custom fields for the program if one is selected
+    custom_fields = []
+    if program_id:
+        with get_db_connection() as conn:
+            custom_fields = conn.execute('''
+                SELECT * FROM program_custom_fields 
+                WHERE program_id = ? 
+                ORDER BY display_order, field_label
+            ''', (program_id,)).fetchall()
     
     if request.method == 'POST':
         try:
+            # Validate required custom fields
+            if custom_fields:
+                for field in custom_fields:
+                    if field['is_required']:
+                        field_value = request.form.get(f'custom_{field["field_name"]}', '').strip()
+                        if not field_value:
+                            flash(f'{field["field_label"]} is required', 'error')
+                            return render_template('add_system_metadata.html', 
+                                                 system=pending,
+                                                 custom_fields=custom_fields)
+            
             # Get metadata from form
             system_hostname = request.form.get('system_hostname', '')
             geo_location = request.form.get('geo_location', '')
@@ -1013,18 +2320,32 @@ def add_system_metadata():
             
             # Create system record with serial number and metadata
             with get_db_connection() as conn:
-                conn.execute('''
+                cursor = conn.execute('''
                     INSERT INTO systems (
                         name, rscm_ip, rscm_port, 
-                        description
+                        description, program_id, created_by
                     )
-                    VALUES (?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 ''', (
                     pending['serial_number'],
                     pending['rscm_ip'],
                     pending['system_port'],
-                    full_description
+                    full_description,
+                    program_id,
+                    session.get('user_id')
                 ))
+                system_id = cursor.lastrowid
+                
+                # Save custom field values
+                for field in custom_fields:
+                    field_value = request.form.get(f'custom_{field["field_name"]}', '').strip()
+                    if field_value:  # Only save if there's a value
+                        conn.execute('''
+                            INSERT INTO system_custom_field_values 
+                            (system_id, field_id, field_value)
+                            VALUES (?, ?, ?)
+                        ''', (system_id, field['id'], field_value))
+                
                 conn.commit()
             
             # Clear session data
@@ -1039,13 +2360,24 @@ def add_system_metadata():
             logger.error(f"Error saving system metadata: {str(e)}")
             flash(f'Error saving system: {str(e)}', 'error')
     
-    return render_template('add_system_metadata.html', system=pending)
+    return render_template('add_system_metadata.html', 
+                         system=pending,
+                         custom_fields=custom_fields)
 
 @app.route('/systems/<int:system_id>')
+@login_required
 def system_detail(system_id):
     """Show system details and firmware checks"""
     with get_db_connection() as conn:
-        system = conn.execute('SELECT * FROM systems WHERE id = ?', (system_id,)).fetchone()
+        system = conn.execute('''
+            SELECT s.*,
+                   u.username as created_by_username,
+                   u.first_name as created_by_first_name,
+                   u.last_name as created_by_last_name
+            FROM systems s
+            LEFT JOIN users u ON s.created_by = u.id
+            WHERE s.id = ?
+        ''', (system_id,)).fetchone()
         if not system:
             flash('System not found!', 'error')
             return redirect(url_for('systems'))
@@ -1064,11 +2396,24 @@ def system_detail(system_id):
             LIMIT 1
         ''', (system_id,)).fetchone()
         
+        # Get custom field values for this system
+        custom_field_values = conn.execute('''
+            SELECT pcf.field_label, pcf.field_name, pcf.field_type, scfv.field_value
+            FROM system_custom_field_values scfv
+            JOIN program_custom_fields pcf ON scfv.field_id = pcf.id
+            WHERE scfv.system_id = ?
+            ORDER BY pcf.display_order, pcf.field_label
+        ''', (system_id,)).fetchall()
 
     
-    return render_template('system_detail.html', system=system, checks=checks, active_check=active_check)
+    return render_template('system_detail.html', 
+                         system=system, 
+                         checks=checks, 
+                         active_check=active_check,
+                         custom_field_values=custom_field_values)
 
 @app.route('/systems/<int:system_id>/delete', methods=['POST'])
+@editor_required
 def delete_system(system_id):
     """Delete a system and all its firmware checks"""
     try:
@@ -1094,6 +2439,7 @@ def delete_system(system_id):
     return redirect(url_for('systems'))
 
 @app.route('/systems/<int:system_id>/edit', methods=['GET', 'POST'])
+@editor_required
 def edit_system(system_id):
     """Edit system information"""
     with get_db_connection() as conn:
@@ -1194,6 +2540,7 @@ def edit_system(system_id):
                          additional_notes=additional_notes)
 
 @app.route('/check/<int:system_id>')
+@login_required
 def check_firmware(system_id):
     """Check firmware versions for a system"""
     with get_db_connection() as conn:
@@ -1209,6 +2556,39 @@ def check_firmware(system_id):
             ORDER BY check_date DESC 
             LIMIT 1
         ''', (system_id,)).fetchone()
+        
+        # Get firmware types available for this system's program
+        if system['program_id']:
+            # Filter firmware types by program association
+            firmware_types = conn.execute('''
+                SELECT ft.* 
+                FROM firmware_types ft
+                INNER JOIN program_firmware_types pft ON ft.id = pft.firmware_type_id
+                WHERE pft.program_id = ?
+                ORDER BY ft.category, ft.name
+            ''', (system['program_id'],)).fetchall()
+        else:
+            # No program assigned - show all firmware types
+            firmware_types = conn.execute('''
+                SELECT * FROM firmware_types ORDER BY category, name
+            ''').fetchall()
+        
+        # Group firmware types by category for display
+        firmware_by_category = {}
+        for ft in firmware_types:
+            if ft['category'] not in firmware_by_category:
+                firmware_by_category[ft['category']] = []
+            firmware_by_category[ft['category']].append(ft)
+        
+        # Load available recipes for selection (filtered by program)
+        if system['program_id']:
+            recipes = conn.execute('''
+                SELECT id, name FROM firmware_recipes 
+                WHERE program_id = ? OR program_id IS NULL
+                ORDER BY name
+            ''', (system['program_id'],)).fetchall()
+        else:
+            recipes = conn.execute('SELECT id, name FROM firmware_recipes ORDER BY name').fetchall()
     
     # Extract hostname from description if present
     system_hostname = None
@@ -1220,14 +2600,15 @@ def check_firmware(system_id):
         except (IndexError, AttributeError):
             system_hostname = None
     
-    # Load available recipes for selection
-    with get_db_connection() as conn:
-        recipes = conn.execute('SELECT id, name FROM firmware_recipes ORDER BY name').fetchall()
-    
-    return render_template('check_firmware.html', system=system, active_check=active_check, 
-                         system_hostname=system_hostname, recipes=recipes)
+    return render_template('check_firmware.html', 
+                         system=system, 
+                         active_check=active_check, 
+                         system_hostname=system_hostname, 
+                         recipes=recipes,
+                         firmware_by_category=firmware_by_category)
 
 @app.route('/check/<int:system_id>/progress')
+@login_required
 def check_progress(system_id):
     """View progress of an ongoing firmware check"""
     with get_db_connection() as conn:
@@ -1270,20 +2651,41 @@ def check_progress(system_id):
                          firmware_data=parsed_firmware_data)
 
 @app.route('/check/result/<int:check_id>')
+@login_required
 def check_result(check_id):
     """View specific firmware check result"""
     with get_db_connection() as conn:
         # Get the specific check
         check = conn.execute('''
-            SELECT fc.*, s.name as system_name, s.rscm_ip, s.rscm_port, s.description as system_description
+            SELECT fc.*, s.name as system_name, s.rscm_ip, s.rscm_port, s.program_id,
+                   u.username as checked_by_username,
+                   u.first_name as checked_by_first_name, 
+                   u.last_name as checked_by_last_name
             FROM firmware_checks fc
             JOIN systems s ON fc.system_id = s.id
+            LEFT JOIN users u ON fc.user_id = u.id
             WHERE fc.id = ?
         ''', (check_id,)).fetchone()
         
         if not check:
             flash('Firmware check not found!', 'error')
             return redirect(url_for('index'))
+        
+        # Get available recipes for this program
+        program_id = check['program_id']
+        available_recipes = []
+        if program_id:
+            available_recipes = conn.execute('''
+                SELECT id, name, description
+                FROM firmware_recipes 
+                WHERE program_id = ?
+                ORDER BY name
+            ''', (program_id,)).fetchall()
+            print(f"[DEBUG] Check ID {check_id}: program_id={program_id}, found {len(available_recipes)} recipes")
+            for rec in available_recipes:
+                print(f"[DEBUG]   Recipe: {rec['name']} (ID: {rec['id']})")
+        else:
+            print(f"[DEBUG] Check ID {check_id}: No program_id found")
         
         # Get recipe if one was used
         recipe = None
@@ -1319,9 +2721,11 @@ def check_result(check_id):
         return render_template('check_result.html', 
                              check=check,
                              firmware_data=parsed_firmware_data,
-                             recipe=recipe)
+                             recipe=recipe,
+                             available_recipes=available_recipes)
 
 @app.route('/api/check/<int:check_id>/firmware-data')
+@login_required
 def api_check_firmware_data(check_id):
     """API endpoint to get firmware data for a specific check"""
     with get_db_connection() as conn:
@@ -1343,7 +2747,52 @@ def api_check_firmware_data(check_id):
         except json.JSONDecodeError:
             return jsonify({'error': 'Invalid firmware data'}), 500
 
+@app.route('/api/check/<int:check_id>/compare-recipe/<int:recipe_id>')
+@login_required
+def api_compare_check_with_recipe(check_id, recipe_id):
+    """API endpoint to compare a firmware check against a recipe"""
+    with get_db_connection() as conn:
+        # Get firmware check data
+        check = conn.execute('''
+            SELECT firmware_data, status
+            FROM firmware_checks 
+            WHERE id = ?
+        ''', (check_id,)).fetchone()
+        
+        if not check:
+            return jsonify({'error': 'Check not found'}), 404
+        
+        if not check['firmware_data'] or check['firmware_data'] == '{}':
+            return jsonify({'error': 'No firmware data available'}), 404
+        
+        # Get recipe
+        recipe = conn.execute('''
+            SELECT * FROM firmware_recipes WHERE id = ?
+        ''', (recipe_id,)).fetchone()
+        
+        if not recipe:
+            return jsonify({'error': 'Recipe not found'}), 404
+        
+        try:
+            firmware_data = json.loads(check['firmware_data'])
+            recipe_versions = json.loads(recipe['firmware_versions'])
+            
+            # Perform comparison
+            comparison_results = compare_firmware_with_recipe(firmware_data, recipe_versions)
+            
+            return jsonify({
+                'recipe': {
+                    'id': recipe['id'],
+                    'name': recipe['name'],
+                    'description': recipe['description']
+                },
+                'comparison': comparison_results
+            })
+        except json.JSONDecodeError as e:
+            return jsonify({'error': f'Invalid data format: {str(e)}'}), 500
+
 @app.route('/api/check-status/<int:system_id>')
+@login_required
 def api_check_status(system_id):
     """API endpoint to check status of running firmware check with threading info"""
     try:
@@ -1426,6 +2875,7 @@ def api_check_status(system_id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/check-firmware', methods=['POST'])
+@login_required
 def api_check_firmware():
     """API endpoint to start firmware checks in background thread"""
     try:
@@ -1477,9 +2927,9 @@ def api_check_firmware():
         # Create initial "running" entry in database
         with get_db_connection() as conn:
             cursor = conn.execute('''
-                INSERT INTO firmware_checks (system_id, firmware_data, status, recipe_id)
-                VALUES (?, ?, ?, ?)
-            ''', (system_id, '{"status": "initializing", "message": "Preparing firmware check..."}', 'running', recipe_id))
+                INSERT INTO firmware_checks (system_id, firmware_data, status, recipe_id, user_id)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (system_id, '{"status": "initializing", "message": "Preparing firmware check..."}', 'running', recipe_id, session.get('user_id')))
             check_id = cursor.lastrowid
             conn.commit()
         
@@ -1537,6 +2987,7 @@ def api_check_firmware():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/check-firmware-individual', methods=['POST'])
+@login_required
 def api_check_firmware_individual():
     """API endpoint to check individual firmware types
     
@@ -1686,6 +3137,7 @@ def api_check_firmware_individual():
 
 @app.route('/firmware-types')
 @app.route('/test-redfish')
+@login_required
 def test_redfish():
     """Serve the Redfish connection test page"""
     import os
@@ -1694,6 +3146,7 @@ def test_redfish():
         return f.read(), 200, {'Content-Type': 'text/html'}
 
 @app.route('/api/test-connection', methods=['POST'])
+@login_required
 def test_connection():
     """Test Redfish API connection to a system"""
     try:
@@ -1757,6 +3210,7 @@ def test_connection():
         }), 500
 
 @app.route('/api/active-checks')
+@login_required
 def api_active_checks():
     """API endpoint to get information about active threaded checks"""
     try:
@@ -1804,6 +3258,7 @@ def api_active_checks():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/cleanup-orphaned-checks', methods=['POST'])
+@admin_required
 def api_cleanup_orphaned_checks():
     """API endpoint to manually cleanup orphaned running checks"""
     try:
@@ -1865,6 +3320,65 @@ def api_cleanup_orphaned_checks():
             'error': str(e)
         }), 500
 
+@app.route('/api/restart-application', methods=['POST'])
+@admin_required
+def api_restart_application():
+    """API endpoint to restart the Flask application"""
+    try:
+        # Check if any firmware checks are currently running
+        with active_checks_lock:
+            if len(active_checks) > 0:
+                active_list = []
+                for check_id, info in active_checks.items():
+                    with get_db_connection() as conn:
+                        check = conn.execute('''
+                            SELECT fc.id, s.name as system_name, s.rscm_ip
+                            FROM firmware_checks fc
+                            JOIN systems s ON fc.system_id = s.id
+                            WHERE fc.id = ?
+                        ''', (check_id,)).fetchone()
+                        
+                        if check:
+                            active_list.append({
+                                'check_id': check_id,
+                                'system_name': check['system_name'],
+                                'rscm_ip': check['rscm_ip'],
+                                'runtime_minutes': (time.time() - info['start_time']) / 60
+                            })
+                
+                return jsonify({
+                    'status': 'blocked',
+                    'message': 'Cannot restart while firmware checks are running',
+                    'active_checks': active_list,
+                    'active_count': len(active_checks)
+                }), 400
+        
+        # No active checks, safe to restart
+        logger.info("Application restart requested - shutting down gracefully...")
+        
+        # Shutdown thread pool
+        def shutdown_and_restart():
+            time.sleep(1)  # Give time for response to be sent
+            thread_pool.shutdown(wait=False)
+            logger.info("Restarting application...")
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+        
+        # Start shutdown in background thread
+        restart_thread = threading.Thread(target=shutdown_and_restart, daemon=True)
+        restart_thread.start()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Application is restarting...'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error restarting application: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
 @app.errorhandler(404)
 def not_found(error):
     return render_template('404.html'), 404
@@ -1894,6 +3408,9 @@ if __name__ == '__main__':
     init_db()
     
     print("Database initialized successfully!")
+    
+    # Create default admin user if needed
+    create_default_admin()
     
     # Cleanup orphaned running checks on startup
     cleanup_orphaned_checks()

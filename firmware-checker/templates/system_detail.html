@@ -61,8 +61,38 @@
                     <dt class="col-sm-5">Description:</dt>
                     <dd class="col-sm-7">{{ system.description or 'No description' }}</dd>
                     
+                    {% if custom_field_values %}
+                    <dt class="col-12 mt-3 mb-2"><hr><strong><i class="bi bi-sliders"></i> Program-Specific Fields:</strong></dt>
+                    {% for field in custom_field_values %}
+                    <dt class="col-sm-5">{{ field.field_label }}:</dt>
+                    <dd class="col-sm-7">
+                        {% if field.field_type == 'url' %}
+                        <a href="{{ field.field_value }}" target="_blank">{{ field.field_value }}</a>
+                        {% elif field.field_type == 'email' %}
+                        <a href="mailto:{{ field.field_value }}">{{ field.field_value }}</a>
+                        {% elif field.field_type == 'ip' %}
+                        <code>{{ field.field_value }}</code>
+                        {% else %}
+                        {{ field.field_value }}
+                        {% endif %}
+                    </dd>
+                    {% endfor %}
+                    {% endif %}
+                    
+                    <dt class="col-12 mt-3"><hr></dt>
                     <dt class="col-sm-5">Created:</dt>
                     <dd class="col-sm-7">{{ system.created_at[:19] if system.created_at else 'Unknown' }}</dd>
+                    
+                    {% if system.created_by_username %}
+                    <dt class="col-sm-5">Created By:</dt>
+                    <dd class="col-sm-7">
+                        {% if system.created_by_first_name and system.created_by_last_name %}
+                            {{ system.created_by_first_name }} {{ system.created_by_last_name }}
+                        {% else %}
+                            {{ system.created_by_username }}
+                        {% endif %}
+                    </dd>
+                    {% endif %}
                     
                     <dt class="col-sm-5">Updated:</dt>
                     <dd class="col-sm-7">{{ system.updated_at[:19] if system.updated_at else 'Unknown' }}</dd>
@@ -143,12 +173,10 @@
                                     </td>
                                     <td>
                                         {% if check.firmware_data and check.firmware_data != '{}' %}
-                                            <button class="btn btn-outline-info btn-sm" 
-                                                    data-check-id="{{ check.id }}" 
-                                                    data-firmware-data="{{ check.firmware_data|escape }}"
-                                                    onclick="showFirmwareData(this)">
-                                                <i class="bi bi-eye"></i> View Data
-                                            </button>
+                                            <a href="{{ url_for('check_result', check_id=check.id) }}" 
+                                               class="btn btn-outline-info btn-sm">
+                                                <i class="bi bi-eye"></i> View Results
+                                            </a>
                                         {% else %}
                                             <span class="text-muted">No data</span>
                                         {% endif %}
@@ -163,16 +191,16 @@
                                     <td>
                                         <div class="btn-group" role="group">
                                             {% if check.firmware_data and check.firmware_data != '{}' %}
-                                                <button class="btn btn-outline-primary btn-sm" 
-                                                        data-check-id="{{ check.id }}" 
-                                                        data-firmware-data="{{ check.firmware_data|escape }}"
-                                                        onclick="showFirmwareData(this)">
+                                                <a href="{{ url_for('check_result', check_id=check.id) }}" 
+                                                   class="btn btn-outline-primary btn-sm"
+                                                   title="View Results">
                                                     <i class="bi bi-eye"></i>
-                                                </button>
+                                                </a>
                                             {% endif %}
                                             <button class="btn btn-outline-danger btn-sm" 
                                                     data-check-id="{{ check.id }}"
-                                                    onclick="deleteCheck(this)">
+                                                    onclick="deleteCheck(this)"
+                                                    title="Delete Check">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </div>

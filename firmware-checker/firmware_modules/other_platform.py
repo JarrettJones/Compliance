@@ -118,10 +118,10 @@ class OtherPlatformChecker:
                 else:
                     skip_reason = "Missing requirements"
                 
-                # Return not_checked status for storage devices
+                # Return error status for storage devices when credentials not provided
                 storage_result = {
-                    'version': 'NOT_CHECKED',
-                    'status': 'not_checked',
+                    'version': 'NOT CONFIGURED - OS Credentials Required',
+                    'status': 'error',
                     'error': skip_reason,
                     'checked_at': datetime.now().isoformat(),
                     'method': 'storage_firmware_tool'
@@ -149,8 +149,8 @@ class OtherPlatformChecker:
                     skip_reason = "Missing requirements"
                 
                 results['firmware_versions']['Windows OS Version'] = {
-                    'version': 'NOT_CHECKED',
-                    'status': 'not_checked',
+                    'version': 'NOT CONFIGURED - OS Credentials Required',
+                    'status': 'error',
                     'error': skip_reason,
                     'checked_at': datetime.now().isoformat(),
                     'method': 'os_version_check'
@@ -311,8 +311,8 @@ class OtherPlatformChecker:
                     return self.storage_checker.get_m2_devices(target_computer)
                 else:
                     return {
-                        'version': 'NOT_CHECKED',
-                        'status': 'not_checked',
+                        'version': 'NOT CONFIGURED - OS Credentials Required',
+                        'status': 'error',
                         'error': 'No OS credentials provided',
                         'checked_at': datetime.now().isoformat(),
                         'method': 'storage_firmware_tool'
@@ -324,8 +324,8 @@ class OtherPlatformChecker:
                     return self.storage_checker.get_e1s_devices(target_computer)
                 else:
                     return {
-                        'version': 'NOT_CHECKED',
-                        'status': 'not_checked',
+                        'version': 'NOT CONFIGURED - OS Credentials Required',
+                        'status': 'error',
                         'error': 'No OS credentials provided',
                         'checked_at': datetime.now().isoformat(),
                         'method': 'storage_firmware_tool'
@@ -337,8 +337,8 @@ class OtherPlatformChecker:
                     return self.os_version_checker.get_os_version(target_computer)
                 else:
                     return {
-                        'version': 'NOT_CHECKED',
-                        'status': 'not_checked',
+                        'version': 'NOT CONFIGURED - OS Credentials Required',
+                        'status': 'error',
                         'error': 'No OS credentials provided',
                         'checked_at': datetime.now().isoformat(),
                         'method': 'os_version_check'

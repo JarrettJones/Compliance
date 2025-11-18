@@ -310,11 +310,22 @@ function generateTableRow(system) {
     const locationInfo = [metadata.location, metadata.building, metadata.room].filter(x => x).join(', ') || 'Not specified';
     const lastCheck = system.last_check ? system.last_check.substring(0, 19) : '<small class="text-warning">Never</small>';
     
+    // Format created by info
+    let createdByInfo = '';
+    if (system.created_by_username) {
+        if (system.created_by_first_name && system.created_by_last_name) {
+            createdByInfo = `<br><small class="text-muted"><i class="bi bi-person-plus"></i> ${system.created_by_first_name} ${system.created_by_last_name}</small>`;
+        } else {
+            createdByInfo = `<br><small class="text-muted"><i class="bi bi-person-plus"></i> ${system.created_by_username}</small>`;
+        }
+    }
+    
     return `
         <tr>
             <td>
                 <strong>${system.name}</strong>
                 ${metadata.hostname ? `<br><small class="text-muted">(${metadata.hostname})</small>` : ''}
+                ${createdByInfo}
             </td>
             <td><code>${system.rscm_ip}</code></td>
             <td><span class="badge bg-secondary">${system.rscm_port}</span></td>
@@ -415,11 +426,39 @@ function renderGrouped(systems, groupBy) {
     });
 }
 
+// Save filter preferences to localStorage
+function saveFilterPreferences() {
+    const preferences = {
+        searchTerm: document.getElementById('searchInput').value,
+        groupBy: document.getElementById('groupByFilter').value,
+        sortBy: document.getElementById('sortByFilter').value
+    };
+    localStorage.setItem('systemsFilterPreferences', JSON.stringify(preferences));
+}
+
+// Load filter preferences from localStorage
+function loadFilterPreferences() {
+    const saved = localStorage.getItem('systemsFilterPreferences');
+    if (saved) {
+        try {
+            const preferences = JSON.parse(saved);
+            document.getElementById('searchInput').value = preferences.searchTerm || '';
+            document.getElementById('groupByFilter').value = preferences.groupBy || 'none';
+            document.getElementById('sortByFilter').value = preferences.sortBy || 'name-asc';
+        } catch (e) {
+            console.error('Error loading filter preferences:', e);
+        }
+    }
+}
+
 // Filter and sort systems
 function filterAndSortSystems() {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
     const groupBy = document.getElementById('groupByFilter').value;
     const sortBy = document.getElementById('sortByFilter').value;
+    
+    // Save preferences
+    saveFilterPreferences();
     
     // Filter systems
     let filtered = systemsData.filter(system => {
@@ -484,6 +523,7 @@ function clearFilters() {
     document.getElementById('searchInput').value = '';
     document.getElementById('groupByFilter').value = 'none';
     document.getElementById('sortByFilter').value = 'name-asc';
+    saveFilterPreferences(); // Save cleared state
     filterAndSortSystems();
 }
 
@@ -492,7 +532,8 @@ document.getElementById('searchInput').addEventListener('input', filterAndSortSy
 document.getElementById('groupByFilter').addEventListener('change', filterAndSortSystems);
 document.getElementById('sortByFilter').addEventListener('change', filterAndSortSystems);
 
-// Initial render
+// Load preferences and initial render
+loadFilterPreferences();
 filterAndSortSystems();
 
 function confirmDelete(button) {

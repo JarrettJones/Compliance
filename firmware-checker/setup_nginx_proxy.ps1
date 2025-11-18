@@ -66,18 +66,6 @@ Write-Host "-" * 80
 
 $hostname = $env:COMPUTERNAME.ToLower()
 
-# Check if SSL certificates exist
-$sslDir = "$nginxPath\ssl"
-$certExists = (Test-Path "$sslDir\server.crt") -and (Test-Path "$sslDir\server.key")
-$fullHostname = "$hostname.redmond.corp.microsoft.com"
-
-if ($certExists) {
-    Write-Host "[OK] SSL certificates found - enabling HTTPS" -ForegroundColor Green
-} else {
-    Write-Host "[INFO] No SSL certificates found - HTTP only" -ForegroundColor Yellow
-    Write-Host "       Run install_ca_certificate.py to enable HTTPS" -ForegroundColor Yellow
-}
-
 $nginxConfig = @"
 # nginx configuration for Firmware Checker
 # Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
@@ -99,66 +87,51 @@ http {
     access_log  logs/access.log;
     error_log   logs/error.log;
     
-    # HTTP Server (Port 80) - Redirect to HTTPS if certificates exist
+    # HTTP server - redirect to HTTPS
     server {
         listen 80;
-        server_name $hostname $fullHostname localhost;
-"@
-
-if ($certExists) {
-    $nginxConfig += @"
+        server_name $hostname localhost;
         
         # Redirect all HTTP to HTTPS
         return 301 https://`$host`$request_uri;
     }
     
-    # HTTPS Server (Port 443) - Main application server
+    # HTTPS server
     server {
         listen 443 ssl;
-        server_name $hostname $fullHostname localhost;
+        server_name $hostname localhost;
         
-        # SSL Configuration (use forward slashes for nginx compatibility)
+        # SSL Certificate Configuration
+        # Using Microsoft-signed certificate from C:\nginx\ssl
         ssl_certificate      C:/nginx/ssl/server.crt;
         ssl_certificate_key  C:/nginx/ssl/server.key;
         
-        # SSL Security Settings
+        # SSL Settings
         ssl_protocols TLSv1.2 TLSv1.3;
         ssl_ciphers HIGH:!aNULL:!MD5;
         ssl_prefer_server_ciphers on;
         ssl_session_cache shared:SSL:10m;
         ssl_session_timeout 10m;
-"@
-} else {
-    $nginxConfig += @"
-
-"@
-}
-
-$nginxConfig += @"
         
         # Root redirects to firmware-checker
         location = / {
             return 301 /firmware-checker/;
         }
         
-        # Redirect /firmware-checker to /firmware-checker/ (with trailing slash)
-        location = /firmware-checker {
-            return 301 /firmware-checker/;
-        }
-        
         # Firmware Checker application
-        location /firmware-checker/ {
-            # Strip /firmware-checker prefix and pass the rest to Flask
-            rewrite ^/firmware-checker/(.*)$ /`$1 break;
+        # Keep the /firmware-checker prefix when proxying
+        location /firmware-checker {
+            # Rewrite to strip /firmware-checker before passing to Flask
+            rewrite ^/firmware-checker(.*)$ `$1 break;
             
-            # Proxy to Flask/Waitress at root (use IPv4 explicitly to avoid IPv6 issues)
+            # Proxy to Waitress at root (use IPv4 explicitly to avoid IPv6 issues)
             proxy_pass http://127.0.0.1:5000;
             
             # Preserve original request information
             proxy_set_header Host `$host;
             proxy_set_header X-Real-IP `$remote_addr;
             proxy_set_header X-Forwarded-For `$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto `$scheme;
+            proxy_set_header X-Forwarded-Proto https;
             proxy_set_header X-Forwarded-Host `$host;
             proxy_set_header X-Forwarded-Port `$server_port;
             
@@ -223,9 +196,9 @@ Write-Host "Step 5: Configuring Windows Firewall" -ForegroundColor Cyan
 Write-Host "-" * 80
 
 try {
-    # HTTP Rule
-    $httpRule = Get-NetFirewallRule -DisplayName "nginx HTTP" -ErrorAction SilentlyContinue
-    if ($httpRule) {
+    # HTTP port 80
+    $existingRule = Get-NetFirewallRule -DisplayName "nginx HTTP" -ErrorAction SilentlyContinue
+    if ($existingRule) {
         Write-Host "[INFO] HTTP firewall rule already exists" -ForegroundColor Yellow
     } else {
         New-NetFirewallRule `
@@ -239,22 +212,20 @@ try {
         Write-Host "[OK] Created firewall rule for port 80 (HTTP)" -ForegroundColor Green
     }
     
-    # HTTPS Rule (if certificates exist)
-    if ($certExists) {
-        $httpsRule = Get-NetFirewallRule -DisplayName "nginx HTTPS" -ErrorAction SilentlyContinue
-        if ($httpsRule) {
-            Write-Host "[INFO] HTTPS firewall rule already exists" -ForegroundColor Yellow
-        } else {
-            New-NetFirewallRule `
-                -DisplayName "nginx HTTPS" `
-                -Direction Inbound `
-                -Protocol TCP `
-                -LocalPort 443 `
-                -Action Allow `
-                -Profile Domain,Private `
-                -Enabled True | Out-Null
-            Write-Host "[OK] Created firewall rule for port 443 (HTTPS)" -ForegroundColor Green
-        }
+    # HTTPS port 443
+    $existingHttpsRule = Get-NetFirewallRule -DisplayName "nginx HTTPS" -ErrorAction SilentlyContinue
+    if ($existingHttpsRule) {
+        Write-Host "[INFO] HTTPS firewall rule already exists" -ForegroundColor Yellow
+    } else {
+        New-NetFirewallRule `
+            -DisplayName "nginx HTTPS" `
+            -Direction Inbound `
+            -Protocol TCP `
+            -LocalPort 443 `
+            -Action Allow `
+            -Profile Domain,Private `
+            -Enabled True | Out-Null
+        Write-Host "[OK] Created firewall rule for port 443 (HTTPS)" -ForegroundColor Green
     }
 } catch {
     Write-Host "[WARNING] Could not configure firewall (may need Administrator)" -ForegroundColor Yellow
@@ -294,27 +265,59 @@ if ($nginxProcess) {
 }
 Write-Host ""
 
-# Step 7: Summary
+# Step 7: SSL Certificate Setup Instructions
+Write-Host "Step 7: SSL Certificate Setup" -ForegroundColor Cyan
+Write-Host "-" * 80
+Write-Host ""
+Write-Host "IMPORTANT: You need to configure SSL certificates for HTTPS to work!" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Certificate Location: $nginxPath\conf\ssl\" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Steps to configure your organization's certificate:" -ForegroundColor White
+Write-Host "1. Create the SSL directory if it doesn't exist:" -ForegroundColor White
+Write-Host "   New-Item -ItemType Directory -Path '$nginxPath\conf\ssl' -Force" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "2. Export your certificate from certlm.msc:" -ForegroundColor White
+Write-Host "   a. Open certlm.msc (Certificate Manager)" -ForegroundColor Gray
+Write-Host "   b. Navigate to Personal > Certificates" -ForegroundColor Gray
+Write-Host "   c. Find your server certificate (CN=$hostname)" -ForegroundColor Gray
+Write-Host "   d. Right-click > All Tasks > Export" -ForegroundColor Gray
+Write-Host "   e. Export with private key as PFX" -ForegroundColor Gray
+Write-Host ""
+Write-Host "3. Convert PFX to PEM format for nginx:" -ForegroundColor White
+Write-Host "   # Extract certificate" -ForegroundColor Gray
+Write-Host "   openssl pkcs12 -in certificate.pfx -clcerts -nokeys -out server.crt" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "   # Extract private key" -ForegroundColor Gray
+Write-Host "   openssl pkcs12 -in certificate.pfx -nocerts -nodes -out server.key" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "4. Copy the files to nginx:" -ForegroundColor White
+Write-Host "   Copy-Item server.crt '$nginxPath\conf\ssl\server.crt'" -ForegroundColor Cyan
+Write-Host "   Copy-Item server.key '$nginxPath\conf\ssl\server.key'" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "5. Reload nginx:" -ForegroundColor White
+Write-Host "   cd $nginxPath; .\nginx.exe -s reload" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "NOTE: If you don't have OpenSSL, download from: https://slproweb.com/products/Win32OpenSSL.html" -ForegroundColor Yellow
+Write-Host ""
+
+# Step 8: Summary
 Write-Host "=" * 80 -ForegroundColor Cyan
 Write-Host "nginx Configuration Complete!" -ForegroundColor Green
 Write-Host "=" * 80 -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Access URLs:" -ForegroundColor Yellow
-if ($certExists) {
-    Write-Host "  https://$fullHostname/firmware-checker" -ForegroundColor Green
-    Write-Host "  https://$hostname/firmware-checker" -ForegroundColor Cyan
-    Write-Host "  http://$hostname/firmware-checker (redirects to HTTPS)" -ForegroundColor Yellow
-} else {
-    Write-Host "  http://$hostname/firmware-checker" -ForegroundColor Cyan
-    Write-Host "  http://localhost/firmware-checker" -ForegroundColor Cyan
-}
+Write-Host "  HTTP:  http://$hostname/firmware-checker (redirects to HTTPS)" -ForegroundColor Cyan
+Write-Host "  HTTPS: https://$hostname/firmware-checker" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Important:" -ForegroundColor Yellow
-Write-Host "1. Make sure Waitress is running on port 5000:" -ForegroundColor White
+Write-Host "1. Configure SSL certificates (see Step 7 above)" -ForegroundColor White
+Write-Host ""
+Write-Host "2. Make sure Waitress is running on port 5000:" -ForegroundColor White
 Write-Host "   .\start_production.ps1" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "2. Test the URL:" -ForegroundColor White
-Write-Host "   Start-Process http://localhost/firmware-checker" -ForegroundColor Cyan
+Write-Host "3. Test the URL after configuring certificates:" -ForegroundColor White
+Write-Host "   Start-Process https://localhost/firmware-checker" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "nginx Commands:" -ForegroundColor Yellow
 Write-Host "  Start:   cd $nginxPath; .\nginx.exe" -ForegroundColor White

@@ -217,6 +217,7 @@ class DCScmChecker:
                 'status': 'success' if bios_version != 'Not Available' else 'not_found',
                 'error': None,
                 'checked_at': datetime.now().isoformat(),
+                'method': 'redfish_api',
                 'raw_data': bios_version
             }
         except Exception as e:
@@ -224,7 +225,8 @@ class DCScmChecker:
                 'version': 'PARSE_ERROR',
                 'status': 'error',
                 'error': str(e),
-                'checked_at': datetime.now().isoformat()
+                'checked_at': datetime.now().isoformat(),
+                'method': 'redfish_api'
             }
     
     def _extract_bmc_version(self, system_data):
@@ -236,6 +238,7 @@ class DCScmChecker:
                 'status': 'success' if bmc_version != 'Not Available' else 'not_found',
                 'error': None,
                 'checked_at': datetime.now().isoformat(),
+                'method': 'redfish_api',
                 'raw_data': bmc_version
             }
         except Exception as e:
@@ -243,7 +246,8 @@ class DCScmChecker:
                 'version': 'PARSE_ERROR',
                 'status': 'error',
                 'error': str(e),
-                'checked_at': datetime.now().isoformat()
+                'checked_at': datetime.now().isoformat(),
+                'method': 'redfish_api'
             }
     
     def _extract_scm_cpld_version(self, system_data):
@@ -257,6 +261,7 @@ class DCScmChecker:
                 'status': 'success' if scm_cpld_version != 'Not Available' else 'not_found',
                 'error': None,
                 'checked_at': datetime.now().isoformat(),
+                'method': 'redfish_api',
                 'raw_data': {
                     'DCSCMCPLDVersion': scm_cpld_version
                 }
@@ -266,7 +271,8 @@ class DCScmChecker:
                 'version': 'PARSE_ERROR',
                 'status': 'error',
                 'error': str(e),
-                'checked_at': datetime.now().isoformat()
+                'checked_at': datetime.now().isoformat(),
+                'method': 'redfish_api'
             }
     
 

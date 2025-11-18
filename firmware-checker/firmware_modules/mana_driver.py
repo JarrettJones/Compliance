@@ -199,7 +199,19 @@ class ManaDriverChecker:
                 'method': 'mana_driver_check'
             }
         except Exception as e:
+            error_str = str(e).lower()
             logger.error(f"Failed to check MANA driver on {computer_name}: {str(e)}")
+            
+            # Check if it's a connection/network error
+            if any(keyword in error_str for keyword in ['connection', 'network', 'unreachable', 'timeout', 'wsman', 'winrm', 'refused']):
+                return {
+                    'version': 'UNREACHABLE - Check Network',
+                    'status': 'error',
+                    'error': f'Cannot connect to {computer_name}: {str(e)}',
+                    'checked_at': datetime.now().isoformat(),
+                    'method': 'mana_driver_check'
+                }
+            
             return {
                 'version': 'EXCEPTION_ERROR',
                 'status': 'error',

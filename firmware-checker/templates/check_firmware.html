@@ -219,25 +219,51 @@
                                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllFirmware()">
                                             <i class="bi bi-x"></i> Deselect All
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="selectCategory('dc_scm')">
-                                            DC-SCM Only
+                                        {% for category in firmware_by_category.keys() %}
+                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="selectCategory('{{ category.lower().replace('-', '_').replace(' ', '_') }}')">
+                                            {{ category }} Only
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-outline-success" onclick="selectCategory('ovl2')">
-                                            OVL2 Only
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-warning" onclick="selectCategory('other_platform')">
-                                            Other Platform Only
-                                        </button>
+                                        {% endfor %}
                                     </div>
                                     
-                                    <!-- Firmware Type Selection -->
+                                    <!-- Firmware Type Selection - Dynamic based on program -->
                                     <div class="row">
+                                        {% if firmware_by_category and firmware_by_category|length > 0 %}
+                                            {% for category, firmware_types in firmware_by_category.items() %}
+                                            <div class="col-md-4 mb-3">
+                                                <h6 class="text-primary">{{ category }} ({{ firmware_types|length }} types)</h6>
+                                                {% for fw_type in firmware_types %}
+                                                <div class="form-check">
+                                                    <input class="form-check-input fw-category {{ category.lower().replace('-', '_').replace(' ', '_') }}" 
+                                                           type="checkbox" 
+                                                           value="{{ fw_type['name'] }}" 
+                                                           id="fw_{{ fw_type['id'] }}" 
+                                                           checked>
+                                                    <label class="form-check-label small" for="fw_{{ fw_type['id'] }}">
+                                                        {{ fw_type['name'] }}
+                                                    </label>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                            {% endfor %}
+                                        {% else %}
+                                        <div class="col-12">
+                                            <div class="alert alert-warning">
+                                                <i class="bi bi-exclamation-triangle"></i>
+                                                No firmware types configured for this program. Please contact an administrator to assign firmware types to this program.
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <!-- Keep the old hardcoded section for backwards compatibility (hidden) -->
+                                    <div class="row d-none">
                                         <!-- DC-SCM -->
                                         <div class="col-md-4">
                                             <h6 class="text-primary">DC-SCM (16 types)</h6>
                                             <div class="form-check">
-                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="IFWI" id="fw_ifwi" checked>
-                                                <label class="form-check-label small" for="fw_ifwi">IFWI</label>
+                                                <input class="form-check-input fw-category dc_scm" type="checkbox" value="IFWI" id="fw_ifwi_old" checked>
+                                                <label class="form-check-label small" for="fw_ifwi_old">IFWI</label>
                                             </div>
                                             <div class="form-check">
                                                 <input class="form-check-input fw-category dc_scm" type="checkbox" value="UEFI Profile/Other" id="fw_uefi" checked>
@@ -481,26 +507,48 @@ let checkResults = null;
 
 // Firmware Selection Functions
 function updateSelectedCount() {
-    const checkboxes = document.querySelectorAll('.fw-category:checked');
-    const count = checkboxes.length;
+    // Only count visible checkboxes (exclude d-none hidden section)
+    const checkboxes = document.querySelectorAll('.fw-category:checked:not(.d-none .fw-category)');
+    const visibleChecked = Array.from(checkboxes).filter(cb => {
+        return !cb.closest('.d-none');
+    });
+    const count = visibleChecked.length;
     document.getElementById('selectedCount').textContent = `${count} firmware type${count !== 1 ? 's' : ''}`;
 }
 
 function selectAllFirmware() {
-    document.querySelectorAll('.fw-category').forEach(cb => cb.checked = true);
+    // Only select visible checkboxes
+    document.querySelectorAll('.fw-category').forEach(cb => {
+        if (!cb.closest('.d-none')) {
+            cb.checked = true;
+        }
+    });
     updateSelectedCount();
 }
 
 function deselectAllFirmware() {
-    document.querySelectorAll('.fw-category').forEach(cb => cb.checked = false);
+    // Only deselect visible checkboxes
+    document.querySelectorAll('.fw-category').forEach(cb => {
+        if (!cb.closest('.d-none')) {
+            cb.checked = false;
+        }
+    });
     updateSelectedCount();
 }
 
 function selectCategory(category) {
-    // Deselect all first
-    document.querySelectorAll('.fw-category').forEach(cb => cb.checked = false);
-    // Select only the specified category
-    document.querySelectorAll(`.fw-category.${category}`).forEach(cb => cb.checked = true);
+    // Deselect all visible checkboxes first
+    document.querySelectorAll('.fw-category').forEach(cb => {
+        if (!cb.closest('.d-none')) {
+            cb.checked = false;
+        }
+    });
+    // Select only the specified category (visible only)
+    document.querySelectorAll(`.fw-category.${category}`).forEach(cb => {
+        if (!cb.closest('.d-none')) {
+            cb.checked = true;
+        }
+    });
     updateSelectedCount();
 }
 
@@ -511,10 +559,13 @@ function getSelectedFirmwareTypes() {
         other_platform: []
     };
     
+    // Only get visible checked checkboxes
     document.querySelectorAll('.fw-category:checked').forEach(cb => {
-        const category = Array.from(cb.classList).find(c => ['dc_scm', 'ovl2', 'other_platform'].includes(c));
-        if (category) {
-            selected[category].push(cb.value);
+        if (!cb.closest('.d-none')) {
+            const category = Array.from(cb.classList).find(c => ['dc_scm', 'ovl2', 'other_platform'].includes(c));
+            if (category) {
+                selected[category].push(cb.value);
+            }
         }
     });
     

@@ -51,6 +51,15 @@
                                 </span>
                             </li>
                             <li><strong>Date:</strong> {{ check.check_date[:19] }}</li>
+                            {% if check.checked_by_username %}
+                            <li><strong>Run By:</strong> 
+                                {% if check.checked_by_first_name and check.checked_by_last_name %}
+                                    {{ check.checked_by_first_name }} {{ check.checked_by_last_name }} ({{ check.checked_by_username }})
+                                {% else %}
+                                    {{ check.checked_by_username }}
+                                {% endif %}
+                            </li>
+                            {% endif %}
                             {% if check.error_message %}
                             <li><strong>Error:</strong> <span class="text-danger">{{ check.error_message }}</span></li>
                             {% endif %}
@@ -69,6 +78,11 @@
                             <button class="btn btn-outline-primary" onclick="exportResults()">
                                 <i class="bi bi-download"></i> Export Results
                             </button>
+                            {% if available_recipes %}
+                            <button class="btn btn-outline-info" onclick="showRecipeComparison()">
+                                <i class="bi bi-clipboard-check"></i> Compare with Recipe
+                            </button>
+                            {% endif %}
                             {% else %}
                             <div class="text-muted">
                                 <i class="bi bi-info-circle"></i> No firmware data available
@@ -125,6 +139,39 @@
                                 </div>
                             </div>
                             {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Post-Check Recipe Comparison Tool -->
+                <div class="row mb-4" id="recipeComparisonSection" style="display: none;">
+                    <div class="col-12">
+                        <div class="card border-info">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0"><i class="bi bi-clipboard-check"></i> Compare with Recipe</h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted mb-3">
+                                    <i class="bi bi-info-circle"></i> Compare this check's results against any recipe.
+                                </p>
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <select id="compareRecipeSelect" class="form-select">
+                                            <option value="">-- Select a recipe to compare --</option>
+                                            {% for rec in available_recipes %}
+                                            <option value="{{ rec.id }}">{{ rec.name }}{% if rec.description %} - {{ rec.description }}{% endif %}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <button class="btn btn-primary w-100" onclick="compareWithRecipe()">
+                                            <i class="bi bi-bar-chart-line"></i> Compare Now
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- Comparison results will be displayed here -->
+                                <div id="comparisonResults" class="mt-3" style="display: none;"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -560,9 +607,14 @@ function exportResults() {
         const dataStr = JSON.stringify(firmwareData, null, 2);
         const dataBlob = new Blob([dataStr], {type: 'application/json'});
         
+        // Get system name from page title or use system serial number from firmware data
+        const systemName = '{{ check.system_name|replace(" ", "_")|replace(":", "-") }}' || 'unknown';
+        const checkId = firmwareData.check_id || 'unknown';
+        const date = new Date().toISOString().split('T')[0];
+        
         const link = document.createElement('a');
         link.href = URL.createObjectURL(dataBlob);
-        link.download = `firmware_check_${firmwareData.check_id || 'unknown'}_${new Date().toISOString().split('T')[0]}.json`;
+        link.download = `firmware_check_${systemName}_${checkId}_${date}.json`;
         
         document.body.appendChild(link);
         link.click();
@@ -725,6 +777,147 @@ function performRecheck(checkId, firmwareType, category, username, password, os_
         button.disabled = false;
         button.innerHTML = originalButtonHtml;
     });
+}
+
+function compareWithRecipe() {
+    const recipeId = document.getElementById('compareRecipeSelect').value;
+    
+    if (!recipeId) {
+        alert('Please select a recipe to compare against');
+        return;
+    }
+    
+    const checkId = getCheckIdFromUrl();
+    if (!checkId) {
+        alert('Could not determine check ID');
+        return;
+    }
+    
+    // Show loading state
+    const resultsDiv = document.getElementById('comparisonResults');
+    resultsDiv.style.display = 'block';
+    resultsDiv.innerHTML = '<div class="text-center py-3"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Comparing with recipe...</p></div>';
+    
+    // Fetch comparison
+    fetch(`${SCRIPT_ROOT}/api/check/${checkId}/compare-recipe/${recipeId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            displayComparisonResults(data);
+        })
+        .catch(error => {
+            console.error('Error comparing with recipe:', error);
+            resultsDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Error: ${error.message}</div>`;
+        });
+}
+
+function showRecipeComparison() {
+    const section = document.getElementById('recipeComparisonSection');
+    if (section.style.display === 'none') {
+        section.style.display = 'block';
+        section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else {
+        section.style.display = 'none';
+    }
+}
+
+function displayComparisonResults(data) {
+    const resultsDiv = document.getElementById('comparisonResults');
+    const comparison = data.comparison;
+    const recipe = data.recipe;
+    
+    let html = `
+        <div class="card mt-3">
+            <div class="card-header bg-${comparison.failed === 0 ? 'success' : 'warning'} text-white">
+                <h6 class="mb-0"><i class="bi bi-file-earmark-check"></i> Comparison Results: ${recipe.name}</h6>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <div class="text-center p-3 bg-light rounded">
+                            <h4 class="mb-0 text-success">${comparison.passed}</h4>
+                            <small class="text-muted">Passed</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3 bg-light rounded">
+                            <h4 class="mb-0 text-danger">${comparison.failed}</h4>
+                            <small class="text-muted">Failed</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3 bg-light rounded">
+                            <h4 class="mb-0 text-primary">${comparison.total_checked}</h4>
+                            <small class="text-muted">Total Checked</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3 bg-light rounded">
+                            <h4 class="mb-0 text-secondary">${comparison.not_in_recipe}</h4>
+                            <small class="text-muted">Not in Recipe</small>
+                        </div>
+                    </div>
+                </div>
+    `;
+    
+    if (comparison.failed > 0) {
+        html += '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> <strong>Version Mismatches Detected!</strong> See details below.</div>';
+    } else if (comparison.passed > 0) {
+        html += '<div class="alert alert-success"><i class="bi bi-check-circle"></i> <strong>All Checked Firmware Matches Recipe!</strong></div>';
+    }
+    
+    // Display detailed comparison by category
+    html += '<h6 class="mt-3">Detailed Comparison:</h6>';
+    
+    for (const [category, items] of Object.entries(comparison.details)) {
+        if (Object.keys(items).length === 0) continue;
+        
+        html += `
+            <div class="mb-3">
+                <h6 class="text-muted"><i class="bi bi-folder"></i> ${category}</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Firmware Type</th>
+                                <th>Expected</th>
+                                <th>Actual</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        for (const [fwType, details] of Object.entries(items)) {
+            const statusBadge = details.status === 'pass' 
+                ? '<span class="badge bg-success"><i class="bi bi-check"></i> Match</span>'
+                : '<span class="badge bg-danger"><i class="bi bi-x"></i> Mismatch</span>';
+            
+            html += `
+                <tr class="${details.status === 'pass' ? '' : 'table-warning'}">
+                    <td><strong>${fwType}</strong></td>
+                    <td><code>${details.expected}</code></td>
+                    <td><code>${details.actual}</code></td>
+                    <td>${statusBadge}</td>
+                </tr>
+            `;
+        }
+        
+        html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+    
+    html += '</div></div>';
+    
+    resultsDiv.innerHTML = html;
 }
 </script>
 {% endblock %}

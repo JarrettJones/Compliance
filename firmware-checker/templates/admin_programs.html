@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Programs - Admin - Firmware Checker{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-building"></i> Program Management</h2>
+        <a href="{{ url_for('admin_add_program') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Add New Program
+        </a>
+    </div>
+
+    {% if programs %}
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>Methodology</th>
+                    <th>Systems</th>
+                    <th>Checks</th>
+                    <th>Recipes</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for program in programs %}
+                <tr class="{% if not program.is_active %}table-secondary{% endif %}">
+                    <td>
+                        <strong>{{ program.name }}</strong>
+                    </td>
+                    <td class="text-muted">{{ program.description or '-' }}</td>
+                    <td>
+                        {% if program.check_methodology == 'echo_falls' %}
+                            <span class="badge bg-info">Echo Falls</span>
+                        {% elif program.check_methodology == 'standard' %}
+                            <span class="badge bg-secondary">Standard</span>
+                        {% else %}
+                            <span class="badge bg-warning">Custom</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <i class="bi bi-server"></i> {{ program.system_count }}
+                    </td>
+                    <td>
+                        <i class="bi bi-check-circle"></i> {{ program.check_count }}
+                    </td>
+                    <td>
+                        <i class="bi bi-file-earmark-check"></i> {{ program.recipe_count }}
+                    </td>
+                    <td>
+                        {% if program.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted small">
+                        {{ program.created_at.split('.')[0] if program.created_at else '-' }}
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <a href="{{ url_for('admin_edit_program', program_id=program.id) }}" 
+                               class="btn btn-outline-primary" title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{{ url_for('admin_program_custom_fields', program_id=program.id) }}" 
+                               class="btn btn-outline-info" title="Custom Fields">
+                                <i class="bi bi-sliders"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('admin_toggle_program', program_id=program.id) }}" 
+                                  class="d-inline"
+                                  onsubmit="return confirm('Are you sure you want to {% if program.is_active %}deactivate{% else %}activate{% endif %} this program?');">
+                                <button type="submit" 
+                                        class="btn btn-outline-{% if program.is_active %}warning{% else %}success{% endif %}" 
+                                        title="{% if program.is_active %}Deactivate{% else %}Activate{% endif %}">
+                                    <i class="bi bi-{% if program.is_active %}x-circle{% else %}check-circle{% endif %}"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i> No programs found. Click "Add New Program" to create one.
+    </div>
+    {% endif %}
+
+    <div class="mt-4">
+        <a href="{{ url_for('admin') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Admin Panel
+        </a>
+    </div>
+</div>
+{% endblock %}

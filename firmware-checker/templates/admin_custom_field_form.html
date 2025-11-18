@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}{{ action }} Custom Field - {{ program.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin') }}">Admin</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin_programs') }}">Programs</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin_program_custom_fields', program_id=program.id) }}">{{ program.name }} - Custom Fields</a></li>
+                    <li class="breadcrumb-item active">{{ action }} Field</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4><i class="bi bi-sliders"></i> {{ action }} Custom Field for {{ program.name }}</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        {% if action == 'Add' %}
+                        <div class="mb-3">
+                            <label for="field_name" class="form-label">Field Name <span class="text-danger">*</span></label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="field_name" 
+                                   name="field_name" 
+                                   required
+                                   pattern="[a-zA-Z0-9_\- ]+"
+                                   placeholder="e.g., amc_1_port"
+                                   value="{{ field.field_name if field else '' }}">
+                            <div class="form-text">
+                                Internal name for the field (lowercase, underscores only). This will be auto-formatted.
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="mb-3">
+                            <label class="form-label">Field Name</label>
+                            <input type="text" class="form-control" value="{{ field.field_name }}" disabled>
+                            <div class="form-text">Field name cannot be changed after creation</div>
+                        </div>
+                        {% endif %}
+
+                        <div class="mb-3">
+                            <label for="field_label" class="form-label">Field Label <span class="text-danger">*</span></label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="field_label" 
+                                   name="field_label" 
+                                   required
+                                   placeholder="e.g., AMC #1 Port"
+                                   value="{{ field.field_label if field else '' }}">
+                            <div class="form-text">Display name shown to users in forms</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="field_type" class="form-label">Field Type <span class="text-danger">*</span></label>
+                            <select class="form-select" id="field_type" name="field_type" required>
+                                <option value="text" {% if field and field.field_type == 'text' %}selected{% endif %}>Text (single line)</option>
+                                <option value="textarea" {% if field and field.field_type == 'textarea' %}selected{% endif %}>Text Area (multiple lines)</option>
+                                <option value="number" {% if field and field.field_type == 'number' %}selected{% endif %}>Number</option>
+                                <option value="ip" {% if field and field.field_type == 'ip' %}selected{% endif %}>IP Address</option>
+                                <option value="email" {% if field and field.field_type == 'email' %}selected{% endif %}>Email</option>
+                                <option value="url" {% if field and field.field_type == 'url' %}selected{% endif %}>URL</option>
+                            </select>
+                            <div class="form-text">Type of data this field will store</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       id="is_required" 
+                                       name="is_required"
+                                       {% if field and field.is_required %}checked{% endif %}>
+                                <label class="form-check-label" for="is_required">
+                                    Required Field
+                                </label>
+                            </div>
+                            <div class="form-text">If checked, users must provide a value for this field</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="placeholder" class="form-label">Placeholder Text</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="placeholder" 
+                                   name="placeholder" 
+                                   placeholder="e.g., 192.168.1.100"
+                                   value="{{ field.placeholder if field and field.placeholder else '' }}">
+                            <div class="form-text">Example text shown in empty field</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="help_text" class="form-label">Help Text</label>
+                            <textarea class="form-control" 
+                                      id="help_text" 
+                                      name="help_text" 
+                                      rows="2"
+                                      placeholder="Additional information or instructions for this field">{{ field.help_text if field and field.help_text else '' }}</textarea>
+                            <div class="form-text">Helpful description or instructions shown below the field</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="display_order" class="form-label">Display Order</label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="display_order" 
+                                   name="display_order" 
+                                   min="0"
+                                   value="{{ field.display_order if field else 0 }}">
+                            <div class="form-text">Fields with lower numbers appear first (0 = first)</div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{{ url_for('admin_program_custom_fields', program_id=program.id) }}" 
+                               class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> {{ action }} Field
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-info-circle"></i> Custom Fields</h5>
+                    <p class="card-text small">
+                        Custom fields allow you to capture program-specific information about systems.
+                    </p>
+                    <hr>
+                    <h6>Examples:</h6>
+                    <ul class="small">
+                        <li><strong>AMC Port #1</strong> - IP or hostname for first AMC</li>
+                        <li><strong>AMC Port #2</strong> - IP or hostname for second AMC</li>
+                        <li><strong>Hardware Revision</strong> - Hardware version identifier</li>
+                        <li><strong>Rack Location</strong> - Physical location details</li>
+                        <li><strong>Asset Tag</strong> - Internal tracking number</li>
+                    </ul>
+                    <hr>
+                    <h6>Field Types:</h6>
+                    <ul class="small">
+                        <li><strong>Text:</strong> Short text input</li>
+                        <li><strong>Text Area:</strong> Multi-line text</li>
+                        <li><strong>Number:</strong> Numeric values only</li>
+                        <li><strong>IP Address:</strong> IP validation</li>
+                        <li><strong>Email:</strong> Email format</li>
+                        <li><strong>URL:</strong> Web address</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
