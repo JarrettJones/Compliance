@@ -1724,6 +1724,20 @@ def index():
         # Convert to dict for easier template access
         firmware_by_category = {row['category']: row['count'] for row in firmware_types}
         
+        # Get current user's recent checks
+        user_id = session.get('user_id')
+        my_recent_checks = []
+        if user_id:
+            my_recent_checks = conn.execute(f'''
+                SELECT fc.*, s.name as system_name, s.description as system_description
+                FROM firmware_checks fc
+                JOIN systems s ON fc.system_id = s.id
+                WHERE fc.user_id = ?
+                {' AND ' + program_filter.replace('WHERE ', '') if program_filter else ''}
+                ORDER BY fc.check_date DESC
+                LIMIT 10
+            ''', [user_id] + program_params).fetchall()
+        
         stats = {
             'total_systems': conn.execute(f'SELECT COUNT(*) as count FROM systems s {program_filter}', program_params).fetchone()['count'],
             'total_checks': conn.execute(f'''
@@ -1735,7 +1749,8 @@ def index():
             'total_recipes': conn.execute(f'SELECT COUNT(*) as count FROM firmware_recipes fr {program_filter.replace("s.program_id", "fr.program_id")}', program_params).fetchone()['count'],
             'total_firmware_types': firmware_types_count,
             'recent_systems': systems,
-            'recent_checks': recent_checks
+            'recent_checks': recent_checks,
+            'my_recent_checks': my_recent_checks
         }
     
     return render_template('index.html', stats=stats, firmware_by_category=firmware_by_category)
@@ -2171,11 +2186,19 @@ def systems():
             GROUP BY s.id
             ORDER BY s.name
         ''').fetchall()
+        
+        # Get list of users who have created systems
+        creators = conn.execute('''
+            SELECT DISTINCT u.id as user_id, u.username, u.first_name, u.last_name
+            FROM users u
+            INNER JOIN systems s ON u.id = s.created_by
+            ORDER BY u.first_name, u.last_name, u.username
+        ''').fetchall()
     
     # Convert Row objects to dictionaries for JSON serialization
     systems_list = [dict(row) for row in systems_rows]
     
-    return render_template('systems.html', systems=systems_list)
+    return render_template('systems.html', systems=systems_list, creators=creators)
 
 @app.route('/systems/add', methods=['GET', 'POST'])
 @editor_required

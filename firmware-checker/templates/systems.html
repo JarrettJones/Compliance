@@ -35,12 +35,29 @@
                     </div>
                     
                     <!-- Group By Filter -->
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <select class="form-select" id="groupByFilter">
                             <option value="none">No Grouping</option>
                             <option value="location">Group by Location</option>
                             <option value="building">Group by Building</option>
                             <option value="rack">Group by Rack</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Created By Filter -->
+                    <div class="col-md-2">
+                        <select class="form-select" id="createdByFilter">
+                            <option value="all">All Creators</option>
+                            <option value="me">My Systems</option>
+                            {% for creator in creators %}
+                            <option value="{{ creator.user_id }}">
+                                {% if creator.first_name and creator.last_name %}
+                                    {{ creator.first_name }} {{ creator.last_name }}
+                                {% else %}
+                                    {{ creator.username }}
+                                {% endif %}
+                            </option>
+                            {% endfor %}
                         </select>
                     </div>
                     
@@ -431,7 +448,8 @@ function saveFilterPreferences() {
     const preferences = {
         searchTerm: document.getElementById('searchInput').value,
         groupBy: document.getElementById('groupByFilter').value,
-        sortBy: document.getElementById('sortByFilter').value
+        sortBy: document.getElementById('sortByFilter').value,
+        createdBy: document.getElementById('createdByFilter').value
     };
     localStorage.setItem('systemsFilterPreferences', JSON.stringify(preferences));
 }
@@ -445,6 +463,7 @@ function loadFilterPreferences() {
             document.getElementById('searchInput').value = preferences.searchTerm || '';
             document.getElementById('groupByFilter').value = preferences.groupBy || 'none';
             document.getElementById('sortByFilter').value = preferences.sortBy || 'name-asc';
+            document.getElementById('createdByFilter').value = preferences.createdBy || 'all';
         } catch (e) {
             console.error('Error loading filter preferences:', e);
         }
@@ -456,6 +475,7 @@ function filterAndSortSystems() {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
     const groupBy = document.getElementById('groupByFilter').value;
     const sortBy = document.getElementById('sortByFilter').value;
+    const createdBy = document.getElementById('createdByFilter').value;
     
     // Save preferences
     saveFilterPreferences();
@@ -474,7 +494,26 @@ function filterAndSortSystems() {
             metadata.rack
         ].join(' ').toLowerCase();
         
-        return searchableText.includes(searchTerm);
+        // Check search term
+        if (!searchableText.includes(searchTerm)) {
+            return false;
+        }
+        
+        // Check creator filter
+        if (createdBy === 'me') {
+            // Show only systems created by current user
+            const currentUserId = {{ session.get('user_id') or 'null' }};
+            if (system.created_by !== currentUserId) {
+                return false;
+            }
+        } else if (createdBy !== 'all') {
+            // Show systems created by specific user
+            if (system.created_by !== parseInt(createdBy)) {
+                return false;
+            }
+        }
+        
+        return true;
     });
     
     // Sort systems
@@ -523,6 +562,7 @@ function clearFilters() {
     document.getElementById('searchInput').value = '';
     document.getElementById('groupByFilter').value = 'none';
     document.getElementById('sortByFilter').value = 'name-asc';
+    document.getElementById('createdByFilter').value = 'all';
     saveFilterPreferences(); // Save cleared state
     filterAndSortSystems();
 }
@@ -531,6 +571,7 @@ function clearFilters() {
 document.getElementById('searchInput').addEventListener('input', filterAndSortSystems);
 document.getElementById('groupByFilter').addEventListener('change', filterAndSortSystems);
 document.getElementById('sortByFilter').addEventListener('change', filterAndSortSystems);
+document.getElementById('createdByFilter').addEventListener('change', filterAndSortSystems);
 
 // Load preferences and initial render
 loadFilterPreferences();
