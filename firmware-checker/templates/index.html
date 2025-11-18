@@ -249,53 +249,50 @@
 </div>
 
 <div class="row">
-    <!-- Recent Systems -->
+    <!-- My Recent Checks -->
     <div class="col-lg-6 mb-4">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="bi bi-server"></i> Recent Systems</h5>
-                {% if session.get('role') in ['admin', 'editor'] %}
-                <a href="{{ url_for('add_system') }}" class="btn btn-primary btn-sm">
-                    <i class="bi bi-plus"></i> Add System
-                </a>
-                {% endif %}
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-person-check"></i> My Recent Checks</h5>
+                <small>Firmware checks you've run</small>
             </div>
             <div class="card-body">
-                {% if stats.recent_systems %}
+                {% if stats.my_recent_checks %}
                     <div class="list-group list-group-flush">
-                        {% for system in stats.recent_systems %}
-                            <div class="list-group-item d-flex justify-content-between align-items-start">
-                                <div class="ms-2 me-auto">
-                                    <div class="fw-bold">
-                                        {{ system.name }}
-                                        {% if system.description and 'Host:' in system.description %}
-                                            {% set host_part = system.description.split('Host:')[1].split('|')[0].strip() %}
-                                            <span class="text-muted fw-normal">({{ host_part }})</span>
+                        {% for check in stats.my_recent_checks %}
+                            <a href="{% if check.status == 'running' %}{{ url_for('check_firmware', system_id=check.system_id) }}{% else %}{{ url_for('check_result', check_id=check.id) }}{% endif %}" class="list-group-item list-group-item-action">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <div>
+                                        <h6 class="mb-1">{{ check.system_name }}</h6>
+                                        {% if check.system_description and 'Host:' in check.system_description %}
+                                            {% set host_part = check.system_description.split('Host:')[1].split('|')[0].strip() %}
+                                            <small class="text-muted">{{ host_part }}</small>
                                         {% endif %}
                                     </div>
-                                    <small class="text-muted">{{ system.rscm_ip }}:{{ system.rscm_port }}</small>
+                                    <small class="text-muted">{{ check.check_date[:19] }}</small>
                                 </div>
-                                <div class="text-end">
-                                    <span class="badge bg-secondary">{{ system.check_count }} checks</span>
-                                    <div class="small text-muted">
-                                        {% if system.last_check %}
-                                            Last: {{ system.last_check[:19] }}
+                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                    <span class="badge bg-{{ 'warning' if check.status == 'running' else ('success' if check.status == 'success' else 'danger') }}">
+                                        {% if check.status == 'running' %}
+                                            <i class="bi bi-clock"></i> Running
+                                        {% elif check.status == 'success' %}
+                                            <i class="bi bi-check-circle"></i> Completed
                                         {% else %}
-                                            Never checked
+                                            <i class="bi bi-x-circle"></i> Failed
                                         {% endif %}
-                                    </div>
+                                    </span>
+                                    {% if check.error_message %}
+                                        <small class="text-danger">{{ check.error_message[:50] }}...</small>
+                                    {% endif %}
                                 </div>
-                            </div>
+                            </a>
                         {% endfor %}
-                    </div>
-                    <div class="text-center mt-3">
-                        <a href="{{ url_for('systems') }}" class="btn btn-outline-primary">View All Systems</a>
                     </div>
                 {% else %}
                     <div class="text-center text-muted py-4">
-                        <i class="bi bi-server fs-1"></i>
-                        <p class="mt-2">No systems configured yet</p>
-                        <a href="{{ url_for('add_system') }}" class="btn btn-primary">Add Your First System</a>
+                        <i class="bi bi-clock-history fs-1"></i>
+                        <p class="mt-2">No firmware checks yet</p>
+                        <a href="{{ url_for('systems') }}" class="btn btn-primary">Check a System</a>
                     </div>
                 {% endif %}
             </div>
@@ -368,52 +365,6 @@
         </div>
     </div>
 </div>
-
-<!-- My Recent Checks -->
-{% if stats.my_recent_checks %}
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="bi bi-person-check"></i> My Recent Checks</h5>
-                <small>Firmware checks you've run</small>
-            </div>
-            <div class="card-body">
-                <div class="list-group list-group-flush">
-                    {% for check in stats.my_recent_checks %}
-                        <a href="{% if check.status == 'running' %}{{ url_for('check_firmware', system_id=check.system_id) }}{% else %}{{ url_for('check_result', check_id=check.id) }}{% endif %}" class="list-group-item list-group-item-action">
-                            <div class="d-flex w-100 justify-content-between">
-                                <div>
-                                    <h6 class="mb-1">{{ check.system_name }}</h6>
-                                    {% if check.system_description and 'Host:' in check.system_description %}
-                                        {% set host_part = check.system_description.split('Host:')[1].split('|')[0].strip() %}
-                                        <small class="text-muted">{{ host_part }}</small>
-                                    {% endif %}
-                                </div>
-                                <small class="text-muted">{{ check.check_date[:19] }}</small>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center mt-2">
-                                <span class="badge bg-{{ 'warning' if check.status == 'running' else ('success' if check.status == 'success' else 'danger') }}">
-                                    {% if check.status == 'running' %}
-                                        <i class="bi bi-clock"></i> Running
-                                    {% elif check.status == 'success' %}
-                                        <i class="bi bi-check-circle"></i> Completed
-                                    {% else %}
-                                        <i class="bi bi-x-circle"></i> Failed
-                                    {% endif %}
-                                </span>
-                                {% if check.error_message %}
-                                    <small class="text-danger">{{ check.error_message[:50] }}...</small>
-                                {% endif %}
-                            </div>
-                        </a>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
 
 <!-- Quick Actions -->
 <div class="row">
