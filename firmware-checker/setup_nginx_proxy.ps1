@@ -102,9 +102,9 @@ http {
         server_name $hostname localhost;
         
         # SSL Certificate Configuration
-        # Update these paths to point to your organization's certificate
-        ssl_certificate      conf/ssl/server.crt;
-        ssl_certificate_key  conf/ssl/server.key;
+        # Absolute paths to your organization's certificate
+        ssl_certificate      ssl/server.crt;
+        ssl_certificate_key  ssl/server.key;
         
         # SSL Settings
         ssl_protocols TLSv1.2 TLSv1.3;
