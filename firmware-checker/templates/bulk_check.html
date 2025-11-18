@@ -8,7 +8,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h1><i class="bi bi-check-circle-fill"></i> Bulk Firmware Check</h1>
-                <p class="lead">Configure credentials for {{ systems|length }} systems</p>
+                <p class="lead">Configure firmware check for {{ systems|length }} systems</p>
             </div>
             <div>
                 <a href="{{ url_for('systems') }}" class="btn btn-outline-secondary">
@@ -19,119 +19,160 @@
     </div>
 </div>
 
-<!-- Credentials Form -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="bi bi-key"></i> Authentication Credentials</h5>
-            </div>
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <i class="bi bi-info-circle"></i> 
-                    <strong>Note:</strong> These credentials will be used for all selected systems. 
-                    Ensure all systems use the same RSCM/Redfish credentials.
-                </div>
-                
-                <form id="credentialsForm">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="rscm_username" class="form-label">
-                                    <i class="bi bi-person"></i> RSCM Username <span class="text-danger">*</span>
-                                </label>
-                                <input type="text" class="form-control" id="rscm_username" 
-                                       name="rscm_username" required
-                                       placeholder="Enter RSCM username">
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="rscm_password" class="form-label">
-                                    <i class="bi bi-lock"></i> RSCM Password <span class="text-danger">*</span>
-                                </label>
-                                <input type="password" class="form-control" id="rscm_password" 
-                                       name="rscm_password" required
-                                       placeholder="Enter RSCM password">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="windows_username" class="form-label">
-                                    <i class="bi bi-pc-display"></i> Windows Username <span class="badge bg-secondary">Optional</span>
-                                </label>
-                                <input type="text" class="form-control" id="windows_username" 
-                                       name="windows_username"
-                                       placeholder="Enter Windows username (if needed)">
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="windows_password" class="form-label">
-                                    <i class="bi bi-lock"></i> Windows Password <span class="badge bg-secondary">Optional</span>
-                                </label>
-                                <input type="password" class="form-control" id="windows_password" 
-                                       name="windows_password"
-                                       placeholder="Enter Windows password (if needed)">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-12">
-                            <div class="mb-3">
-                                <label for="target_hostname" class="form-label">
-                                    <i class="bi bi-hdd-network"></i> Target Hostname <span class="badge bg-secondary">Optional</span>
-                                </label>
-                                <input type="text" class="form-control" id="target_hostname" 
-                                       name="target_hostname"
-                                       placeholder="Target system hostname for storage checks (if Windows credentials provided)">
-                                <small class="form-text text-muted">Required only if Windows credentials are provided</small>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-success btn-lg">
-                            <i class="bi bi-play-fill"></i> Start Bulk Check on {{ systems|length }} Systems
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Selected Systems List -->
-<div class="row mb-4" id="systemsListSection">
+<!-- Firmware Check Configuration Form -->
+<div class="row" id="configurationSection">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-server"></i> Selected Systems</h5>
+                <h5 class="mb-0"><i class="bi bi-cpu"></i> Firmware Check Configuration</h5>
             </div>
             <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>System Name</th>
-                                <th>RSCM IP</th>
-                                <th>Port</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for system in systems %}
-                            <tr>
-                                <td>{{ system.name }}</td>
-                                <td><code>{{ system.rscm_ip }}</code></td>
-                                <td><span class="badge bg-secondary">{{ system.rscm_port }}</span></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                <!-- Selected Systems -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <h6><i class="bi bi-server"></i> Selected Systems ({{ systems|length }})</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>System Name</th>
+                                        <th>RSCM IP</th>
+                                        <th>Port</th>
+                                        <th>Hostname/IP for Storage Checks</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="systemsTableBody">
+                                    {% for system in systems %}
+                                    <tr>
+                                        <td><strong>{{ system.name }}</strong></td>
+                                        <td><code>{{ system.rscm_ip }}</code></td>
+                                        <td><span class="badge bg-secondary">{{ system.rscm_port }}</span></td>
+                                        <td>
+                                            <input type="text" 
+                                                   class="form-control form-control-sm target-hostname" 
+                                                   id="target_{{ system.id }}"
+                                                   data-system-id="{{ system.id }}"
+                                                   placeholder="Optional: hostname/IP for WinRM">
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Storage Checks:</strong> Target hostname/IP is only needed if you provide Windows OS credentials below. 
+                            Each system can connect to a different target for storage firmware checks.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Credentials Section -->
+                <div class="row mb-4">
+                    <!-- RSCM/Redfish Credentials -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6><i class="bi bi-key"></i> RSCM Authentication Credentials</h6>
+                                <p class="text-muted small">Enter the same credentials used for Redfish API access. These will be used for all selected systems.</p>
+                                <div class="mb-3">
+                                    <label for="rscm_username" class="form-label">Username <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="rscm_username" 
+                                           placeholder="Enter RSCM username" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="rscm_password" class="form-label">Password <span class="text-danger">*</span></label>
+                                    <input type="password" class="form-control" id="rscm_password" 
+                                           placeholder="Enter RSCM password" required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Windows OS Credentials -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6><i class="bi bi-pc-display"></i> Windows OS Credentials <span class="badge bg-secondary">Optional</span></h6>
+                                <p class="text-muted small">Required for M.2 and E.1s storage firmware checks via WinRM. Leave blank to skip in-band storage checks.</p>
+                                <div class="mb-3">
+                                    <label for="windows_username" class="form-label">OS Username</label>
+                                    <input type="text" class="form-control" id="windows_username" 
+                                           placeholder="Windows OS username">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="windows_password" class="form-label">OS Password</label>
+                                    <input type="password" class="form-control" id="windows_password" 
+                                           placeholder="Windows OS password">
+                                </div>
+                                <div class="alert alert-warning small">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    If OS credentials are provided, you must specify target hostname/IP for each system in the table above.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Firmware Categories Info -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <h6><i class="bi bi-list-check"></i> Firmware Categories to Check</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="bi bi-cpu text-primary"></i> DC-SCM Firmware
+                                        </h6>
+                                        <ul class="list-unstyled small">
+                                            <li><i class="bi bi-check-circle"></i> IFWI & BMC via Redfish API</li>
+                                            <li><i class="bi bi-check-circle"></i> BMC configurations via SSH IPMI</li>
+                                            <li><i class="bi bi-check-circle"></i> Security firmware via SSH Cerberus</li>
+                                        </ul>
+                                        <div class="text-muted small">16 firmware types</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="bi bi-motherboard text-info"></i> OVL2 Firmware
+                                        </h6>
+                                        <ul class="list-unstyled small">
+                                            <li><i class="bi bi-check-circle"></i> SOC Test OS via SSH serial</li>
+                                            <li><i class="bi bi-check-circle"></i> FPGA drivers via SSH sessions</li>
+                                            <li><i class="bi bi-check-circle"></i> Cyclone V & SOC FIP images</li>
+                                        </ul>
+                                        <div class="text-muted small">12 firmware types</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="bi bi-hdd-network text-warning"></i> Other Platform
+                                        </h6>
+                                        <ul class="list-unstyled small">
+                                            <li><i class="bi bi-check-circle"></i> HPM CPLD via Redfish</li>
+                                            <li><i class="bi bi-check-circle"></i> SOC VR configurations</li>
+                                            <li><i class="bi bi-check-circle"></i> Storage device firmware</li>
+                                        </ul>
+                                        <div class="text-muted small">5 firmware types</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Start Check Button -->
+                <div class="d-grid">
+                    <button type="button" class="btn btn-success btn-lg" onclick="startBulkCheck()">
+                        <i class="bi bi-play-fill"></i> Start Firmware Check on {{ systems|length }} Systems
+                    </button>
                 </div>
             </div>
         </div>
@@ -220,34 +261,56 @@ let failedCount = 0;
 const totalCount = systemIds.length;
 let credentials = null;
 
-// Handle credentials form submission
-document.getElementById('credentialsForm').addEventListener('submit', function(e) {
-    e.preventDefault();
+// Start bulk check
+function startBulkCheck() {
+    // Get RSCM credentials
+    const rscmUsername = document.getElementById('rscm_username').value.trim();
+    const rscmPassword = document.getElementById('rscm_password').value.trim();
     
-    // Get credentials
-    credentials = {
-        rscm_username: document.getElementById('rscm_username').value,
-        rscm_password: document.getElementById('rscm_password').value,
-        windows_username: document.getElementById('windows_username').value || null,
-        windows_password: document.getElementById('windows_password').value || null,
-        target_hostname: document.getElementById('target_hostname').value || null
-    };
+    if (!rscmUsername || !rscmPassword) {
+        alert('RSCM username and password are required.');
+        return;
+    }
     
-    // Validate - if any Windows credential is provided, all must be provided
-    if (credentials.windows_username || credentials.windows_password) {
-        if (!credentials.windows_username || !credentials.windows_password || !credentials.target_hostname) {
-            alert('If providing Windows credentials, you must provide username, password, and target hostname.');
+    // Get optional Windows credentials
+    const winUsername = document.getElementById('windows_username').value.trim();
+    const winPassword = document.getElementById('windows_password').value.trim();
+    
+    // Validate Windows credentials - if any are provided, both must be provided
+    if ((winUsername && !winPassword) || (!winUsername && winPassword)) {
+        alert('If providing Windows credentials, both username and password must be filled in.');
+        return;
+    }
+    
+    // If Windows credentials provided, check that at least one system has a target hostname
+    if (winUsername && winPassword) {
+        const targetInputs = document.querySelectorAll('.target-hostname');
+        const hasAnyTarget = Array.from(targetInputs).some(input => input.value.trim());
+        
+        if (!hasAnyTarget) {
+            alert('Windows credentials provided but no target hostnames specified. Please specify at least one target hostname/IP for storage checks, or leave Windows credentials blank.');
             return;
         }
     }
     
-    // Hide form, show progress section
-    document.querySelector('.card-header.bg-primary').parentElement.style.display = 'none';
+    // Store base credentials
+    credentials = {
+        rscm_username: rscmUsername,
+        rscm_password: rscmPassword
+    };
+    
+    if (winUsername) {
+        credentials.windows_username = winUsername;
+        credentials.windows_password = winPassword;
+    }
+    
+    // Hide configuration and show progress
+    document.getElementById('configurationSection').style.display = 'none';
     document.getElementById('progressSection').style.display = 'block';
     
     // Start all checks
     startAllChecks();
-});
+}
 
 // Start all checks
 async function startAllChecks() {
@@ -270,11 +333,17 @@ async function startCheck(systemId) {
             bulk: true
         };
         
-        // Add Windows credentials if provided
+        // Add Windows credentials and per-system target hostname if provided
         if (credentials.windows_username) {
-            payload.windows_username = credentials.windows_username;
-            payload.windows_password = credentials.windows_password;
-            payload.target_hostname = credentials.target_hostname;
+            const targetInput = document.getElementById(`target_${systemId}`);
+            const targetHostname = targetInput ? targetInput.value.trim() : '';
+            
+            // Only add Windows credentials if this system has a target hostname
+            if (targetHostname) {
+                payload.windows_username = credentials.windows_username;
+                payload.windows_password = credentials.windows_password;
+                payload.target_hostname = targetHostname;
+            }
         }
         
         // Initiate check via API
