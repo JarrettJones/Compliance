@@ -8,7 +8,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h1><i class="bi bi-check-circle-fill"></i> Bulk Firmware Check</h1>
-                <p class="lead">Checking {{ systems|length }} systems in parallel</p>
+                <p class="lead">Configure credentials for {{ systems|length }} systems</p>
             </div>
             <div>
                 <a href="{{ url_for('systems') }}" class="btn btn-outline-secondary">
@@ -18,6 +18,128 @@
         </div>
     </div>
 </div>
+
+<!-- Credentials Form -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-key"></i> Authentication Credentials</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> 
+                    <strong>Note:</strong> These credentials will be used for all selected systems. 
+                    Ensure all systems use the same RSCM/Redfish credentials.
+                </div>
+                
+                <form id="credentialsForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="rscm_username" class="form-label">
+                                    <i class="bi bi-person"></i> RSCM Username <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="rscm_username" 
+                                       name="rscm_username" required
+                                       placeholder="Enter RSCM username">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="rscm_password" class="form-label">
+                                    <i class="bi bi-lock"></i> RSCM Password <span class="text-danger">*</span>
+                                </label>
+                                <input type="password" class="form-control" id="rscm_password" 
+                                       name="rscm_password" required
+                                       placeholder="Enter RSCM password">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="windows_username" class="form-label">
+                                    <i class="bi bi-pc-display"></i> Windows Username <span class="badge bg-secondary">Optional</span>
+                                </label>
+                                <input type="text" class="form-control" id="windows_username" 
+                                       name="windows_username"
+                                       placeholder="Enter Windows username (if needed)">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="windows_password" class="form-label">
+                                    <i class="bi bi-lock"></i> Windows Password <span class="badge bg-secondary">Optional</span>
+                                </label>
+                                <input type="password" class="form-control" id="windows_password" 
+                                       name="windows_password"
+                                       placeholder="Enter Windows password (if needed)">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="mb-3">
+                                <label for="target_hostname" class="form-label">
+                                    <i class="bi bi-hdd-network"></i> Target Hostname <span class="badge bg-secondary">Optional</span>
+                                </label>
+                                <input type="text" class="form-control" id="target_hostname" 
+                                       name="target_hostname"
+                                       placeholder="Target system hostname for storage checks (if Windows credentials provided)">
+                                <small class="form-text text-muted">Required only if Windows credentials are provided</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="bi bi-play-fill"></i> Start Bulk Check on {{ systems|length }} Systems
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Selected Systems List -->
+<div class="row mb-4" id="systemsListSection" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-server"></i> Selected Systems</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>System Name</th>
+                                <th>RSCM IP</th>
+                                <th>Port</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for system in systems %}
+                            <tr>
+                                <td>{{ system.name }}</td>
+                                <td><code>{{ system.rscm_ip }}</code></td>
+                                <td><span class="badge bg-secondary">{{ system.rscm_port }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Section (hidden until checks start) -->
+<div id="progressSection" style="display: none;">
 
 <!-- Overall Progress -->
 <div class="row mb-4">
@@ -96,6 +218,36 @@ const checkIds = new Map(); // Map system_id to check_id
 let completedCount = 0;
 let failedCount = 0;
 const totalCount = systemIds.length;
+let credentials = null;
+
+// Handle credentials form submission
+document.getElementById('credentialsForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // Get credentials
+    credentials = {
+        rscm_username: document.getElementById('rscm_username').value,
+        rscm_password: document.getElementById('rscm_password').value,
+        windows_username: document.getElementById('windows_username').value || null,
+        windows_password: document.getElementById('windows_password').value || null,
+        target_hostname: document.getElementById('target_hostname').value || null
+    };
+    
+    // Validate - if any Windows credential is provided, all must be provided
+    if (credentials.windows_username || credentials.windows_password) {
+        if (!credentials.windows_username || !credentials.windows_password || !credentials.target_hostname) {
+            alert('If providing Windows credentials, you must provide username, password, and target hostname.');
+            return;
+        }
+    }
+    
+    // Hide form, show progress section
+    document.querySelector('.card-header.bg-primary').parentElement.style.display = 'none';
+    document.getElementById('progressSection').style.display = 'block';
+    
+    // Start all checks
+    startAllChecks();
+});
 
 // Start all checks
 async function startAllChecks() {
@@ -110,16 +262,28 @@ async function startCheck(systemId) {
         // Update UI: Starting
         updateCheckStatus(systemId, 'running', 'Running', 'Starting firmware check...', 'bg-warning');
         
+        // Prepare request payload with credentials
+        const payload = {
+            system_id: systemId,
+            rscm_username: credentials.rscm_username,
+            rscm_password: credentials.rscm_password,
+            bulk: true
+        };
+        
+        // Add Windows credentials if provided
+        if (credentials.windows_username) {
+            payload.windows_username = credentials.windows_username;
+            payload.windows_password = credentials.windows_password;
+            payload.target_hostname = credentials.target_hostname;
+        }
+        
         // Initiate check via API
         const response = await fetch(`${SCRIPT_ROOT}/api/check-firmware`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ 
-                system_id: systemId,
-                bulk: true 
-            })
+            body: JSON.stringify(payload)
         });
         
         if (!response.ok) {
@@ -263,9 +427,6 @@ function updateOverallProgress() {
     }
 }
 
-// Start checks when page loads
-document.addEventListener('DOMContentLoaded', () => {
-    startAllChecks();
-});
+// Don't auto-start - wait for form submission
 </script>
 {% endblock %}
