@@ -338,7 +338,7 @@
                                     </small>
                                 </div>
                                 {% endif %}
-                                <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex justify-content-between align-items-center mt-2">
                                     <span class="badge bg-{{ 'warning' if check.status == 'running' else ('success' if check.status == 'success' else 'danger') }}">
                                         {% if check.status == 'running' %}
                                             <i class="bi bi-clock"></i> Running
