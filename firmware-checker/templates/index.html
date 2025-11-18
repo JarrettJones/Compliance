@@ -271,7 +271,11 @@
                                     </div>
                                     <small class="text-muted">{{ check.check_date[:19] }}</small>
                                 </div>
-                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                <div class="mb-1">
+                                    <!-- Spacer to match Recent Firmware Checks layout -->
+                                    <small class="text-muted">&nbsp;</small>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
                                     <span class="badge bg-{{ 'warning' if check.status == 'running' else ('success' if check.status == 'success' else 'danger') }}">
                                         {% if check.status == 'running' %}
                                             <i class="bi bi-clock"></i> Running
