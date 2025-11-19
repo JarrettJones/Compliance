@@ -266,6 +266,38 @@
         </div>
     </div>
 </div>
+
+<!-- Results Summary Section (hidden until all checks complete) -->
+<div id="summarySection" class="row mt-4" style="display: none;">
+    <div class="col-12">
+        <div class="card border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-clipboard-check"></i> Bulk Check Results Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>System</th>
+                                <th>RSCM IP:Port</th>
+                                <th>Status</th>
+                                <th>Success</th>
+                                <th>Errors</th>
+                                <th>Not Implemented</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="summaryTableBody">
+                            <!-- Populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -628,13 +660,93 @@ function updateOverallProgress() {
         } else {
             progressBar.classList.add('bg-warning');
         }
+        
+        // Show summary when all checks complete
+        showSummary();
     }
 }
-            progressBar.classList.add('bg-danger');
-        } else {
-            progressBar.classList.add('bg-warning');
+
+// Show results summary table
+async function showSummary() {
+    const summarySection = document.getElementById('summarySection');
+    const tableBody = document.getElementById('summaryTableBody');
+    
+    // Clear existing rows
+    tableBody.innerHTML = '';
+    
+    // Fetch data for each system
+    for (let i = 0; i < systemIds.length; i++) {
+        const systemId = systemIds[i];
+        const checkId = checkIds.get(systemId);
+        
+        if (!checkId) {
+            continue; // Skip systems without check IDs
+        }
+        
+        try {
+            // Fetch check result data
+            const response = await fetch(`${SCRIPT_ROOT}/api/check/${checkId}/firmware-data`);
+            const data = await response.json();
+            
+            // Get system name and RSCM info from the page
+            const systemNameElement = document.querySelector(`#check-${systemId} h6`);
+            const systemName = systemNameElement ? systemNameElement.textContent.trim() : `System ${systemId}`;
+            const rscmInfoElement = document.querySelector(`#check-${systemId} small`);
+            const rscmInfo = rscmInfoElement ? rscmInfoElement.textContent : '';
+            
+            // Count results by status
+            let successCount = 0;
+            let errorCount = 0;
+            let notImplementedCount = 0;
+            
+            ['dc_scm', 'ovl2', 'other_platform'].forEach(category => {
+                if (data[category]) {
+                    Object.values(data[category]).forEach(fw => {
+                        if (fw.status === 'success') successCount++;
+                        else if (fw.status === 'error') errorCount++;
+                        else if (fw.status === 'not_implemented') notImplementedCount++;
+                    });
+                }
+            });
+            
+            // Determine overall status
+            let statusBadge = 'success';
+            let statusText = 'Completed';
+            if (errorCount > 0 && successCount === 0) {
+                statusBadge = 'danger';
+                statusText = 'Failed';
+            } else if (errorCount > 0) {
+                statusBadge = 'warning';
+                statusText = 'Partial';
+            }
+            
+            // Create table row
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><strong>${systemName}</strong></td>
+                <td><code>${rscmInfo}</code></td>
+                <td><span class="badge bg-${statusBadge}">${statusText}</span></td>
+                <td><span class="badge bg-success">${successCount}</span></td>
+                <td><span class="badge bg-danger">${errorCount}</span></td>
+                <td><span class="badge bg-secondary">${notImplementedCount}</span></td>
+                <td>
+                    <a href="${SCRIPT_ROOT}/check/result/${checkId}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-eye"></i> View Details
+                    </a>
+                </td>
+            `;
+            tableBody.appendChild(row);
+            
+        } catch (error) {
+            console.error(`Error fetching summary for system ${systemId}:`, error);
         }
     }
+    
+    // Show the summary section
+    summarySection.style.display = 'block';
+    
+    // Scroll to summary
+    summarySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Don't auto-start - wait for form submission
