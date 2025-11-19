@@ -399,7 +399,7 @@ async function pollCheckStatus(systemId, checkId) {
                 
                 // Enable view button
                 const viewBtn = document.getElementById(`view-btn-${systemId}`);
-                viewBtn.href = `${SCRIPT_ROOT}/check-result/${data.check_id}`;
+                viewBtn.href = `${SCRIPT_ROOT}/check/result/${data.check_id}`;
                 viewBtn.style.display = 'inline-block';
                 
                 incrementCompleted();
