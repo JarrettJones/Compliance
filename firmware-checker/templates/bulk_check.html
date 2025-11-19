@@ -328,8 +328,8 @@ async function startCheck(systemId) {
         // Prepare request payload with credentials
         const payload = {
             system_id: systemId,
-            rscm_username: credentials.rscm_username,
-            rscm_password: credentials.rscm_password,
+            username: credentials.rscm_username,
+            password: credentials.rscm_password,
             bulk: true
         };
         
@@ -340,9 +340,9 @@ async function startCheck(systemId) {
             
             // Only add Windows credentials if this system has a target hostname
             if (targetHostname) {
-                payload.windows_username = credentials.windows_username;
-                payload.windows_password = credentials.windows_password;
-                payload.target_hostname = targetHostname;
+                payload.os_username = credentials.windows_username;
+                payload.os_password = credentials.windows_password;
+                payload.computer_name = targetHostname;
             }
         }
         
