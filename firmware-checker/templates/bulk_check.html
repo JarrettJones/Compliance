@@ -791,70 +791,134 @@ async function showSummary() {
 
 // Generate firmware table for a system
 function generateFirmwareTable(data, checkId) {
-    let html = '<div class="table-responsive">';
+    let html = '<div class="accordion" id="accordion-' + checkId + '">';
     
-    // Process each category
-    ['dc_scm', 'ovl2', 'other_platform'].forEach(category => {
-        if (data[category] && Object.keys(data[category]).length > 0) {
-            const categoryName = category === 'dc_scm' ? 'DC-SCM Firmware' : 
-                               category === 'ovl2' ? 'OVL2 Firmware' : 
-                               'Other Platform Firmware';
+    // Define category display names and order
+    const categories = [
+        { key: 'dc_scm', name: 'DC-SCM Firmware', icon: 'bi-cpu', color: 'primary' },
+        { key: 'ovl2', name: 'OVL2 Firmware', icon: 'bi-hdd-rack', color: 'success' },
+        { key: 'other_platform', name: 'Other Platform Firmware', icon: 'bi-device-hdd', color: 'info' }
+    ];
+    
+    let categoryIndex = 0;
+    
+    categories.forEach(category => {
+        if (data[category.key] && Object.keys(data[category.key]).length > 0) {
+            categoryIndex++;
+            
+            // Count firmware by status
+            let successCount = 0;
+            let errorCount = 0;
+            let notImplementedCount = 0;
+            let totalCount = 0;
+            
+            Object.values(data[category.key]).forEach(fw => {
+                totalCount++;
+                if (fw.status === 'success') successCount++;
+                else if (fw.status === 'error') errorCount++;
+                else if (fw.status === 'not_implemented') notImplementedCount++;
+            });
             
             html += `
-                <h6 class="mt-3 mb-2">${categoryName}</h6>
-                <table class="table table-sm table-hover">
-                    <thead>
-                        <tr>
-                            <th style="width: 30%;">Firmware Type</th>
-                            <th style="width: 25%;">Version</th>
-                            <th style="width: 15%;">Status</th>
-                            <th style="width: 30%;">Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button ${categoryIndex > 1 ? 'collapsed' : ''}" type="button" 
+                                data-bs-toggle="collapse" data-bs-target="#category-${checkId}-${category.key}">
+                            <i class="${category.icon} me-2 text-${category.color}"></i> ${category.name}
+                            <span class="ms-2">
+                                <span class="badge bg-success">${successCount} Success</span>
+                                ${errorCount > 0 ? `<span class="badge bg-danger">${errorCount} Errors</span>` : ''}
+                                ${notImplementedCount > 0 ? `<span class="badge bg-secondary">${notImplementedCount} N/A</span>` : ''}
+                            </span>
+                        </button>
+                    </h2>
+                    <div id="category-${checkId}-${category.key}" 
+                         class="accordion-collapse collapse ${categoryIndex === 1 ? 'show' : ''}" 
+                         data-bs-parent="#accordion-${checkId}">
+                        <div class="accordion-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 35%;">Firmware Type</th>
+                                            <th style="width: 30%;">Version</th>
+                                            <th style="width: 15%;" class="text-center">Status</th>
+                                            <th style="width: 20%;">Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
             `;
             
-            Object.entries(data[category]).forEach(([fwType, fwData]) => {
-                let statusBadge = 'secondary';
-                let statusText = 'Unknown';
+            // Sort firmware types alphabetically
+            const sortedEntries = Object.entries(data[category.key]).sort((a, b) => a[0].localeCompare(b[0]));
+            
+            sortedEntries.forEach(([fwType, fwData]) => {
+                let statusBadge, statusIcon, rowClass;
                 
                 if (fwData.status === 'success') {
                     statusBadge = 'success';
-                    statusText = 'Success';
+                    statusIcon = 'bi-check-circle-fill';
+                    rowClass = '';
                 } else if (fwData.status === 'error') {
                     statusBadge = 'danger';
-                    statusText = 'Error';
+                    statusIcon = 'bi-x-circle-fill';
+                    rowClass = 'table-danger';
                 } else if (fwData.status === 'not_implemented') {
                     statusBadge = 'secondary';
-                    statusText = 'N/A';
+                    statusIcon = 'bi-dash-circle';
+                    rowClass = '';
                 } else if (fwData.status === 'not_found') {
                     statusBadge = 'warning';
-                    statusText = 'Not Found';
+                    statusIcon = 'bi-exclamation-triangle-fill';
+                    rowClass = 'table-warning';
+                } else {
+                    statusBadge = 'secondary';
+                    statusIcon = 'bi-question-circle';
+                    rowClass = '';
                 }
                 
                 const version = fwData.version || 'N/A';
-                const error = fwData.error ? `<small class="text-danger">${fwData.error}</small>` : '';
-                const note = fwData.note ? `<small class="text-muted">${fwData.note}</small>` : '';
+                const error = fwData.error ? `<small class="text-danger">${escapeHtml(fwData.error)}</small>` : '';
+                const note = fwData.note ? `<small class="text-muted">${escapeHtml(fwData.note)}</small>` : '';
+                const notes = error || note || '-';
                 
                 html += `
-                    <tr>
-                        <td><strong>${fwType}</strong></td>
-                        <td><code>${version}</code></td>
-                        <td><span class="badge bg-${statusBadge}">${statusText}</span></td>
-                        <td>${error}${note}</td>
+                    <tr class="${rowClass}">
+                        <td><strong>${escapeHtml(fwType)}</strong></td>
+                        <td><code>${escapeHtml(version)}</code></td>
+                        <td class="text-center">
+                            <i class="bi ${statusIcon} text-${statusBadge}"></i>
+                        </td>
+                        <td>${notes}</td>
                     </tr>
                 `;
             });
             
             html += `
-                    </tbody>
-                </table>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             `;
         }
     });
     
     html += '</div>';
     return html;
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return String(text).replace(/[&<>"']/g, m => map[m]);
 }
 
 // Load available recipes
