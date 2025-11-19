@@ -2581,7 +2581,7 @@ def bulk_check():
         # Get system details for selected systems
         placeholders = ','.join('?' * len(system_ids))
         systems = conn.execute(f'''
-            SELECT id, name, rscm_ip, rscm_port, description 
+            SELECT id, name, rscm_ip, rscm_port, description, program_id 
             FROM systems 
             WHERE id IN ({placeholders})
             ORDER BY name
@@ -2604,10 +2604,33 @@ def bulk_check():
                     hostname = match.group(1)
             system_dict['target_hostname'] = hostname or ''
             systems_with_hostname.append(system_dict)
+        
+        # Get firmware types (use first system's program or all if no program)
+        first_system_program_id = systems[0]['program_id']
+        if first_system_program_id:
+            firmware_types = conn.execute('''
+                SELECT ft.* 
+                FROM firmware_types ft
+                INNER JOIN program_firmware_types pft ON ft.id = pft.firmware_type_id
+                WHERE pft.program_id = ?
+                ORDER BY ft.category, ft.name
+            ''', (first_system_program_id,)).fetchall()
+        else:
+            firmware_types = conn.execute('''
+                SELECT * FROM firmware_types ORDER BY category, name
+            ''').fetchall()
+        
+        # Group firmware types by category for display
+        firmware_by_category = {}
+        for ft in firmware_types:
+            if ft['category'] not in firmware_by_category:
+                firmware_by_category[ft['category']] = []
+            firmware_by_category[ft['category']].append(ft)
     
     return render_template('bulk_check.html', 
                          systems=systems_with_hostname,
-                         system_ids=system_ids)
+                         system_ids=system_ids,
+                         firmware_by_category=firmware_by_category)
 
 @app.route('/check/<int:system_id>')
 @login_required

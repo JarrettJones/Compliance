@@ -115,53 +115,69 @@
                     </div>
                 </div>
 
-                <!-- Firmware Categories Info -->
+                <!-- Selective Firmware Check Section -->
                 <div class="row mb-4">
                     <div class="col-12">
-                        <h6><i class="bi bi-list-check"></i> Firmware Categories to Check</h6>
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="card">
-                                    <div class="card-body">
-                                        <h6 class="card-title">
-                                            <i class="bi bi-cpu text-primary"></i> DC-SCM Firmware
-                                        </h6>
-                                        <ul class="list-unstyled small">
-                                            <li><i class="bi bi-check-circle"></i> IFWI & BMC via Redfish API</li>
-                                            <li><i class="bi bi-check-circle"></i> BMC configurations via SSH IPMI</li>
-                                            <li><i class="bi bi-check-circle"></i> Security firmware via SSH Cerberus</li>
-                                        </ul>
-                                        <div class="text-muted small">16 firmware types</div>
-                                    </div>
+                        <div class="card border-info">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0"><i class="bi bi-toggles"></i> Select Firmware Types to Check <span class="badge bg-info">Advanced</span></h6>
+                                    <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#selectiveFirmwareCollapse">
+                                        <i class="bi bi-chevron-down"></i> Show Options
+                                    </button>
                                 </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card">
-                                    <div class="card-body">
-                                        <h6 class="card-title">
-                                            <i class="bi bi-motherboard text-info"></i> OVL2 Firmware
-                                        </h6>
-                                        <ul class="list-unstyled small">
-                                            <li><i class="bi bi-check-circle"></i> SOC Test OS via SSH serial</li>
-                                            <li><i class="bi bi-check-circle"></i> FPGA drivers via SSH sessions</li>
-                                            <li><i class="bi bi-check-circle"></i> Cyclone V & SOC FIP images</li>
-                                        </ul>
-                                        <div class="text-muted small">12 firmware types</div>
+                                <div class="collapse" id="selectiveFirmwareCollapse">
+                                    <p class="text-muted small mb-3">By default, all firmware types are checked. Uncheck specific types below to skip them (useful for debugging or quick rechecks).</p>
+                                    
+                                    <!-- Quick Selection Buttons -->
+                                    <div class="btn-group mb-3" role="group">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllFirmware()">
+                                            <i class="bi bi-check-all"></i> Select All
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllFirmware()">
+                                            <i class="bi bi-x"></i> Deselect All
+                                        </button>
+                                        {% for category in firmware_by_category.keys() %}
+                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="selectCategory('{{ category.lower().replace('-', '_').replace(' ', '_') }}')">
+                                            {{ category }} Only
+                                        </button>
+                                        {% endfor %}
                                     </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card">
-                                    <div class="card-body">
-                                        <h6 class="card-title">
-                                            <i class="bi bi-hdd-network text-warning"></i> Other Platform
-                                        </h6>
-                                        <ul class="list-unstyled small">
-                                            <li><i class="bi bi-check-circle"></i> HPM CPLD via Redfish</li>
-                                            <li><i class="bi bi-check-circle"></i> SOC VR configurations</li>
-                                            <li><i class="bi bi-check-circle"></i> Storage device firmware</li>
-                                        </ul>
-                                        <div class="text-muted small">5 firmware types</div>
+                                    
+                                    <!-- Firmware Type Selection - Dynamic based on program -->
+                                    <div class="row">
+                                        {% if firmware_by_category and firmware_by_category|length > 0 %}
+                                            {% for category, firmware_types in firmware_by_category.items() %}
+                                            <div class="col-md-4 mb-3">
+                                                <h6 class="text-primary">{{ category }} ({{ firmware_types|length }} types)</h6>
+                                                {% for fw_type in firmware_types %}
+                                                <div class="form-check">
+                                                    <input class="form-check-input fw-category {{ category.lower().replace('-', '_').replace(' ', '_') }}" 
+                                                           type="checkbox" 
+                                                           value="{{ fw_type['name'] }}" 
+                                                           id="fw_{{ fw_type['id'] }}" 
+                                                           checked>
+                                                    <label class="form-check-label small" for="fw_{{ fw_type['id'] }}">
+                                                        {{ fw_type['name'] }}
+                                                    </label>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                            {% endfor %}
+                                        {% else %}
+                                        <div class="col-12">
+                                            <div class="alert alert-warning">
+                                                <i class="bi bi-exclamation-triangle"></i>
+                                                No firmware types configured for this program. Please contact an administrator to assign firmware types to this program.
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="mt-2">
+                                        <small class="text-muted">
+                                            <span id="selectedCount">All firmware types</span> selected
+                                        </small>
                                     </div>
                                 </div>
                             </div>
@@ -262,6 +278,64 @@ let failedCount = 0;
 const totalCount = systemIds.length;
 let credentials = null;
 
+// Firmware Selection Functions
+function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('.fw-category:checked');
+    const count = checkboxes.length;
+    document.getElementById('selectedCount').textContent = `${count} firmware type${count !== 1 ? 's' : ''}`;
+}
+
+function selectAllFirmware() {
+    document.querySelectorAll('.fw-category').forEach(cb => {
+        cb.checked = true;
+    });
+    updateSelectedCount();
+}
+
+function deselectAllFirmware() {
+    document.querySelectorAll('.fw-category').forEach(cb => {
+        cb.checked = false;
+    });
+    updateSelectedCount();
+}
+
+function selectCategory(category) {
+    // Deselect all checkboxes first
+    document.querySelectorAll('.fw-category').forEach(cb => {
+        cb.checked = false;
+    });
+    // Select only the specified category
+    document.querySelectorAll(`.fw-category.${category}`).forEach(cb => {
+        cb.checked = true;
+    });
+    updateSelectedCount();
+}
+
+function getSelectedFirmwareTypes() {
+    const selected = {
+        dc_scm: [],
+        ovl2: [],
+        other_platform: []
+    };
+    
+    document.querySelectorAll('.fw-category:checked').forEach(cb => {
+        const category = Array.from(cb.classList).find(c => ['dc_scm', 'ovl2', 'other_platform'].includes(c));
+        if (category) {
+            selected[category].push(cb.value);
+        }
+    });
+    
+    return selected;
+}
+
+// Add event listeners to update count when checkboxes change
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.fw-category').forEach(cb => {
+        cb.addEventListener('change', updateSelectedCount);
+    });
+    updateSelectedCount();
+});
+
 // Start bulk check
 function startBulkCheck() {
     // Get RSCM credentials
@@ -334,12 +408,16 @@ async function startCheck(systemId) {
         // Update UI: Starting
         updateCheckStatus(systemId, 'running', 'Running', 'Starting firmware check...', 'bg-warning');
         
+        // Get selected firmware types
+        const selectedFirmware = getSelectedFirmwareTypes();
+        
         // Prepare request payload with credentials
         const payload = {
             system_id: systemId,
             username: credentials.rscm_username,
             password: credentials.rscm_password,
-            bulk: true
+            bulk: true,
+            selected_firmware: selectedFirmware
         };
         
         // Add Windows credentials and per-system target hostname if provided
