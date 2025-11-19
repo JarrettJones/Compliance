@@ -541,8 +541,8 @@ async function pollCheckStatus(systemId, checkId) {
                 
                 // Try to get actual progress from progress_data
                 let progressPercent = 0;
-                if (data.progress_data && data.progress_data.progress) {
-                    progressPercent = data.progress_data.progress;
+                if (data.progress_data && data.progress_data.progress && data.progress_data.progress.percentage !== undefined) {
+                    progressPercent = data.progress_data.progress.percentage;
                 }
                 
                 updateCheckStatus(systemId, 'running', 'Running', 
