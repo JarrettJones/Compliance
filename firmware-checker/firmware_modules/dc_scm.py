@@ -1250,9 +1250,9 @@ class DCScmChecker:
         """Check Cerberus items - use Redfish for Manticore, SSH for others"""
         print(f"[DC-SCM] Checking Cerberus: {firmware_type}...")
         try:
-            # For Manticore (HSM), use Redfish endpoint instead of SSH command
+            # For Manticore (HSM) and its variants, use Redfish endpoint instead of SSH command
             # SSH exec_command doesn't handle the long-running Cerberus commands well
-            if firmware_type == 'Manticore (HSM)':
+            if firmware_type in ['Manticore (HSM)', 'Manticore']:
                 print(f"[DC-SCM] Using Redfish API for {firmware_type}...")
                 cerberus_data = self._get_redfish_data(rscm_ip, system_port, '/redfish/v1/System/Cerberus/1')
                 if cerberus_data:
@@ -1377,12 +1377,11 @@ class DCScmChecker:
                 auth_timeout=10
             )
             
-            # Try a simple command
-            stdin, stdout, stderr = ssh.exec_command('echo "SSH test successful"', timeout=10)
-            output = stdout.read().decode('utf-8').strip()
+            # If we successfully connect and authenticate, that's good enough
+            # Don't rely on command execution which may timeout or fail on some systems
             ssh.close()
             
-            print(f"[DC-SCM DEBUG] SSH test successful: {output}")
+            print(f"[DC-SCM DEBUG] SSH test successful - connection and authentication OK")
             return True
             
         except Exception as e:
@@ -1621,18 +1620,18 @@ class DCScmChecker:
     def _get_cerberus_info_via_ssh(self, firmware_type, rscm_ip, system_port):
         """Get Cerberus info via SSH commands (matching PowerShell implementation)
         
-        NOTE: Manticore (HSM) uses Redfish API instead of SSH - see _check_cerberus_individual()
+        NOTE: Manticore (HSM) and Manticore use Redfish API instead of SSH - see _check_cerberus_individual()
         """
         try:
             # Map firmware types to Cerberus commands (matching PowerShell)
-            # NOTE: Manticore is NOT in this list - it uses Redfish API instead
+            # NOTE: Manticore variants are NOT in this list - they use Redfish API instead
             cerberus_commands = {
                 'CFM Platform ID': 'cerberus_utility get_cfm_id -i 2',
                 'CFM Version ID (hex)/(dec)': 'cerberus_utility get_cfm_id -i 2'
             }
             
-            # Manticore should never reach here - it's handled by Redfish in _check_cerberus_individual()
-            if firmware_type == 'Manticore (HSM)':
+            # Manticore variants should never reach here - they're handled by Redfish in _check_cerberus_individual()
+            if firmware_type in ['Manticore (HSM)', 'Manticore']:
                 return {
                     'version': 'ERROR: Manticore should use Redfish API, not SSH',
                     'status': 'error',
@@ -1641,7 +1640,17 @@ class DCScmChecker:
                     'method': 'ssh_cerberus_wrong_path'
                 }
             
-            command = cerberus_commands.get(firmware_type, 'cerberus_utility get_device_info -i 2')
+            # Only CFM Platform ID and CFM Version ID should use SSH Cerberus commands
+            if firmware_type not in cerberus_commands:
+                return {
+                    'version': 'UNSUPPORTED_CERBERUS_TYPE',
+                    'status': 'not_implemented',
+                    'error': f'No SSH Cerberus command defined for {firmware_type}',
+                    'checked_at': datetime.now().isoformat(),
+                    'method': 'ssh_cerberus'
+                }
+            
+            command = cerberus_commands[firmware_type]
             
             print(f"[DC-SCM DEBUG] Executing Cerberus command for {firmware_type}: {command}")
             
