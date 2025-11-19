@@ -2581,7 +2581,7 @@ def bulk_check():
         # Get system details for selected systems
         placeholders = ','.join('?' * len(system_ids))
         systems = conn.execute(f'''
-            SELECT id, name, rscm_ip, rscm_port 
+            SELECT id, name, rscm_ip, rscm_port, description 
             FROM systems 
             WHERE id IN ({placeholders})
             ORDER BY name
@@ -2590,9 +2590,23 @@ def bulk_check():
         if not systems:
             flash('No valid systems found', 'error')
             return redirect(url_for('systems'))
+        
+        # Extract hostname from description for each system
+        import re
+        systems_with_hostname = []
+        for system in systems:
+            system_dict = dict(system)
+            # Try to extract "Host: hostname" from description
+            hostname = None
+            if system_dict.get('description'):
+                match = re.search(r'Host:\s*(\S+)', system_dict['description'], re.IGNORECASE)
+                if match:
+                    hostname = match.group(1)
+            system_dict['target_hostname'] = hostname or ''
+            systems_with_hostname.append(system_dict)
     
     return render_template('bulk_check.html', 
-                         systems=systems,
+                         systems=systems_with_hostname,
                          system_ids=system_ids)
 
 @app.route('/check/<int:system_id>')

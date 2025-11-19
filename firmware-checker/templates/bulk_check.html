@@ -52,6 +52,7 @@
                                                    class="form-control form-control-sm target-hostname" 
                                                    id="target_{{ system.id }}"
                                                    data-system-id="{{ system.id }}"
+                                                   value="{{ system.target_hostname }}"
                                                    placeholder="Optional: hostname/IP for WinRM">
                                         </td>
                                     </tr>
@@ -402,8 +403,12 @@ async function pollCheckStatus(systemId, checkId) {
             // Check status
             if (data.status === 'completed' || data.status === 'success') {
                 clearInterval(pollInterval);
+                
+                // Mark as 100% complete
+                checkIds.set(systemId + '_progress', 100);
+                
                 updateCheckStatus(systemId, 'success', 'Completed', 
-                    `Check completed successfully`, 'bg-success');
+                    `Check completed successfully`, 'bg-success', 100);
                 
                 // Enable view button
                 const viewBtn = document.getElementById(`view-btn-${systemId}`);
@@ -413,17 +418,29 @@ async function pollCheckStatus(systemId, checkId) {
                 incrementCompleted();
             } else if (data.status === 'error') {
                 clearInterval(pollInterval);
+                
+                // Mark as 100% (failed but complete)
+                checkIds.set(systemId + '_progress', 100);
+                
                 updateCheckStatus(systemId, 'failed', 'Failed', 
-                    data.error || 'Check failed', 'bg-danger');
+                    data.error || 'Check failed', 'bg-danger', 100);
                 incrementFailed();
             } else if (data.status === 'running') {
                 const runtime = data.thread_info ? Math.floor(data.thread_info.runtime_seconds) : 0;
+                const currentCategory = data.thread_info ? data.thread_info.current_category : 'unknown';
+                
+                // Try to get actual progress from progress_data
+                let progressPercent = 0;
+                if (data.progress_data && data.progress_data.progress) {
+                    progressPercent = data.progress_data.progress;
+                }
+                
                 updateCheckStatus(systemId, 'running', 'Running', 
-                    `Running... (${runtime}s)`, 'bg-warning');
+                    `${currentCategory} - ${progressPercent}% (${runtime}s)`, 'bg-warning', progressPercent);
             } else if (data.status === 'none') {
                 // No check found yet, keep waiting
                 updateCheckStatus(systemId, 'running', 'Starting', 
-                    'Initializing check...', 'bg-warning');
+                    'Initializing check...', 'bg-warning', 0);
             }
             
             if (attempts >= maxAttempts) {
@@ -443,7 +460,7 @@ async function pollCheckStatus(systemId, checkId) {
 }
 
 // Update check status UI
-function updateCheckStatus(systemId, status, badgeText, message, badgeClass) {
+function updateCheckStatus(systemId, status, badgeText, message, badgeClass, progressPercent = null) {
     const statusIcon = document.getElementById(`status-icon-${systemId}`);
     const badge = document.getElementById(`badge-${systemId}`);
     const messageEl = document.getElementById(`message-${systemId}`);
@@ -465,6 +482,14 @@ function updateCheckStatus(systemId, status, badgeText, message, badgeClass) {
     
     // Update message
     messageEl.textContent = message;
+    
+    // Store progress for this system
+    if (progressPercent !== null) {
+        checkIds.set(systemId + '_progress', progressPercent);
+    }
+    
+    // Update overall progress
+    updateOverallProgress();
 }
 
 // Increment counters
@@ -483,20 +508,50 @@ function incrementFailed() {
 }
 
 function updateOverallProgress() {
-    const progress = ((completedCount + failedCount) / totalCount) * 100;
+    // Calculate overall progress based on individual system progress
+    let totalProgress = 0;
+    
+    for (let i = 0; i < systemIds.length; i++) {
+        const systemId = systemIds[i];
+        const systemProgress = checkIds.get(systemId + '_progress');
+        
+        if (systemProgress !== undefined) {
+            totalProgress += systemProgress;
+        } else {
+            // If completed or failed, count as 100%
+            if (completedCount > 0 || failedCount > 0) {
+                // Check if this specific system is completed/failed by checking if it has a check_id
+                const hasCheckId = checkIds.has(systemId);
+                if (hasCheckId) {
+                    totalProgress += 100;
+                }
+            }
+        }
+    }
+    
+    const progress = totalCount > 0 ? (totalProgress / totalCount) : 0;
     const progressBar = document.getElementById('overallProgress');
     const progressText = document.getElementById('progressText');
     
     progressBar.style.width = progress + '%';
     progressBar.setAttribute('aria-valuenow', progress);
-    progressText.textContent = `${completedCount + failedCount} / ${totalCount} complete`;
+    
+    // Show detailed progress text
+    const runningCount = totalCount - completedCount - failedCount;
+    progressText.textContent = `${Math.round(progress)}% - ${completedCount} complete, ${runningCount} running, ${failedCount} failed`;
     
     // Change color based on status
-    if (progress === 100) {
+    if (completedCount + failedCount === totalCount) {
         progressBar.classList.remove('progress-bar-animated');
         if (failedCount === 0) {
             progressBar.classList.add('bg-success');
         } else if (completedCount === 0) {
+            progressBar.classList.add('bg-danger');
+        } else {
+            progressBar.classList.add('bg-warning');
+        }
+    }
+}
             progressBar.classList.add('bg-danger');
         } else {
             progressBar.classList.add('bg-warning');
