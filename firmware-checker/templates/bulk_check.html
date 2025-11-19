@@ -271,27 +271,21 @@
 <div id="summarySection" class="row mt-4" style="display: none;">
     <div class="col-12">
         <div class="card border-success">
-            <div class="card-header bg-success text-white">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="bi bi-clipboard-check"></i> Bulk Check Results Summary</h5>
+                <div>
+                    <select id="recipeSelector" class="form-select form-select-sm d-inline-block" style="width: auto; background-color: white; color: #212529;">
+                        <option value="">Compare with Recipe...</option>
+                        <!-- Populated by JavaScript -->
+                    </select>
+                    <button class="btn btn-sm btn-light ms-2" onclick="compareWithRecipe()">
+                        <i class="bi bi-bar-chart"></i> Compare
+                    </button>
+                </div>
             </div>
             <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>System</th>
-                                <th>RSCM IP:Port</th>
-                                <th>Status</th>
-                                <th>Success</th>
-                                <th>Errors</th>
-                                <th>Not Implemented</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="summaryTableBody">
-                            <!-- Populated by JavaScript -->
-                        </tbody>
-                    </table>
+                <div id="summaryTableContainer">
+                    <!-- Summary rows will be added here -->
                 </div>
             </div>
         </div>
@@ -669,10 +663,13 @@ function updateOverallProgress() {
 // Show results summary table
 async function showSummary() {
     const summarySection = document.getElementById('summarySection');
-    const tableBody = document.getElementById('summaryTableBody');
+    const container = document.getElementById('summaryTableContainer');
     
-    // Clear existing rows
-    tableBody.innerHTML = '';
+    // Load available recipes
+    await loadRecipes();
+    
+    // Clear existing content
+    container.innerHTML = '';
     
     // Fetch data for each system
     for (let i = 0; i < systemIds.length; i++) {
@@ -698,10 +695,12 @@ async function showSummary() {
             let successCount = 0;
             let errorCount = 0;
             let notImplementedCount = 0;
+            let totalCount = 0;
             
             ['dc_scm', 'ovl2', 'other_platform'].forEach(category => {
                 if (data[category]) {
                     Object.values(data[category]).forEach(fw => {
+                        totalCount++;
                         if (fw.status === 'success') successCount++;
                         else if (fw.status === 'error') errorCount++;
                         else if (fw.status === 'not_implemented') notImplementedCount++;
@@ -720,22 +719,63 @@ async function showSummary() {
                 statusText = 'Partial';
             }
             
-            // Create table row
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td><strong>${systemName}</strong></td>
-                <td><code>${rscmInfo}</code></td>
-                <td><span class="badge bg-${statusBadge}">${statusText}</span></td>
-                <td><span class="badge bg-success">${successCount}</span></td>
-                <td><span class="badge bg-danger">${errorCount}</span></td>
-                <td><span class="badge bg-secondary">${notImplementedCount}</span></td>
-                <td>
-                    <a href="${SCRIPT_ROOT}/check/result/${checkId}" class="btn btn-sm btn-primary">
-                        <i class="bi bi-eye"></i> View Details
-                    </a>
-                </td>
+            // Create collapsible summary card
+            const summaryCard = document.createElement('div');
+            summaryCard.className = 'card mb-2';
+            summaryCard.setAttribute('data-check-id', checkId);
+            summaryCard.setAttribute('data-system-id', systemId);
+            
+            summaryCard.innerHTML = `
+                <div class="card-header bg-light">
+                    <div class="row align-items-center">
+                        <div class="col-md-4">
+                            <button class="btn btn-link text-start text-decoration-none p-0 w-100" type="button" 
+                                    data-bs-toggle="collapse" data-bs-target="#firmware-${checkId}">
+                                <i class="bi bi-chevron-right" id="chevron-${checkId}"></i>
+                                <strong>${systemName}</strong>
+                                <br>
+                                <small class="text-muted"><code>${rscmInfo}</code></small>
+                            </button>
+                        </div>
+                        <div class="col-md-2 text-center">
+                            <span class="badge bg-${statusBadge}">${statusText}</span>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex justify-content-center gap-2">
+                                <span class="badge bg-success">${successCount} Success</span>
+                                <span class="badge bg-danger">${errorCount} Errors</span>
+                                <span class="badge bg-secondary">${notImplementedCount} N/A</span>
+                            </div>
+                        </div>
+                        <div class="col-md-2 text-end">
+                            <a href="${SCRIPT_ROOT}/check/result/${checkId}" class="btn btn-sm btn-primary" target="_blank">
+                                <i class="bi bi-eye"></i> Details
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="collapse" id="firmware-${checkId}">
+                    <div class="card-body">
+                        <div id="firmware-content-${checkId}">
+                            ${generateFirmwareTable(data, checkId)}
+                        </div>
+                    </div>
+                </div>
             `;
-            tableBody.appendChild(row);
+            
+            container.appendChild(summaryCard);
+            
+            // Add event listener to toggle chevron
+            const collapseElement = document.getElementById(`firmware-${checkId}`);
+            const chevron = document.getElementById(`chevron-${checkId}`);
+            collapseElement.addEventListener('show.bs.collapse', function () {
+                chevron.classList.remove('bi-chevron-right');
+                chevron.classList.add('bi-chevron-down');
+            });
+            collapseElement.addEventListener('hide.bs.collapse', function () {
+                chevron.classList.remove('bi-chevron-down');
+                chevron.classList.add('bi-chevron-right');
+            });
             
         } catch (error) {
             console.error(`Error fetching summary for system ${systemId}:`, error);
@@ -747,6 +787,188 @@ async function showSummary() {
     
     // Scroll to summary
     summarySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Generate firmware table for a system
+function generateFirmwareTable(data, checkId) {
+    let html = '<div class="table-responsive">';
+    
+    // Process each category
+    ['dc_scm', 'ovl2', 'other_platform'].forEach(category => {
+        if (data[category] && Object.keys(data[category]).length > 0) {
+            const categoryName = category === 'dc_scm' ? 'DC-SCM Firmware' : 
+                               category === 'ovl2' ? 'OVL2 Firmware' : 
+                               'Other Platform Firmware';
+            
+            html += `
+                <h6 class="mt-3 mb-2">${categoryName}</h6>
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th style="width: 30%;">Firmware Type</th>
+                            <th style="width: 25%;">Version</th>
+                            <th style="width: 15%;">Status</th>
+                            <th style="width: 30%;">Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            Object.entries(data[category]).forEach(([fwType, fwData]) => {
+                let statusBadge = 'secondary';
+                let statusText = 'Unknown';
+                
+                if (fwData.status === 'success') {
+                    statusBadge = 'success';
+                    statusText = 'Success';
+                } else if (fwData.status === 'error') {
+                    statusBadge = 'danger';
+                    statusText = 'Error';
+                } else if (fwData.status === 'not_implemented') {
+                    statusBadge = 'secondary';
+                    statusText = 'N/A';
+                } else if (fwData.status === 'not_found') {
+                    statusBadge = 'warning';
+                    statusText = 'Not Found';
+                }
+                
+                const version = fwData.version || 'N/A';
+                const error = fwData.error ? `<small class="text-danger">${fwData.error}</small>` : '';
+                const note = fwData.note ? `<small class="text-muted">${fwData.note}</small>` : '';
+                
+                html += `
+                    <tr>
+                        <td><strong>${fwType}</strong></td>
+                        <td><code>${version}</code></td>
+                        <td><span class="badge bg-${statusBadge}">${statusText}</span></td>
+                        <td>${error}${note}</td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                    </tbody>
+                </table>
+            `;
+        }
+    });
+    
+    html += '</div>';
+    return html;
+}
+
+// Load available recipes
+async function loadRecipes() {
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/recipes`);
+        const recipes = await response.json();
+        
+        const selector = document.getElementById('recipeSelector');
+        selector.innerHTML = '<option value="">Compare with Recipe...</option>';
+        
+        recipes.forEach(recipe => {
+            const option = document.createElement('option');
+            option.value = recipe.id;
+            option.textContent = recipe.name;
+            selector.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading recipes:', error);
+    }
+}
+
+// Compare all checks with selected recipe
+async function compareWithRecipe() {
+    const recipeId = document.getElementById('recipeSelector').value;
+    if (!recipeId) {
+        alert('Please select a recipe to compare against');
+        return;
+    }
+    
+    // Loop through all systems and update their firmware tables with comparison results
+    for (let i = 0; i < systemIds.length; i++) {
+        const systemId = systemIds[i];
+        const checkId = checkIds.get(systemId);
+        
+        if (!checkId) continue;
+        
+        try {
+            // Fetch comparison data
+            const response = await fetch(`${SCRIPT_ROOT}/api/check/${checkId}/compare-recipe/${recipeId}`);
+            const comparisonData = await response.json();
+            
+            if (comparisonData.error) {
+                console.error(`Error comparing check ${checkId}:`, comparisonData.error);
+                continue;
+            }
+            
+            // Update the firmware table with comparison results
+            updateFirmwareTableWithComparison(checkId, comparisonData);
+            
+        } catch (error) {
+            console.error(`Error comparing check ${checkId}:`, error);
+        }
+    }
+}
+
+// Update firmware table with recipe comparison
+function updateFirmwareTableWithComparison(checkId, comparisonData) {
+    const container = document.getElementById(`firmware-content-${checkId}`);
+    if (!container) return;
+    
+    const comparison = comparisonData.comparison;
+    
+    // Find all version codes and add comparison badges
+    const rows = container.querySelectorAll('tr');
+    rows.forEach(row => {
+        const fwTypeCell = row.querySelector('td:first-child strong');
+        const versionCell = row.querySelector('td:nth-child(2)');
+        const notesCell = row.querySelector('td:nth-child(4)');
+        
+        if (!fwTypeCell || !versionCell) return;
+        
+        const fwType = fwTypeCell.textContent;
+        const version = versionCell.querySelector('code')?.textContent;
+        
+        // Check if this firmware is in the comparison results
+        let comparisonBadge = '';
+        let comparisonNote = '';
+        
+        ['dc_scm', 'ovl2', 'other_platform'].forEach(category => {
+            if (comparison[category] && comparison[category][fwType]) {
+                const comp = comparison[category][fwType];
+                
+                if (comp.match === 'exact') {
+                    comparisonBadge = '<span class="badge bg-success ms-2" title="Matches recipe">✓ Match</span>';
+                } else if (comp.match === 'mismatch') {
+                    comparisonBadge = '<span class="badge bg-warning ms-2" title="Different from recipe">⚠ Mismatch</span>';
+                    comparisonNote = `<br><small class="text-warning">Expected: <code>${comp.recipe_version}</code></small>`;
+                } else if (comp.match === 'not_in_recipe') {
+                    comparisonBadge = '<span class="badge bg-secondary ms-2" title="Not in recipe">- Not in Recipe</span>';
+                }
+            }
+        });
+        
+        if (comparisonBadge) {
+            versionCell.innerHTML += comparisonBadge;
+        }
+        if (comparisonNote && notesCell) {
+            notesCell.innerHTML += comparisonNote;
+        }
+    });
+    
+    // Add summary comparison stats at the top
+    const summaryDiv = document.createElement('div');
+    summaryDiv.className = 'alert alert-info mb-3';
+    summaryDiv.innerHTML = `
+        <h6><i class="bi bi-bar-chart"></i> Recipe Comparison: ${comparisonData.recipe.name}</h6>
+        <div class="d-flex gap-3">
+            <span><i class="bi bi-check-circle-fill text-success"></i> ${comparison.summary.matches} Matches</span>
+            <span><i class="bi bi-exclamation-triangle-fill text-warning"></i> ${comparison.summary.mismatches} Mismatches</span>
+            <span><i class="bi bi-dash-circle text-secondary"></i> ${comparison.summary.not_in_recipe} Not in Recipe</span>
+        </div>
+    `;
+    container.insertBefore(summaryDiv, container.firstChild);
 }
 
 // Don't auto-start - wait for form submission

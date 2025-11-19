@@ -431,6 +431,9 @@ function renderGrouped(systems, groupBy) {
                         <table class="table table-hover mb-0">
                             <thead>
                                 <tr>
+                                    <th style="width: 40px;">
+                                        <input type="checkbox" class="group-select-all" onchange="toggleGroupSelectAll(this)">
+                                    </th>
                                     <th>System Name</th>
                                     <th>RSCM IP</th>
                                     <th>Port</th>
@@ -615,6 +618,16 @@ function updateSelectedCount() {
 
 function toggleSelectAll(checkbox) {
     const checkboxes = document.querySelectorAll('.system-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = checkbox.checked;
+    });
+    updateSelectedCount();
+}
+
+function toggleGroupSelectAll(checkbox) {
+    // Find all checkboxes in the same table
+    const table = checkbox.closest('table');
+    const checkboxes = table.querySelectorAll('.system-checkbox');
     checkboxes.forEach(cb => {
         cb.checked = checkbox.checked;
     });

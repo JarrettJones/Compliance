@@ -200,6 +200,41 @@ pre {
     animation: pulse 2s infinite;
 }
 
+/* System selection checkbox column */
+.table th:first-child,
+.table td:first-child {
+    width: 40px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.system-checkbox {
+    cursor: pointer;
+}
+
+/* Bulk check summary collapsible cards */
+#summaryTableContainer .card {
+    transition: box-shadow 0.2s ease-in-out;
+}
+
+#summaryTableContainer .card:hover {
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+}
+
+#summaryTableContainer .card-header button {
+    color: inherit;
+    width: 100%;
+}
+
+#summaryTableContainer .card-header button:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+#summaryTableContainer .card-header .bi-chevron-right,
+#summaryTableContainer .card-header .bi-chevron-down {
+    transition: transform 0.2s ease-in-out;
+}
+
 /* System status indicators */
 .status-online {
     color: #198754;

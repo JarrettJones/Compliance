@@ -2840,6 +2840,22 @@ def api_check_firmware_data(check_id):
         except json.JSONDecodeError:
             return jsonify({'error': 'Invalid firmware data'}), 500
 
+@app.route('/api/recipes')
+@login_required
+def api_recipes():
+    """API endpoint to get list of recipes for the current program"""
+    program_id = session.get('program_id')
+    with get_db_connection() as conn:
+        recipes_rows = conn.execute('''
+            SELECT id, name, description
+            FROM firmware_recipes
+            WHERE program_id = ?
+            ORDER BY name
+        ''', (program_id,)).fetchall()
+    
+    recipes_list = [dict(row) for row in recipes_rows]
+    return jsonify(recipes_list)
+
 @app.route('/api/check/<int:check_id>/compare-recipe/<int:recipe_id>')
 @login_required
 def api_compare_check_with_recipe(check_id, recipe_id):

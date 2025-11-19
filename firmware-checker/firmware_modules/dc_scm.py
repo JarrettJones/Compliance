@@ -212,9 +212,19 @@ class DCScmChecker:
         """Extract BIOS/IFWI version from system data"""
         try:
             bios_version = system_data.get('BiosVersion', 'Not Available')
+            # Check if version is empty or not available
+            if not bios_version or bios_version == 'Not Available':
+                return {
+                    'version': 'Not Available',
+                    'status': 'not_found',
+                    'error': 'BiosVersion field is empty or not present',
+                    'checked_at': datetime.now().isoformat(),
+                    'method': 'redfish_api',
+                    'raw_data': bios_version
+                }
             return {
                 'version': bios_version,
-                'status': 'success' if bios_version != 'Not Available' else 'not_found',
+                'status': 'success',
                 'error': None,
                 'checked_at': datetime.now().isoformat(),
                 'method': 'redfish_api',
@@ -952,12 +962,15 @@ class DCScmChecker:
             print(f"[DC-SCM] [DEBUG] Sending command: {cfm_command.strip()}")
             shell.send(cfm_command)
             
-            # Wait for command execution - CFM commands can take up to 40 seconds
+            # Give the command a moment to start executing before we start reading
+            time.sleep(1)
+            
+            # Wait for command execution - CFM commands can take up to 60 seconds
             # Keep reading until we see "Completion Code: Success" or "Completion Code: Failed"
-            print(f"[DC-SCM] [DEBUG] Waiting for CFM command to complete (up to 40 seconds)...")
+            print(f"[DC-SCM] [DEBUG] Waiting for CFM command to complete (up to 60 seconds)...")
             cfm_output = ""
             start_time = time.time()
-            max_wait = 40
+            max_wait = 60
             last_output_time = start_time
             no_output_timeout = 5  # If no output for 5 seconds after getting some data, consider it done
             
@@ -1154,6 +1167,8 @@ class DCScmChecker:
         try:
             system_data = self._get_redfish_data(rscm_ip, system_port, self.base_endpoints['system'])
             if system_data:
+                print(f"[DC-SCM] [DEBUG] IFWI - System data keys: {list(system_data.keys())}")
+                print(f"[DC-SCM] [DEBUG] IFWI - BiosVersion field: {system_data.get('BiosVersion', 'NOT FOUND')}")
                 return self._extract_bios_version(system_data)
             else:
                 return {
