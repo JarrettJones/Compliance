@@ -314,9 +314,17 @@ function startBulkCheck() {
 
 // Start all checks
 async function startAllChecks() {
-    // Start all checks in parallel
-    const promises = systemIds.map(systemId => startCheck(systemId));
-    await Promise.all(promises);
+    // Start checks sequentially with a 2-second delay between each
+    // This prevents overwhelming the RSCM SSH servers with too many concurrent connections
+    for (let i = 0; i < systemIds.length; i++) {
+        const systemId = systemIds[i];
+        await startCheck(systemId);
+        
+        // Add delay before starting next system (except after the last one)
+        if (i < systemIds.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+    }
 }
 
 // Start individual check
