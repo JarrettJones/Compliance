@@ -304,7 +304,7 @@ class OtherPlatformChecker:
             # Map firmware types to their checking methods
             if firmware_type == 'HPMCpld':
                 return self._check_hpm_cpld_individual(rscm_ip, system_port)
-            elif firmware_type == 'M.2':
+            elif firmware_type in ['M.2', 'M.2(Primary)', 'M.2(Secondary)']:
                 # Use provided computer_name for storage checks, fallback to rscm_ip if not provided
                 target_computer = computer_name if computer_name else rscm_ip
                 if self.os_username and self.os_password:
@@ -313,11 +313,11 @@ class OtherPlatformChecker:
                     return {
                         'version': 'NOT CONFIGURED - OS Credentials Required',
                         'status': 'error',
-                        'error': 'No OS credentials provided',
+                        'error': 'No OS credentials provided for Windows storage firmware check',
                         'checked_at': datetime.now().isoformat(),
                         'method': 'storage_firmware_tool'
                     }
-            elif firmware_type == 'E.1s':
+            elif firmware_type in ['E.1s', 'E.1s(primary)', 'E.1s (Secondary)']:
                 # Use provided computer_name for storage checks, fallback to rscm_ip if not provided
                 target_computer = computer_name if computer_name else rscm_ip
                 if self.os_username and self.os_password:
@@ -326,7 +326,7 @@ class OtherPlatformChecker:
                     return {
                         'version': 'NOT CONFIGURED - OS Credentials Required',
                         'status': 'error',
-                        'error': 'No OS credentials provided',
+                        'error': 'No OS credentials provided for Windows storage firmware check',
                         'checked_at': datetime.now().isoformat(),
                         'method': 'storage_firmware_tool'
                     }
@@ -339,7 +339,7 @@ class OtherPlatformChecker:
                     return {
                         'version': 'NOT CONFIGURED - OS Credentials Required',
                         'status': 'error',
-                        'error': 'No OS credentials provided',
+                        'error': 'No OS credentials provided for Windows OS version check',
                         'checked_at': datetime.now().isoformat(),
                         'method': 'os_version_check'
                     }

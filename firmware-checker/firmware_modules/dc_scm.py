@@ -1112,17 +1112,17 @@ class DCScmChecker:
             # Map firmware types to their checking methods
             if firmware_type == 'IFWI':
                 return self._check_ifwi_individual(rscm_ip, system_port)
-            elif firmware_type == 'BMC FW':
+            elif firmware_type in ['BMC', 'BMC FW']:
                 return self._check_bmc_individual(rscm_ip, system_port)
             elif firmware_type == 'SCM-CPLD':
                 return self._check_scm_cpld_individual(rscm_ip, system_port)
             elif firmware_type in ['Inventory', 'PowerCapping', 'FanTable', 'SDRGenerator', 'IPMIAllowList']:
                 return self._check_bmc_config_individual(firmware_type, rscm_ip, system_port)
-            elif firmware_type in ['BMC Tip', 'BMC TIP PCD Platform ID', 'BMC TIP PCD Version ID (hex)/(dec)']:
+            elif firmware_type in ['BMC Tip', 'BMCTip', 'BMC TIP PCD Platform ID', 'BMCTip PCD Platform ID', 'BMC TIP PCD Version ID (hex)/(dec)', 'BMCTip PCD Version', 'BMCTip PCD Version ID']:
                 return self._check_bmc_tip_individual(firmware_type, rscm_ip, system_port)
-            elif firmware_type == 'CFM Platform ID':
+            elif firmware_type in ['CFM Platform ID', 'CFM PlatformID']:
                 return self.check_cfm_platform_id(rscm_ip, system_port)
-            elif firmware_type == 'CFM Version ID (hex)/(dec)':
+            elif firmware_type in ['CFM Version ID (hex)/(dec)', 'CFMVersion ID']:
                 return {
                     'version': 'NOT_IMPLEMENTED_BY_DEV_TEAMS',
                     'status': 'not_implemented',
@@ -1130,7 +1130,7 @@ class DCScmChecker:
                     'checked_at': datetime.now().isoformat(),
                     'method': 'not_available'
                 }
-            elif firmware_type == 'Manticore (HSM)':
+            elif firmware_type in ['Manticore (HSM)', 'Manticore']:
                 return self._check_cerberus_individual(firmware_type, rscm_ip, system_port)
             elif firmware_type == 'TPM Module':
                 return self._check_tpm_individual(rscm_ip, system_port)
@@ -1519,8 +1519,17 @@ class DCScmChecker:
     def _get_bmc_tip_via_ssh(self, firmware_type, rscm_ip, system_port):
         """Get BMC TIP info via SSH Cerberus commands (matching PowerShell implementation)"""
         try:
+            # Normalize firmware type names (database might have different names)
+            firmware_type_normalized = firmware_type
+            if firmware_type in ['BMCTip', 'BMC Tip']:
+                firmware_type_normalized = 'BMC Tip'
+            elif firmware_type in ['BMCTip PCD Platform ID', 'BMC TIP PCD Platform ID']:
+                firmware_type_normalized = 'BMC TIP PCD Platform ID'
+            elif firmware_type in ['BMCTip PCD Version', 'BMCTip PCD Version ID', 'BMC TIP PCD Version ID (hex)/(dec)']:
+                firmware_type_normalized = 'BMC TIP PCD Version ID (hex)/(dec)'
+            
             # Handle not-implemented firmware types first
-            if firmware_type in ['BMC TIP PCD Platform ID', 'BMC TIP PCD Version ID (hex)/(dec)']:
+            if firmware_type_normalized in ['BMC TIP PCD Platform ID', 'BMC TIP PCD Version ID (hex)/(dec)']:
                 print(f"[DC-SCM DEBUG] {firmware_type} is not yet implemented by development teams")
                 return {
                     'version': 'NOT IMPLEMENTED',
@@ -1536,7 +1545,7 @@ class DCScmChecker:
             }
             
             # Only BMC Tip should reach this point
-            if firmware_type != 'BMC Tip':
+            if firmware_type_normalized != 'BMC Tip':
                 return {
                     'version': 'UNKNOWN_FIRMWARE_TYPE',
                     'status': 'error',
@@ -1545,8 +1554,8 @@ class DCScmChecker:
                     'method': 'unknown'
                 }
             
-            command = cerberus_commands[firmware_type]
-            print(f"[DC-SCM DEBUG] Executing BMC TIP command for {firmware_type}: {command}")
+            command = cerberus_commands[firmware_type_normalized]
+            print(f"[DC-SCM DEBUG] Executing BMC TIP command for {firmware_type} (normalized: {firmware_type_normalized}): {command}")
             
             # Execute SSH command for BMC Tip only
             ssh = paramiko.SSHClient()
