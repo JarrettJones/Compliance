@@ -417,6 +417,14 @@ function startBulkCheck() {
         credentials.windows_password = winPassword;
     }
     
+    // Store bulk check session info in localStorage for navigation
+    const bulkCheckSession = {
+        systemIds: systemIds,
+        timestamp: Date.now(),
+        url: window.location.href
+    };
+    localStorage.setItem('bulkCheckSession', JSON.stringify(bulkCheckSession));
+    
     // Hide configuration and show progress
     document.getElementById('configurationSection').style.display = 'none';
     document.getElementById('progressSection').style.display = 'block';
