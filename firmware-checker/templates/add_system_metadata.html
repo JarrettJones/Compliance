@@ -95,15 +95,6 @@
                         </div>
                         
                         <div class="col-md-4 mb-3">
-                            <label for="rack" class="form-label">
-                                <i class="bi bi-server"></i> Rack / Bench
-                            </label>
-                            <input type="text" class="form-control" id="rack" name="rack"
-                                   placeholder="e.g., Rack A12 or Test Bench 5">
-                            <div class="form-text">Rack identifier or bench location</div>
-                        </div>
-                        
-                        <div class="col-md-4 mb-3">
                             <label for="u_height" class="form-label">
                                 <i class="bi bi-arrows-vertical"></i> U Position
                             </label>
@@ -112,6 +103,118 @@
                             <div class="form-text">Rack unit position</div>
                         </div>
                     </div>
+
+                    <hr class="my-4">
+
+                    <!-- Rack Selection -->
+                    <h5 class="mb-3"><i class="bi bi-server"></i> Rack / Bench Assignment</h5>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Rack Assignment</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="rack_selection" id="rack_existing" value="existing" checked>
+                            <label class="form-check-label" for="rack_existing">
+                                Select Existing Rack
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="rack_selection" id="rack_new" value="new">
+                            <label class="form-check-label" for="rack_new">
+                                Create New Rack
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="rack_selection" id="rack_none" value="none">
+                            <label class="form-check-label" for="rack_none">
+                                No Rack (assign later)
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Existing Rack Selection -->
+                    <div id="existing_rack_section" class="mb-3">
+                        <label for="existing_rack_id" class="form-label">Select Rack</label>
+                        <select class="form-select" id="existing_rack_id" name="existing_rack_id">
+                            <option value="">-- Select a Rack --</option>
+                            {% for rack in racks %}
+                            <option value="{{ rack.id }}">
+                                {{ rack.name }} - {{ rack.location }} ({{ rack.rack_type|upper }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">System RSCM IP: <code>{{ system.rscm_ip }}</code> - Make sure this matches an RSCM in the selected rack</div>
+                    </div>
+
+                    <!-- New Rack Creation -->
+                    <div id="new_rack_section" class="mb-3" style="display: none;">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> <strong>Creating a new rack requires both Upper and Lower RSCM IPs</strong>
+                            <p class="mb-0 mt-2">Each rack must have two RSCMs (upper and lower positions). These are physical units that manage multiple servers.</p>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="new_rack_name" class="form-label">
+                                    Rack Name <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="new_rack_name" name="new_rack_name"
+                                       placeholder="e.g., B04 or TestBench-5">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="new_rack_type" class="form-label">Type</label>
+                                <select class="form-select" id="new_rack_type" name="new_rack_type">
+                                    <option value="rack">Rack</option>
+                                    <option value="bench">Bench</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="new_rack_location" class="form-label">Rack Location</label>
+                            <input type="text" class="form-control" id="new_rack_location" name="new_rack_location"
+                                   placeholder="e.g., Redmond, WA - Building 50">
+                            <div class="form-text">Leave blank to use location from Geographic Location field above</div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="rscm_upper_ip" class="form-label">
+                                    Upper RSCM IP <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="rscm_upper_ip" name="rscm_upper_ip"
+                                       placeholder="e.g., 10.199.88.18"
+                                       pattern="^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$">
+                                <div class="form-text">IP address of the upper RSCM unit</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="rscm_lower_ip" class="form-label">
+                                    Lower RSCM IP <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="rscm_lower_ip" name="rscm_lower_ip"
+                                       placeholder="e.g., 10.199.88.19"
+                                       pattern="^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$">
+                                <div class="form-text">IP address of the lower RSCM unit</div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i> <strong>Current System Connection:</strong>
+                            <p class="mb-0">This system connects to <code>{{ system.rscm_ip }}:{{ system.system_port }}</code></p>
+                            <p class="mb-0 mt-2">Make sure one of the RSCM IPs above matches <code>{{ system.rscm_ip }}</code></p>
+                        </div>
+                    </div>
+
+                    <script>
+                        // Toggle rack sections based on radio selection
+                        document.querySelectorAll('input[name="rack_selection"]').forEach(radio => {
+                            radio.addEventListener('change', function() {
+                                document.getElementById('existing_rack_section').style.display = 
+                                    this.value === 'existing' ? 'block' : 'none';
+                                document.getElementById('new_rack_section').style.display = 
+                                    this.value === 'new' ? 'block' : 'none';
+                            });
+                        });
+                    </script>
 
                     {% if custom_fields %}
                     <hr class="my-4">

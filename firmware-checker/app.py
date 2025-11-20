@@ -2292,13 +2292,21 @@ def add_system_metadata():
     
     # Get custom fields for the program if one is selected
     custom_fields = []
-    if program_id:
-        with get_db_connection() as conn:
+    racks = []
+    with get_db_connection() as conn:
+        if program_id:
             custom_fields = conn.execute('''
                 SELECT * FROM program_custom_fields 
                 WHERE program_id = ? 
                 ORDER BY display_order, field_label
             ''', (program_id,)).fetchall()
+        
+        # Get existing racks
+        racks = conn.execute('''
+            SELECT id, name, location, rack_type 
+            FROM racks 
+            ORDER BY name
+        ''').fetchall()
     
     if request.method == 'POST':
         try:
@@ -2311,16 +2319,95 @@ def add_system_metadata():
                             flash(f'{field["field_label"]} is required', 'error')
                             return render_template('add_system_metadata.html', 
                                                  system=pending,
-                                                 custom_fields=custom_fields)
+                                                 custom_fields=custom_fields,
+                                                 racks=racks)
             
             # Get metadata from form
             system_hostname = request.form.get('system_hostname', '')
             geo_location = request.form.get('geo_location', '')
             building = request.form.get('building', '')
             room = request.form.get('room', '')
-            rack = request.form.get('rack', '')
+            rack_selection = request.form.get('rack_selection', 'existing')
+            existing_rack_id = request.form.get('existing_rack_id', '')
+            new_rack_name = request.form.get('new_rack_name', '').strip()
+            new_rack_location = request.form.get('new_rack_location', '').strip()
+            new_rack_type = request.form.get('new_rack_type', 'rack')
+            rscm_upper_ip = request.form.get('rscm_upper_ip', '').strip()
+            rscm_lower_ip = request.form.get('rscm_lower_ip', '').strip()
             u_height = request.form.get('u_height', '')
             description = request.form.get('description', '')
+            
+            rack_id = None
+            rscm_component_id = None
+            
+            with get_db_connection() as conn:
+                # Handle rack selection/creation
+                if rack_selection == 'new':
+                    # Creating new rack - validate required fields
+                    if not new_rack_name:
+                        flash('Rack name is required when creating a new rack', 'error')
+                        return render_template('add_system_metadata.html', 
+                                             system=pending,
+                                             custom_fields=custom_fields,
+                                             racks=racks)
+                    
+                    if not rscm_upper_ip or not rscm_lower_ip:
+                        flash('Both Upper and Lower RSCM IPs are required when creating a new rack', 'error')
+                        return render_template('add_system_metadata.html', 
+                                             system=pending,
+                                             custom_fields=custom_fields,
+                                             racks=racks)
+                    
+                    # Default location if not provided
+                    if not new_rack_location:
+                        if geo_location:
+                            new_rack_location = f"{geo_location} - Building {building or '50'}"
+                        else:
+                            new_rack_location = "Redmond, WA - Building 50"
+                    
+                    # Create new rack
+                    try:
+                        cursor = conn.execute('''
+                            INSERT INTO racks (name, location, rack_type)
+                            VALUES (?, ?, ?)
+                        ''', (new_rack_name, new_rack_location, new_rack_type))
+                        rack_id = cursor.lastrowid
+                        
+                        # Create RSCM components (upper and lower)
+                        cursor = conn.execute('''
+                            INSERT INTO rscm_components (rack_id, name, ip_address, port)
+                            VALUES (?, ?, ?, ?)
+                        ''', (rack_id, 'RSCM-Upper', rscm_upper_ip, 22))
+                        
+                        cursor = conn.execute('''
+                            INSERT INTO rscm_components (rack_id, name, ip_address, port)
+                            VALUES (?, ?, ?, ?)
+                        ''', (rack_id, 'RSCM-Lower', rscm_lower_ip, 22))
+                        
+                        flash(f'Created new rack "{new_rack_name}" with upper and lower RSCMs', 'success')
+                    except sqlite3.IntegrityError as e:
+                        flash(f'Error creating rack: Rack name may already exist', 'error')
+                        return render_template('add_system_metadata.html', 
+                                             system=pending,
+                                             custom_fields=custom_fields,
+                                             racks=racks)
+                
+                elif rack_selection == 'existing' and existing_rack_id:
+                    rack_id = int(existing_rack_id)
+                
+                # If rack is selected, find matching RSCM component
+                if rack_id:
+                    # Match RSCM by IP address
+                    rscm_component = conn.execute('''
+                        SELECT id FROM rscm_components 
+                        WHERE rack_id = ? AND ip_address = ?
+                    ''', (rack_id, pending['rscm_ip'])).fetchone()
+                    
+                    if rscm_component:
+                        rscm_component_id = rscm_component['id']
+                    else:
+                        # RSCM IP doesn't match any in this rack - warn but continue
+                        flash(f'Warning: System RSCM IP ({pending["rscm_ip"]}) does not match any RSCM in selected rack', 'warning')
             
             # Build description with hostname/IP and location metadata
             desc_parts = []
@@ -2332,8 +2419,14 @@ def add_system_metadata():
                 desc_parts.append(f"Building: {building}")
             if room:
                 desc_parts.append(f"Room: {room}")
-            if rack:
-                desc_parts.append(f"Rack: {rack}")
+            if rack_selection == 'new' and new_rack_name:
+                desc_parts.append(f"Rack: {new_rack_name}")
+            elif rack_selection == 'existing' and existing_rack_id:
+                # Get rack name
+                with get_db_connection() as conn:
+                    rack = conn.execute('SELECT name FROM racks WHERE id = ?', (existing_rack_id,)).fetchone()
+                    if rack:
+                        desc_parts.append(f"Rack: {rack['name']}")
             if u_height:
                 desc_parts.append(f"U: {u_height}")
             if description:
@@ -2346,16 +2439,19 @@ def add_system_metadata():
                 cursor = conn.execute('''
                     INSERT INTO systems (
                         name, rscm_ip, rscm_port, 
-                        description, program_id, created_by
+                        description, program_id, created_by,
+                        rack_id, rscm_component_id
                     )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     pending['serial_number'],
                     pending['rscm_ip'],
                     pending['system_port'],
                     full_description,
                     program_id,
-                    session.get('user_id')
+                    session.get('user_id'),
+                    rack_id,
+                    rscm_component_id
                 ))
                 system_id = cursor.lastrowid
                 
@@ -2385,7 +2481,8 @@ def add_system_metadata():
     
     return render_template('add_system_metadata.html', 
                          system=pending,
-                         custom_fields=custom_fields)
+                         custom_fields=custom_fields,
+                         racks=racks)
 
 @app.route('/systems/<int:system_id>')
 @login_required
