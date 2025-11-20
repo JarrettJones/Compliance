@@ -79,7 +79,7 @@
                     </div>
 
                     <!-- Existing Rack Selection -->
-                    <div id="existing_rack_section" class="mb-4">
+                    <div id="existing_rack_section" class="mb-3">
                         <label for="existing_rack_id" class="form-label">Select Rack <span class="text-danger">*</span></label>
                         <select class="form-select" id="existing_rack_id" name="existing_rack_id">
                             <option value="">-- Select a Rack --</option>
@@ -96,7 +96,7 @@
                     </div>
 
                     <!-- New Rack Creation -->
-                    <div id="new_rack_section" class="mb-4" style="display: none;">
+                    <div id="new_rack_section" class="mb-3" style="display: none;">
                         <div class="alert alert-info">
                             <i class="bi bi-info-circle"></i> <strong>Creating a new rack requires both Upper and Lower RSCM IPs</strong>
                             <p class="mb-0 mt-2">Each rack must have two RSCMs (upper and lower positions). These are physical units that manage multiple servers.</p>
@@ -156,7 +156,7 @@
                         </div>
                     </div>
 
-                    <hr class="my-4">
+                    <hr class="my-3">
 
                     <!-- System-Specific Details (only if needed) -->
                     <h5 class="mb-3"><i class="bi bi-hdd-network"></i> System Details</h5>
@@ -182,7 +182,7 @@
                     </div>
 
                     {% if custom_fields %}
-                    <hr class="my-4">
+                    <hr class="my-3">
                     <h5 class="mb-3"><i class="bi bi-sliders"></i> Program-Specific Fields</h5>
                     
                     {% for field in custom_fields %}
@@ -253,7 +253,7 @@
                         <div class="form-text">Optional additional information</div>
                     </div>
 
-                    <div class="d-grid gap-2 mt-4">
+                    <div class="d-grid gap-2 mt-3">
                         <button type="submit" class="btn btn-success btn-lg">
                             <i class="bi bi-check-circle"></i> Complete Registration
                         </button>
@@ -274,18 +274,6 @@
                         });
                     });
                 </script>
-            </div>
-        </div>
-
-        <div class="card mt-3 border-warning">
-            <div class="card-body">
-                <h6><i class="bi bi-lightbulb"></i> Best Practices:</h6>
-                <ul class="mb-0">
-                    <li>Use consistent naming conventions across your systems</li>
-                    <li>Include enough detail to physically locate the system</li>
-                    <li>Consider including contact information in the notes field</li>
-                    <li>You can always edit this information later from the system details page</li>
-                </ul>
             </div>
         </div>
     </div>
