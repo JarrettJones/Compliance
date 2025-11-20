@@ -372,7 +372,83 @@ document.addEventListener('DOMContentLoaded', function() {
         cb.addEventListener('change', updateSelectedCount);
     });
     updateSelectedCount();
+    
+    // Check if we should restore a bulk check session (either in progress or completed)
+    checkForExistingSession();
 });
+
+// Check for existing bulk check session
+async function checkForExistingSession() {
+    try {
+        const bulkCheckSession = localStorage.getItem('bulkCheckSession');
+        if (!bulkCheckSession) return;
+        
+        const session = JSON.parse(bulkCheckSession);
+        
+        // Check if this is the same bulk check (same system IDs)
+        if (!session.systemIds || JSON.stringify(session.systemIds.sort()) !== JSON.stringify(systemIds.sort())) {
+            return;
+        }
+        
+        // Check if session is recent (within last 24 hours)
+        const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+        if (session.timestamp < twentyFourHoursAgo) {
+            localStorage.removeItem('bulkCheckSession');
+            return;
+        }
+        
+        // Check if there are completed checks for these systems
+        let hasAnyResults = false;
+        for (const systemId of systemIds) {
+            try {
+                const response = await fetch(`${SCRIPT_ROOT}/api/check-status/${systemId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.check_id && (data.status === 'completed' || data.status === 'success' || data.status === 'error')) {
+                        hasAnyResults = true;
+                        checkIds.set(systemId, data.check_id);
+                        
+                        // Update UI for this system
+                        if (data.status === 'completed' || data.status === 'success') {
+                            updateCheckStatus(systemId, 'success', 'Completed', 'Check completed', 'bg-success', 100);
+                            const viewBtn = document.getElementById(`view-btn-${systemId}`);
+                            viewBtn.href = `${SCRIPT_ROOT}/check/result/${data.check_id}`;
+                            viewBtn.style.display = 'inline-block';
+                            completedCount++;
+                        } else if (data.status === 'error') {
+                            updateCheckStatus(systemId, 'failed', 'Failed', data.error || 'Check failed', 'bg-danger', 100);
+                            failedCount++;
+                        } else if (data.status === 'running') {
+                            // Still running, start polling
+                            updateCheckStatus(systemId, 'running', 'Running', 'In progress...', 'bg-warning');
+                            pollCheckStatus(systemId, data.check_id);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error(`Error checking status for system ${systemId}:`, e);
+            }
+        }
+        
+        // If we found any results, show the progress/results section
+        if (hasAnyResults) {
+            document.getElementById('configurationSection').style.display = 'none';
+            document.getElementById('progressSection').style.display = 'block';
+            
+            // Update progress bar
+            updateOverallProgress();
+            
+            // If all checks are complete, load the summary
+            if (completedCount + failedCount === totalCount) {
+                loadRecipes();
+                await loadAllFirmwareData();
+                showSummary();
+            }
+        }
+    } catch (e) {
+        console.error('Error checking for existing session:', e);
+    }
+}
 
 // Start bulk check
 function startBulkCheck() {
