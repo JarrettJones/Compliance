@@ -199,6 +199,18 @@
 <!-- Progress Section (hidden until checks start) -->
 <div id="progressSection" style="display: none;">
 
+<!-- Navigation Header -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-hourglass-split"></i> Bulk Check In Progress</h2>
+            <a href="{{ url_for('bulk_check') }}?systems={{ system_ids|join(',') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Configuration
+            </a>
+        </div>
+    </div>
+</div>
+
 <!-- Overall Progress -->
 <div class="row mb-4">
     <div class="col-12">
