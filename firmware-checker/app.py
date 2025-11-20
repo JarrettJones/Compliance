@@ -2324,9 +2324,6 @@ def add_system_metadata():
             
             # Get metadata from form
             system_hostname = request.form.get('system_hostname', '')
-            geo_location = request.form.get('geo_location', '')
-            building = request.form.get('building', '')
-            room = request.form.get('room', '')
             rack_selection = request.form.get('rack_selection', 'existing')
             existing_rack_id = request.form.get('existing_rack_id', '')
             new_rack_name = request.form.get('new_rack_name', '').strip()
@@ -2339,6 +2336,8 @@ def add_system_metadata():
             
             rack_id = None
             rscm_component_id = None
+            rack_name = None
+            rack_location = None
             
             with get_db_connection() as conn:
                 # Handle rack selection/creation
@@ -2351,19 +2350,19 @@ def add_system_metadata():
                                              custom_fields=custom_fields,
                                              racks=racks)
                     
+                    if not new_rack_location:
+                        flash('Rack location is required when creating a new rack', 'error')
+                        return render_template('add_system_metadata.html', 
+                                             system=pending,
+                                             custom_fields=custom_fields,
+                                             racks=racks)
+                    
                     if not rscm_upper_ip or not rscm_lower_ip:
                         flash('Both Upper and Lower RSCM IPs are required when creating a new rack', 'error')
                         return render_template('add_system_metadata.html', 
                                              system=pending,
                                              custom_fields=custom_fields,
                                              racks=racks)
-                    
-                    # Default location if not provided
-                    if not new_rack_location:
-                        if geo_location:
-                            new_rack_location = f"{geo_location} - Building {building or '50'}"
-                        else:
-                            new_rack_location = "Redmond, WA - Building 50"
                     
                     # Create new rack
                     try:
@@ -2372,6 +2371,8 @@ def add_system_metadata():
                             VALUES (?, ?, ?)
                         ''', (new_rack_name, new_rack_location, new_rack_type))
                         rack_id = cursor.lastrowid
+                        rack_name = new_rack_name
+                        rack_location = new_rack_location
                         
                         # Create RSCM components (upper and lower)
                         cursor = conn.execute('''
@@ -2394,6 +2395,11 @@ def add_system_metadata():
                 
                 elif rack_selection == 'existing' and existing_rack_id:
                     rack_id = int(existing_rack_id)
+                    # Get rack details for description
+                    rack = conn.execute('SELECT name, location FROM racks WHERE id = ?', (rack_id,)).fetchone()
+                    if rack:
+                        rack_name = rack['name']
+                        rack_location = rack['location']
                 
                 # If rack is selected, find matching RSCM component
                 if rack_id:
@@ -2409,24 +2415,14 @@ def add_system_metadata():
                         # RSCM IP doesn't match any in this rack - warn but continue
                         flash(f'Warning: System RSCM IP ({pending["rscm_ip"]}) does not match any RSCM in selected rack', 'warning')
             
-            # Build description with hostname/IP and location metadata
+            # Build description with hostname and location metadata from rack
             desc_parts = []
             if system_hostname:
                 desc_parts.append(f"Host: {system_hostname}")
-            if geo_location:
-                desc_parts.append(f"Geo: {geo_location}")
-            if building:
-                desc_parts.append(f"Building: {building}")
-            if room:
-                desc_parts.append(f"Room: {room}")
-            if rack_selection == 'new' and new_rack_name:
-                desc_parts.append(f"Rack: {new_rack_name}")
-            elif rack_selection == 'existing' and existing_rack_id:
-                # Get rack name
-                with get_db_connection() as conn:
-                    rack = conn.execute('SELECT name FROM racks WHERE id = ?', (existing_rack_id,)).fetchone()
-                    if rack:
-                        desc_parts.append(f"Rack: {rack['name']}")
+            if rack_location:
+                desc_parts.append(f"Location: {rack_location}")
+            if rack_name:
+                desc_parts.append(f"Rack: {rack_name}")
             if u_height:
                 desc_parts.append(f"U: {u_height}")
             if description:
