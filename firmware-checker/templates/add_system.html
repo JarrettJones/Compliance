@@ -5,7 +5,7 @@
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
                 <h1><i class="bi bi-cpu-fill"></i> Add System</h1>
                 <p class="text-muted">Connect to RSCM and automatically discover system information</p>
@@ -51,11 +51,6 @@
                         </div>
                     </div>
 
-                    <div class="alert alert-warning">
-                        <i class="bi bi-shield-lock"></i> <strong>RSCM Credentials Required</strong>
-                        <p class="mb-0 mt-2">Provide credentials to authenticate with the RSCM for automatic serial number retrieval.</p>
-                    </div>
-
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="username" class="form-label">RSCM Username *</label>
@@ -71,12 +66,7 @@
                         </div>
                     </div>
 
-                    <div class="alert alert-secondary">
-                        <i class="bi bi-clock-history"></i> <strong>What happens next?</strong>
-                        <p class="mb-0 mt-2">After clicking "Connect & Discover", we'll connect to the RSCM, retrieve the serial number, and then you'll be able to add location metadata (building, rack, etc.) before saving the system.</p>
-                    </div>
-
-                    <div class="d-grid gap-2">
+                    <div class="d-grid gap-2 mt-3">
                         <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
                             <i class="bi bi-plugin"></i> Connect & Discover System
                         </button>
@@ -85,19 +75,6 @@
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
-
-        <div class="card mt-3">
-            <div class="card-body">
-                <h6><i class="bi bi-question-circle"></i> Need Help?</h6>
-                <p class="text-muted mb-2">Make sure:</p>
-                <ul class="text-muted mb-0">
-                    <li>The RSCM IP address is correct and accessible from this machine</li>
-                    <li>Redfish API is enabled on the RSCM (usually enabled by default)</li>
-                    <li>You have valid RSCM credentials (typically root/password)</li>
-                    <li>Network connectivity allows HTTPS on port 8080 to the RSCM</li>
-                </ul>
             </div>
         </div>
     </div>
