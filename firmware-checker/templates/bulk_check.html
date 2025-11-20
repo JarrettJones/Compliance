@@ -698,8 +698,8 @@ async function showSummary() {
             let totalCount = 0;
             
             ['dc_scm', 'ovl2', 'other_platform'].forEach(category => {
-                if (data[category]) {
-                    Object.values(data[category]).forEach(fw => {
+                if (data[category] && data[category].firmware_versions) {
+                    Object.values(data[category].firmware_versions).forEach(fw => {
                         totalCount++;
                         if (fw.status === 'success') successCount++;
                         else if (fw.status === 'error') errorCount++;
@@ -803,8 +803,10 @@ function generateFirmwareTable(data, checkId) {
     let categoryIndex = 0;
     
     categories.forEach(category => {
-        if (data[category.key] && Object.keys(data[category.key]).length > 0) {
+        if (data[category.key] && data[category.key].firmware_versions && Object.keys(data[category.key].firmware_versions).length > 0) {
             categoryIndex++;
+            
+            const categoryData = data[category.key].firmware_versions;
             
             // Count firmware by status
             let successCount = 0;
@@ -812,7 +814,7 @@ function generateFirmwareTable(data, checkId) {
             let notImplementedCount = 0;
             let totalCount = 0;
             
-            Object.values(data[category.key]).forEach(fw => {
+            Object.values(categoryData).forEach(fw => {
                 totalCount++;
                 if (fw.status === 'success') successCount++;
                 else if (fw.status === 'error') errorCount++;
@@ -850,7 +852,7 @@ function generateFirmwareTable(data, checkId) {
             `;
             
             // Sort firmware types alphabetically
-            const sortedEntries = Object.entries(data[category.key]).sort((a, b) => a[0].localeCompare(b[0]));
+            const sortedEntries = Object.entries(categoryData).sort((a, b) => a[0].localeCompare(b[0]));
             
             sortedEntries.forEach(([fwType, fwData]) => {
                 let statusBadge, statusIcon, rowClass;
