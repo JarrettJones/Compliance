@@ -982,7 +982,7 @@ function updateFirmwareTableWithComparison(checkId, comparisonData) {
     const container = document.getElementById(`firmware-content-${checkId}`);
     if (!container) return;
     
-    const comparison = comparisonData.comparison;
+    const details = comparisonData.comparison.details;
     
     // Find all version codes and add comparison badges
     const rows = container.querySelectorAll('tr');
@@ -1000,17 +1000,16 @@ function updateFirmwareTableWithComparison(checkId, comparisonData) {
         let comparisonBadge = '';
         let comparisonNote = '';
         
-        ['dc_scm', 'ovl2', 'other_platform'].forEach(category => {
-            if (comparison[category] && comparison[category][fwType]) {
-                const comp = comparison[category][fwType];
+        // Check all categories in the comparison details
+        Object.keys(details).forEach(categoryName => {
+            if (details[categoryName] && details[categoryName][fwType]) {
+                const comp = details[categoryName][fwType];
                 
-                if (comp.match === 'exact') {
+                if (comp.status === 'pass') {
                     comparisonBadge = '<span class="badge bg-success ms-2" title="Matches recipe">✓ Match</span>';
-                } else if (comp.match === 'mismatch') {
+                } else if (comp.status === 'fail') {
                     comparisonBadge = '<span class="badge bg-warning ms-2" title="Different from recipe">⚠ Mismatch</span>';
-                    comparisonNote = `<br><small class="text-warning">Expected: <code>${comp.recipe_version}</code></small>`;
-                } else if (comp.match === 'not_in_recipe') {
-                    comparisonBadge = '<span class="badge bg-secondary ms-2" title="Not in recipe">- Not in Recipe</span>';
+                    comparisonNote = `<br><small class="text-warning">Expected: <code>${escapeHtml(comp.expected)}</code></small>`;
                 }
             }
         });
@@ -1027,11 +1026,11 @@ function updateFirmwareTableWithComparison(checkId, comparisonData) {
     const summaryDiv = document.createElement('div');
     summaryDiv.className = 'alert alert-info mb-3';
     summaryDiv.innerHTML = `
-        <h6><i class="bi bi-bar-chart"></i> Recipe Comparison: ${comparisonData.recipe.name}</h6>
+        <h6><i class="bi bi-bar-chart"></i> Recipe Comparison: ${escapeHtml(comparisonData.recipe.name)}</h6>
         <div class="d-flex gap-3">
-            <span><i class="bi bi-check-circle-fill text-success"></i> ${comparison.summary.matches} Matches</span>
-            <span><i class="bi bi-exclamation-triangle-fill text-warning"></i> ${comparison.summary.mismatches} Mismatches</span>
-            <span><i class="bi bi-dash-circle text-secondary"></i> ${comparison.summary.not_in_recipe} Not in Recipe</span>
+            <span><i class="bi bi-check-circle-fill text-success"></i> ${comparisonData.comparison.passed} Matches</span>
+            <span><i class="bi bi-exclamation-triangle-fill text-warning"></i> ${comparisonData.comparison.failed} Mismatches</span>
+            <span><i class="bi bi-dash-circle text-secondary"></i> ${comparisonData.comparison.not_in_recipe} Not in Recipe</span>
         </div>
     `;
     container.insertBefore(summaryDiv, container.firstChild);
