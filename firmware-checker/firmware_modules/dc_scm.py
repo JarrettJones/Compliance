@@ -107,7 +107,7 @@ class DCScmChecker:
                 print(f"[DC-SCM] Extracting BIOS/IFWI version...")
                 results['firmware_versions']['IFWI'] = self._extract_bios_version(system_data)
                 print(f"[DC-SCM] Extracting BMC version...")
-                results['firmware_versions']['BMC FW'] = self._extract_bmc_version(system_data)
+                results['firmware_versions']['BMC FW'] = self._extract_bmc_version(system_data, rscm_ip, system_port)
                 print(f"[DC-SCM] Extracting SCM-CPLD version...")
                 results['firmware_versions']['SCM-CPLD'] = self._extract_scm_cpld_version(system_data)
                 
@@ -239,18 +239,56 @@ class DCScmChecker:
                 'method': 'redfish_api'
             }
     
-    def _extract_bmc_version(self, system_data):
-        """Extract BMC version from system data"""
+    def _extract_bmc_version(self, system_data, rscm_ip=None, system_port=None):
+        """Extract BMC version from system data with fallback to Managers endpoint
+        
+        Args:
+            system_data: Data from /redfish/v1/System endpoint
+            rscm_ip: RSCM IP address (for fallback)
+            system_port: System port (for fallback)
+        """
         try:
-            bmc_version = system_data.get('Oem', {}).get('Microsoft', {}).get('BMCVersion', 'Not Available')
+            # Try primary method: Oem.Microsoft.BMCVersion from /redfish/v1/System
+            bmc_version = system_data.get('Oem', {}).get('Microsoft', {}).get('BMCVersion', None)
+            
+            if bmc_version and bmc_version != 'Not Available':
+                return {
+                    'version': bmc_version,
+                    'status': 'success',
+                    'error': None,
+                    'checked_at': datetime.now().isoformat(),
+                    'method': 'redfish_api_system',
+                    'raw_data': bmc_version
+                }
+            
+            # Fallback: Try /redfish/v1/Managers/System endpoint for FirmwareVersion
+            if rscm_ip and system_port is not None:
+                print(f"[DC-SCM] Primary BMC version not found, trying fallback /redfish/v1/Managers/System...")
+                managers_data = self._get_redfish_data(rscm_ip, system_port, '/redfish/v1/Managers/System')
+                
+                if managers_data:
+                    firmware_version = managers_data.get('FirmwareVersion', None)
+                    if firmware_version:
+                        print(f"[DC-SCM] BMC version found via fallback: {firmware_version}")
+                        return {
+                            'version': firmware_version,
+                            'status': 'success',
+                            'error': None,
+                            'checked_at': datetime.now().isoformat(),
+                            'method': 'redfish_api_managers',
+                            'raw_data': firmware_version
+                        }
+            
+            # If both methods fail
             return {
-                'version': bmc_version,
-                'status': 'success' if bmc_version != 'Not Available' else 'not_found',
-                'error': None,
+                'version': 'Not Available',
+                'status': 'not_found',
+                'error': 'BMCVersion not found in System endpoint and FirmwareVersion not found in Managers endpoint',
                 'checked_at': datetime.now().isoformat(),
                 'method': 'redfish_api',
-                'raw_data': bmc_version
+                'raw_data': None
             }
+            
         except Exception as e:
             return {
                 'version': 'PARSE_ERROR',
