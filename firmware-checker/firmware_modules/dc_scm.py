@@ -1230,7 +1230,7 @@ class DCScmChecker:
         try:
             system_data = self._get_redfish_data(rscm_ip, system_port, self.base_endpoints['system'])
             if system_data:
-                return self._extract_bmc_version(system_data)
+                return self._extract_bmc_version(system_data, rscm_ip, system_port)
             else:
                 return {
                     'version': 'CONNECTION_FAILED',

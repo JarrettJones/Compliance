@@ -485,6 +485,21 @@ def login_required(f):
         if 'user_id' not in session:
             flash('Please log in to access this page.', 'warning')
             return redirect(url_for('login', next=request.url))
+        
+        # Validate session integrity - ensure user_id and username match database
+        user_id = session.get('user_id')
+        session_username = session.get('username')
+        
+        with get_db_connection() as conn:
+            user = conn.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
+            
+            # If user doesn't exist or username doesn't match, clear session and redirect
+            if not user or user['username'] != session_username:
+                logger.warning(f"Session validation failed! user_id={user_id}, session_username={session_username}, db_username={user['username'] if user else 'NOT_FOUND'}")
+                session.clear()
+                flash('Session validation failed. Please log in again.', 'error')
+                return redirect(url_for('login', next=request.url))
+        
         return f(*args, **kwargs)
     return decorated_function
 
@@ -495,6 +510,21 @@ def admin_required(f):
         if 'user_id' not in session:
             flash('Please log in to access this page.', 'warning')
             return redirect(url_for('login', next=request.url))
+        
+        # Validate session integrity - ensure user_id and username match database
+        user_id = session.get('user_id')
+        session_username = session.get('username')
+        
+        with get_db_connection() as conn:
+            user = conn.execute('SELECT username, role FROM users WHERE id = ?', (user_id,)).fetchone()
+            
+            # If user doesn't exist or username doesn't match, clear session and redirect
+            if not user or user['username'] != session_username:
+                logger.warning(f"Session validation failed! user_id={user_id}, session_username={session_username}, db_username={user['username'] if user else 'NOT_FOUND'}")
+                session.clear()
+                flash('Session validation failed. Please log in again.', 'error')
+                return redirect(url_for('login', next=request.url))
+        
         if session.get('role') != 'admin':
             flash('You need administrator privileges to access this page.', 'error')
             return redirect(url_for('index'))
@@ -508,6 +538,21 @@ def editor_required(f):
         if 'user_id' not in session:
             flash('Please log in to access this page.', 'warning')
             return redirect(url_for('login', next=request.url))
+        
+        # Validate session integrity - ensure user_id and username match database
+        user_id = session.get('user_id')
+        session_username = session.get('username')
+        
+        with get_db_connection() as conn:
+            user = conn.execute('SELECT username, role FROM users WHERE id = ?', (user_id,)).fetchone()
+            
+            # If user doesn't exist or username doesn't match, clear session and redirect
+            if not user or user['username'] != session_username:
+                logger.warning(f"Session validation failed! user_id={user_id}, session_username={session_username}, db_username={user['username'] if user else 'NOT_FOUND'}")
+                session.clear()
+                flash('Session validation failed. Please log in again.', 'error')
+                return redirect(url_for('login', next=request.url))
+        
         if session.get('role') not in ['admin', 'editor']:
             flash('You need editor privileges to perform this action.', 'error')
             return redirect(url_for('index'))
@@ -1032,6 +1077,36 @@ def logout():
     session.clear()
     flash(f'Goodbye, {username}!', 'info')
     return redirect(url_for('index'))
+
+@app.route('/debug/session')
+@login_required
+def debug_session():
+    """Debug endpoint to check current session data"""
+    session_data = {
+        'user_id': session.get('user_id'),
+        'username': session.get('username'),
+        'role': session.get('role'),
+        'is_admin': session.get('is_admin'),
+        'program_id': session.get('program_id'),
+    }
+    
+    # Get user from database
+    with get_db_connection() as conn:
+        user = conn.execute('SELECT id, username, email FROM users WHERE id = ?', 
+                          (session.get('user_id'),)).fetchone()
+    
+    return f"""
+    <h1>Session Debug Info</h1>
+    <h2>Session Data:</h2>
+    <pre>{session_data}</pre>
+    
+    <h2>User from Database:</h2>
+    <pre>ID: {user['id'] if user else 'None'}
+Username: {user['username'] if user else 'None'}
+Email: {user['email'] if user else 'None'}</pre>
+    
+    <p><a href="/">Back to Home</a> | <a href="/logout">Logout</a></p>
+    """
 
 @app.route('/change-password', methods=['GET', 'POST'])
 @login_required
