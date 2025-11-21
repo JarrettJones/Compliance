@@ -56,10 +56,17 @@
                     <!-- Rack Selection FIRST -->
                     <h5 class="mb-3"><i class="bi bi-server"></i> Rack / Bench Assignment</h5>
                     
+                    {% if auto_detected_rack %}
+                    <div class="alert alert-success py-2 mb-3">
+                        <i class="bi bi-check-circle"></i> <strong>Rack Auto-Detected!</strong>
+                        <p class="mb-0 small mt-1">Based on RSCM IP <code>{{ system.rscm_ip }}</code>, this system belongs to rack <strong>{{ auto_detected_rack.name }}</strong> ({{ auto_detected_rack.rscm_name }}) at {{ auto_detected_rack.location }}</p>
+                    </div>
+                    {% endif %}
+                    
                     <div class="mb-3">
                         <label class="form-label">Rack Assignment</label>
                         <div class="form-check">
-                            <input class="form-check-input" type="radio" name="rack_selection" id="rack_existing" value="existing" checked>
+                            <input class="form-check-input" type="radio" name="rack_selection" id="rack_existing" value="existing" {% if auto_detected_rack %}checked{% else %}checked{% endif %}>
                             <label class="form-check-label" for="rack_existing">
                                 Select Existing Rack
                             </label>
@@ -84,14 +91,18 @@
                         <select class="form-select" id="existing_rack_id" name="existing_rack_id">
                             <option value="">-- Select a Rack --</option>
                             {% for rack in racks %}
-                            <option value="{{ rack.id }}" data-location="{{ rack.location }}">
+                            <option value="{{ rack.id }}" data-location="{{ rack.location }}" {% if auto_detected_rack and rack.id == auto_detected_rack.id %}selected{% endif %}>
                                 {{ rack.name }} - {{ rack.location }} ({{ rack.rack_type|upper }})
                             </option>
                             {% endfor %}
                         </select>
                         <div class="form-text">
                             System RSCM IP: <code>{{ system.rscm_ip }}</code><br>
+                            {% if auto_detected_rack %}
+                            ✓ Matched to {{ auto_detected_rack.name }}
+                            {% else %}
                             Make sure this matches an RSCM in the selected rack
+                            {% endif %}
                         </div>
                     </div>
 

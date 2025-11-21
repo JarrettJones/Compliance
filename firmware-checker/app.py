@@ -2293,6 +2293,8 @@ def add_system_metadata():
     # Get custom fields for the program if one is selected
     custom_fields = []
     racks = []
+    auto_detected_rack = None
+    
     with get_db_connection() as conn:
         if program_id:
             custom_fields = conn.execute('''
@@ -2307,6 +2309,14 @@ def add_system_metadata():
             FROM racks 
             ORDER BY name
         ''').fetchall()
+        
+        # Check if system's RSCM IP matches any existing rack
+        auto_detected_rack = conn.execute('''
+            SELECT r.id, r.name, r.location, rc.name as rscm_name
+            FROM rscm_components rc
+            JOIN racks r ON rc.rack_id = r.id
+            WHERE rc.ip_address = ?
+        ''', (pending['rscm_ip'],)).fetchone()
     
     if request.method == 'POST':
         try:
@@ -2340,6 +2350,22 @@ def add_system_metadata():
             rack_location = None
             
             with get_db_connection() as conn:
+                # First, try to auto-detect rack based on RSCM IP
+                auto_detected = conn.execute('''
+                    SELECT r.id, r.name, r.location, rc.id as rscm_id
+                    FROM rscm_components rc
+                    JOIN racks r ON rc.rack_id = r.id
+                    WHERE rc.ip_address = ?
+                ''', (pending['rscm_ip'],)).fetchone()
+                
+                if auto_detected and rack_selection == 'none':
+                    # Auto-assign to detected rack
+                    rack_id = auto_detected['id']
+                    rack_name = auto_detected['name']
+                    rack_location = auto_detected['location']
+                    rscm_component_id = auto_detected['rscm_id']
+                    flash(f'✓ Auto-detected and assigned to rack "{rack_name}" based on RSCM IP {pending["rscm_ip"]}', 'success')
+                
                 # Handle rack selection/creation
                 if rack_selection == 'new':
                     # Creating new rack - validate required fields
@@ -2478,7 +2504,8 @@ def add_system_metadata():
     return render_template('add_system_metadata.html', 
                          system=pending,
                          custom_fields=custom_fields,
-                         racks=racks)
+                         racks=racks,
+                         auto_detected_rack=auto_detected_rack)
 
 @app.route('/systems/<int:system_id>')
 @login_required
