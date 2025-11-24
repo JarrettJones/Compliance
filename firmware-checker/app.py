@@ -2254,10 +2254,13 @@ def systems():
                    MAX(fc.check_date) as last_check,
                    u.username as created_by_username,
                    u.first_name as created_by_first_name,
-                   u.last_name as created_by_last_name
+                   u.last_name as created_by_last_name,
+                   r.name as rack_name,
+                   r.location as rack_location
             FROM systems s
             LEFT JOIN firmware_checks fc ON s.id = fc.system_id
             LEFT JOIN users u ON s.created_by = u.id
+            LEFT JOIN racks r ON s.rack_id = r.id
             GROUP BY s.id
             ORDER BY s.name
         ''').fetchall()

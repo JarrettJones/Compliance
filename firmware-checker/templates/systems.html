@@ -43,7 +43,7 @@
                             <option value="none">No Grouping</option>
                             <option value="location">Group by Location</option>
                             <option value="building">Group by Building</option>
-                            <option value="rack">Group by Rack</option>
+                            <option value="rack" selected>Group by Rack</option>
                         </select>
                     </div>
                     
@@ -376,10 +376,182 @@ function renderUngrouped(systems) {
     tbody.innerHTML = systems.map(s => generateTableRow(s)).join('');
 }
 
+// Extract numeric U-height for sorting (e.g., "U10" -> 10, "40" -> 40)
+function parseUHeight(uHeight) {
+    if (!uHeight) return 999999; // Put systems without U-height at the end
+    const match = uHeight.match(/(\d+)/);
+    return match ? parseInt(match[1]) : 999999;
+}
+
+// Render rack view with U-height grouping
+function renderRackView(systems) {
+    const container = document.getElementById('systemsContainer');
+    container.innerHTML = '';
+    
+    // Group by rack first
+    const racks = {};
+    systems.forEach(system => {
+        const rackName = system.rack_name || 'No Rack';
+        if (!racks[rackName]) {
+            racks[rackName] = [];
+        }
+        racks[rackName].push(system);
+    });
+    
+    // Sort racks alphabetically (but "No Rack" last)
+    const sortedRacks = Object.keys(racks).sort((a, b) => {
+        if (a === 'No Rack') return 1;
+        if (b === 'No Rack') return -1;
+        return a.localeCompare(b);
+    });
+    
+    // Render each rack
+    sortedRacks.forEach(rackName => {
+        const rackSystems = racks[rackName];
+        
+        // Group systems by U-height within the rack
+        const uGroups = {};
+        rackSystems.forEach(system => {
+            const uHeight = system.u_height || 'No U-Height';
+            if (!uGroups[uHeight]) {
+                uGroups[uHeight] = [];
+            }
+            uGroups[uHeight].push(system);
+        });
+        
+        // Sort U-heights numerically
+        const sortedUHeights = Object.keys(uGroups).sort((a, b) => {
+            if (a === 'No U-Height') return 1;
+            if (b === 'No U-Height') return -1;
+            return parseUHeight(a) - parseUHeight(b);
+        });
+        
+        // Generate rack card
+        let rackHtml = `
+            <div class="card mb-3">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-server"></i> ${rackName}
+                        <span class="badge bg-light text-dark ms-2">${rackSystems.length} systems</span>
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+        `;
+        
+        // Render each U-height group
+        sortedUHeights.forEach((uHeight, index) => {
+            const uSystems = uGroups[uHeight];
+            const isMultiple = uSystems.length > 1;
+            const collapseId = `collapse-${rackName.replace(/\s+/g, '-')}-${uHeight.replace(/\s+/g, '-')}`;
+            
+            if (isMultiple) {
+                // Multiple systems at same U-height - make it expandable
+                rackHtml += `
+                    <div class="border-bottom">
+                        <div class="d-flex align-items-center p-2 bg-light">
+                            <button class="btn btn-sm btn-outline-secondary me-2" type="button" 
+                                    data-bs-toggle="collapse" data-bs-target="#${collapseId}">
+                                <i class="bi bi-chevron-down"></i>
+                            </button>
+                            <strong>${uHeight}</strong>
+                            <span class="badge bg-secondary ms-2">${uSystems.length} blades</span>
+                        </div>
+                        <div class="collapse show" id="${collapseId}">
+                            <div class="table-responsive">
+                                <table class="table table-hover table-sm mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width: 40px;">
+                                                <input type="checkbox" class="group-select-all" onchange="toggleGroupSelectAll(this)">
+                                            </th>
+                                            <th>System Name</th>
+                                            <th>RSCM IP</th>
+                                            <th>Port</th>
+                                            <th>Checks</th>
+                                            <th>Last Check</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${uSystems.map(s => generateCompactTableRow(s)).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Single system at this U-height - show inline
+                const system = uSystems[0];
+                const metadata = parseMetadata(system.description);
+                const lastCheck = system.last_check ? system.last_check.substring(0, 19) : '<small class="text-warning">Never</small>';
+                
+                rackHtml += `
+                    <div class="border-bottom p-2 d-flex align-items-center">
+                        <div class="me-2" style="width: 40px;">
+                            <input type="checkbox" class="system-checkbox" value="${system.id}" onchange="updateSelectedCount()">
+                        </div>
+                        <div class="flex-grow-1">
+                            <strong>${uHeight}</strong> - ${system.name}
+                            ${metadata.hostname ? `<small class="text-muted">(${metadata.hostname})</small>` : ''}
+                        </div>
+                        <div class="text-end me-3">
+                            <small class="text-muted">
+                                <code>${system.rscm_ip}:${system.rscm_port}</code> | 
+                                Checks: <span class="badge bg-info">${system.check_count}</span> | 
+                                Last: ${lastCheck}
+                            </small>
+                        </div>
+                        <div>
+                            ${generateActionButtons(system)}
+                        </div>
+                    </div>
+                `;
+            }
+        });
+        
+        rackHtml += `
+                </div>
+            </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', rackHtml);
+    });
+}
+
+// Generate compact table row for blade systems
+function generateCompactTableRow(system) {
+    const metadata = parseMetadata(system.description);
+    const lastCheck = system.last_check ? system.last_check.substring(0, 19) : '<small class="text-warning">Never</small>';
+    
+    return `
+        <tr>
+            <td>
+                <input type="checkbox" class="system-checkbox" value="${system.id}" onchange="updateSelectedCount()">
+            </td>
+            <td>
+                <strong>${system.name}</strong>
+                ${metadata.hostname ? `<br><small class="text-muted">(${metadata.hostname})</small>` : ''}
+            </td>
+            <td><code>${system.rscm_ip}</code></td>
+            <td><span class="badge bg-secondary">${system.rscm_port}</span></td>
+            <td><span class="badge bg-info">${system.check_count}</span></td>
+            <td><small class="text-muted">${lastCheck}</small></td>
+            <td>${generateActionButtons(system)}</td>
+        </tr>
+    `;
+}
+
 // Render grouped systems
 function renderGrouped(systems, groupBy) {
     const container = document.getElementById('systemsContainer');
     container.innerHTML = '';
+    
+    if (groupBy === 'rack') {
+        // Special rendering for rack view with U-height grouping
+        renderRackView(systems);
+        return;
+    }
     
     // Group systems
     const groups = {};
@@ -393,9 +565,6 @@ function renderGrouped(systems, groupBy) {
                 break;
             case 'building':
                 groupKey = metadata.building || 'No Building';
-                break;
-            case 'rack':
-                groupKey = metadata.rack || 'No Rack';
                 break;
             default:
                 groupKey = 'All Systems';
