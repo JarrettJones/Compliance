@@ -102,10 +102,10 @@
                         
                         <div class="col-md-4 mb-3">
                             <label for="u_height" class="form-label">U Position</label>
-                            <input type="text" class="form-control" id="u_height" name="u_height"
+                            <input type="number" class="form-control" id="u_height" name="u_height"
                                    value="{{ u_height or '' }}"
-                                   placeholder="e.g., U12-U14">
-                            <div class="form-text">Rack unit position</div>
+                                   placeholder="e.g., 12" min="1" max="50">
+                            <div class="form-text">Rack unit position (positive integer)</div>
                         </div>
                     </div>
                     

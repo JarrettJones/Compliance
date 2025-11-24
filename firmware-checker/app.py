@@ -559,6 +559,28 @@ def editor_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def normalize_u_height(u_height):
+    """
+    Normalize U-height to positive integer string
+    Removes 'U' prefix, leading zeros, and non-digit characters
+    Examples: "U10" -> "10", "U09" -> "9", "03" -> "3"
+    """
+    if not u_height:
+        return None
+    
+    import re
+    # Remove any non-digit characters
+    digits = re.sub(r'[^\d]', '', str(u_height))
+    
+    if not digits:
+        return None
+    
+    # Convert to int to remove leading zeros, then back to string
+    try:
+        return str(int(digits))
+    except ValueError:
+        return None
+
 def cleanup_orphaned_checks():
     """Clean up orphaned 'running' firmware checks on server startup"""
     from datetime import datetime, timedelta
@@ -2419,7 +2441,8 @@ def add_system_metadata():
             new_rack_type = request.form.get('new_rack_type', 'rack')
             rscm_upper_ip = request.form.get('rscm_upper_ip', '').strip()
             rscm_lower_ip = request.form.get('rscm_lower_ip', '').strip()
-            u_height = request.form.get('u_height', '')
+            u_height_raw = request.form.get('u_height', '')
+            u_height = normalize_u_height(u_height_raw) if u_height_raw else None
             description = request.form.get('description', '')
             
             rack_id = None
@@ -2540,13 +2563,20 @@ def add_system_metadata():
                     INSERT INTO systems (
                         name, rscm_ip, rscm_port, 
                         description, program_id, created_by,
-                        rack_id, rscm_component_id
+                        rack_id, rscm_component_id, u_height
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     pending['serial_number'],
                     pending['rscm_ip'],
                     pending['system_port'],
+                    full_description,
+                    program_id,
+                    session.get('user_id'),
+                    rack_id,
+                    rscm_component_id,
+                    u_height
+                ))
                     full_description,
                     program_id,
                     session.get('user_id'),
@@ -2680,7 +2710,8 @@ def edit_system(system_id):
         building = request.form.get('building', '')
         room = request.form.get('room', '')
         rack = request.form.get('rack', '')
-        u_height = request.form.get('u_height', '')
+        u_height_raw = request.form.get('u_height', '')
+        u_height = normalize_u_height(u_height_raw) if u_height_raw else None
         additional_notes = request.form.get('additional_notes', '')
         
         # Build description with metadata
@@ -2706,9 +2737,9 @@ def edit_system(system_id):
             with get_db_connection() as conn:
                 conn.execute('''
                     UPDATE systems 
-                    SET name = ?, rscm_ip = ?, rscm_port = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+                    SET name = ?, rscm_ip = ?, rscm_port = ?, description = ?, u_height = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
-                ''', (name, rscm_ip, rscm_port, description, system_id))
+                ''', (name, rscm_ip, rscm_port, description, u_height, system_id))
                 conn.commit()
             
             flash(f'System "{name}" updated successfully!', 'success')
@@ -2725,7 +2756,7 @@ def edit_system(system_id):
     building = ''
     room = ''
     rack = ''
-    u_height = ''
+    u_height = system.get('u_height', '') or ''  # Get from u_height column
     additional_notes = ''
     
     if system['description']:
@@ -2745,7 +2776,9 @@ def edit_system(system_id):
             elif part.startswith('Rack:'):
                 rack = part.replace('Rack:', '').strip()
             elif part.startswith('U:'):
-                u_height = part.replace('U:', '').strip()
+                # Only use from description if u_height column is empty
+                if not u_height:
+                    u_height = part.replace('U:', '').strip()
             elif not any(part.startswith(prefix) for prefix in ['Host:', 'Geo:', 'Building:', 'Room:', 'Rack:', 'U:']):
                 # This is additional notes (doesn't have a prefix)
                 additional_notes = part
