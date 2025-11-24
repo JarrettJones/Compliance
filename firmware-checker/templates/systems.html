@@ -443,6 +443,7 @@ function renderRackView(systems) {
             const uSystems = uGroups[uHeight];
             const isMultiple = uSystems.length > 1;
             const collapseId = `collapse-${rackName.replace(/\s+/g, '-')}-${uHeight.replace(/\s+/g, '-')}`;
+            const displayUHeight = uHeight === 'No U-Height' ? uHeight : `U${uHeight}`;
             
             if (isMultiple) {
                 // Multiple systems at same U-height - make it expandable
@@ -453,7 +454,7 @@ function renderRackView(systems) {
                                     data-bs-toggle="collapse" data-bs-target="#${collapseId}">
                                 <i class="bi bi-chevron-down"></i>
                             </button>
-                            <strong>${uHeight}</strong>
+                            <strong>${displayUHeight}</strong>
                             <span class="badge bg-secondary ms-2">${uSystems.length} blades</span>
                         </div>
                         <div class="collapse show" id="${collapseId}">
@@ -492,7 +493,7 @@ function renderRackView(systems) {
                             <input type="checkbox" class="system-checkbox" value="${system.id}" onchange="updateSelectedCount()">
                         </div>
                         <div class="flex-grow-1">
-                            <strong>${uHeight}</strong> - ${system.name}
+                            <strong>${displayUHeight}</strong> - ${system.name}
                             ${metadata.hostname ? `<small class="text-muted">(${metadata.hostname})</small>` : ''}
                         </div>
                         <div class="text-end me-3">
