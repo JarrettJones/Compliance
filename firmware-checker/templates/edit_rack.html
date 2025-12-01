@@ -55,6 +55,16 @@
                     </div>
                     
                     <div class="mb-3">
+                        <label for="room" class="form-label">
+                            Room / Floor
+                        </label>
+                        <input type="text" class="form-control" id="room" name="room"
+                               value="{{ rack.room or '' }}"
+                               placeholder="e.g., Room 2045">
+                        <div class="form-text">Room number or floor designation</div>
+                    </div>
+                    
+                    <div class="mb-3">
                         <label for="description" class="form-label">Description</label>
                         <textarea class="form-control" id="description" name="description" rows="3"
                                   placeholder="Optional additional information">{{ rack.description or '' }}</textarea>

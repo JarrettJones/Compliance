@@ -37,7 +37,7 @@
 // Parse racks data
 const racksData = JSON.parse(document.getElementById('racksData').textContent);
 
-// Build tree structure
+// Build tree structure with room grouping
 function buildRacksTree() {
     const tree = {};
     
@@ -46,14 +46,18 @@ function buildRacksTree() {
         const parts = rack.location.split(' - ');
         const location = parts[0] || 'Unknown Location';
         const building = parts[1] || 'Unknown Building';
+        const room = rack.room || 'Unknown Room';
         
         if (!tree[location]) {
             tree[location] = {};
         }
         if (!tree[location][building]) {
-            tree[location][building] = [];
+            tree[location][building] = {};
         }
-        tree[location][building].push(rack);
+        if (!tree[location][building][room]) {
+            tree[location][building][room] = [];
+        }
+        tree[location][building][room].push(rack);
     });
     
     return tree;
@@ -88,8 +92,16 @@ function renderRacksTree() {
     
     sortedLocations.forEach(location => {
         const buildings = tree[location];
-        const totalRacks = Object.values(buildings).flat().length;
-        const totalSystems = Object.values(buildings).flat().reduce((sum, r) => sum + r.system_count, 0);
+        
+        // Calculate total racks and systems for this location
+        let totalRacks = 0;
+        let totalSystems = 0;
+        Object.values(buildings).forEach(rooms => {
+            Object.values(rooms).forEach(racks => {
+                totalRacks += racks.length;
+                totalSystems += racks.reduce((sum, r) => sum + r.system_count, 0);
+            });
+        });
         
         html += `
             <div class="card mb-3">
@@ -114,9 +126,15 @@ function renderRacksTree() {
         const sortedBuildings = Object.keys(buildings).sort();
         
         sortedBuildings.forEach(building => {
-            const racks = buildings[building];
-            const buildingRacks = racks.length;
-            const buildingSystems = racks.reduce((sum, r) => sum + r.system_count, 0);
+            const rooms = buildings[building];
+            
+            // Calculate total racks and systems for this building
+            let buildingRacks = 0;
+            let buildingSystems = 0;
+            Object.values(rooms).forEach(racks => {
+                buildingRacks += racks.length;
+                buildingSystems += racks.reduce((sum, r) => sum + r.system_count, 0);
+            });
             
             html += `
                 <div class="border-bottom">
@@ -134,80 +152,111 @@ function renderRacksTree() {
                         </h6>
                     </div>
                     <div id="building-${locIndex}-${bldgIndex}" class="collapse">
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Type</th>
-                                        <th>Systems</th>
-                                        <th>Description</th>
-                                        <th class="text-end">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
             `;
             
-            // Sort racks by name
-            racks.sort((a, b) => a.name.localeCompare(b.name));
+            let roomIndex = 0;
+            const sortedRooms = Object.keys(rooms).sort();
             
-            racks.forEach(rack => {
+            sortedRooms.forEach(room => {
+                const racks = rooms[room];
+                const roomRacks = racks.length;
+                const roomSystems = racks.reduce((sum, r) => sum + r.system_count, 0);
+                
                 html += `
-                    <tr>
-                        <td><strong>${rack.name}</strong></td>
-                        <td>
-                            ${rack.rack_type === 'rack' 
-                                ? '<span class="badge bg-primary">RACK</span>' 
-                                : '<span class="badge bg-info">BENCH</span>'}
-                        </td>
-                        <td>
-                            <span class="badge bg-secondary">${rack.system_count} system${rack.system_count !== 1 ? 's' : ''}</span>
-                        </td>
-                        <td class="text-muted small">
-                            ${rack.description || '-'}
-                            ${rack.rscm_upper || rack.rscm_lower 
-                                ? `<br><small class="text-primary">
-                                    ${rack.rscm_upper ? '<i class="bi bi-hdd-network"></i> Upper: ' + rack.rscm_upper : ''}
-                                    ${rack.rscm_upper && rack.rscm_lower ? '<br>' : ''}
-                                    ${rack.rscm_lower ? '<i class="bi bi-hdd-network"></i> Lower: ' + rack.rscm_lower : ''}
-                                   </small>`
-                                : ''}
-                        </td>
-                        <td class="text-end">
-                            <a href="/racks/${rack.id}/edit" 
-                               class="btn btn-sm btn-outline-primary" 
-                               title="Edit">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                            ${rack.system_count === 0 
-                                ? `<button class="btn btn-sm btn-outline-danger" 
-                                           data-bs-toggle="modal" 
-                                           data-bs-target="#deleteModal"
-                                           data-rack-id="${rack.id}"
-                                           data-rack-name="${rack.name}"
-                                           title="Delete">
-                                       <i class="bi bi-trash"></i>
-                                   </button>`
-                                : `<button class="btn btn-sm btn-outline-secondary" disabled title="Cannot delete (has systems)">
-                                       <i class="bi bi-trash"></i>
-                                   </button>`}
-                        </td>
-                    </tr>
+                    <div class="ms-3 border-bottom">
+                        <div class="p-2" 
+                             style="cursor: pointer; user-select: none; background-color: #e9ecef;"
+                             data-bs-toggle="collapse" 
+                             data-bs-target="#room-${locIndex}-${bldgIndex}-${roomIndex}">
+                            <i class="bi bi-chevron-right me-2" id="icon-room-${locIndex}-${bldgIndex}-${roomIndex}"></i>
+                            <i class="bi bi-door-closed text-warning me-2"></i>
+                            <strong>${room}</strong>
+                            <span class="badge bg-secondary ms-2">${roomRacks} rack${roomRacks !== 1 ? 's' : ''}</span>
+                            <span class="badge bg-info ms-1">${roomSystems} system${roomSystems !== 1 ? 's' : ''}</span>
+                            <small class="text-muted ms-2">Click to expand</small>
+                        </div>
+                        <div id="room-${locIndex}-${bldgIndex}-${roomIndex}" class="collapse">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Systems</th>
+                                            <th>Description</th>
+                                            <th class="text-end">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
                 `;
+                
+                // Sort racks by name
+                racks.sort((a, b) => a.name.localeCompare(b.name));
+            
+                
+                racks.forEach(rack => {
+                    html += `
+                        <tr>
+                            <td><strong>${rack.name}</strong></td>
+                            <td>
+                                ${rack.rack_type === 'rack' 
+                                    ? '<span class="badge bg-primary">RACK</span>' 
+                                    : '<span class="badge bg-info">BENCH</span>'}
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">${rack.system_count} system${rack.system_count !== 1 ? 's' : ''}</span>
+                            </td>
+                            <td class="text-muted small">
+                                ${rack.description || '-'}
+                                ${rack.rscm_upper || rack.rscm_lower 
+                                    ? `<br><small class="text-primary">
+                                        ${rack.rscm_upper ? '<i class="bi bi-hdd-network"></i> Upper: ' + rack.rscm_upper : ''}
+                                        ${rack.rscm_upper && rack.rscm_lower ? '<br>' : ''}
+                                        ${rack.rscm_lower ? '<i class="bi bi-hdd-network"></i> Lower: ' + rack.rscm_lower : ''}
+                                       </small>`
+                                    : ''}
+                            </td>
+                            <td class="text-end">
+                                <a href="/racks/${rack.id}/edit" 
+                                   class="btn btn-sm btn-outline-primary" 
+                                   title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                ${rack.system_count === 0 
+                                    ? `<button class="btn btn-sm btn-outline-danger" 
+                                               data-bs-toggle="modal" 
+                                               data-bs-target="#deleteModal"
+                                               data-rack-id="${rack.id}"
+                                               data-rack-name="${rack.name}"
+                                               title="Delete">
+                                           <i class="bi bi-trash"></i>
+                                       </button>`
+                                    : `<button class="btn btn-sm btn-outline-secondary" disabled title="Cannot delete (has systems)">
+                                           <i class="bi bi-trash"></i>
+                                       </button>`}
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                roomIndex++;
             });
             
             html += `
-                                </tbody>
-                            </table>
-                        </div>
                     </div>
                 </div>
             `;
             
             bldgIndex++;
-        });
-        
-        html += `
+        });        html += `
                     </div>
                 </div>
             </div>
