@@ -2951,6 +2951,9 @@ def racks():
                 elif 'lower' in rscm['name'].lower():
                     rack_dict['rscm_lower'] = rscm['ip_address']
             
+            # Add edit URL
+            rack_dict['edit_url'] = url_for('edit_rack', rack_id=rack_dict['id'])
+            
             racks.append(rack_dict)
     
     return render_template('racks.html', racks=racks)
