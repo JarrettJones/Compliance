@@ -2591,10 +2591,11 @@ def add_system_metadata():
                     
                     # Create new rack
                     try:
+                        new_rack_room = request.form.get('new_rack_room', '').strip()
                         cursor = conn.execute('''
-                            INSERT INTO racks (name, location, rack_type)
-                            VALUES (?, ?, ?)
-                        ''', (new_rack_name, new_rack_location, new_rack_type))
+                            INSERT INTO racks (name, location, rack_type, room)
+                            VALUES (?, ?, ?, ?)
+                        ''', (new_rack_name, new_rack_location, new_rack_type, new_rack_room))
                         rack_id = cursor.lastrowid
                         rack_name = new_rack_name
                         rack_location = new_rack_location
@@ -2986,6 +2987,7 @@ def edit_rack(rack_id):
         name = request.form['name'].strip()
         location = request.form['location'].strip()
         rack_type = request.form['rack_type']
+        room = request.form.get('room', '').strip()
         description = request.form.get('description', '').strip()
         rscm_upper_ip = request.form.get('rscm_upper', '').strip()
         rscm_lower_ip = request.form.get('rscm_lower', '').strip()
@@ -2999,9 +3001,9 @@ def edit_rack(rack_id):
                 # Update rack info
                 conn.execute('''
                     UPDATE racks 
-                    SET name = ?, location = ?, rack_type = ?, description = ?
+                    SET name = ?, location = ?, rack_type = ?, room = ?, description = ?
                     WHERE id = ?
-                ''', (name, location, rack_type, description, rack_id))
+                ''', (name, location, rack_type, room, description, rack_id))
                 
                 # Update or insert RSCM Upper
                 if rscm_upper_ip:
