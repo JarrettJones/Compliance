@@ -92,7 +92,7 @@
                             <option value="">-- Select a Rack --</option>
                             {% for rack in racks %}
                             <option value="{{ rack.id }}" data-location="{{ rack.location }}" {% if auto_detected_rack and rack.id == auto_detected_rack.id %}selected{% endif %}>
-                                {{ rack.name }} - {{ rack.location }} ({{ rack.rack_type|upper }})
+                                {{ rack.name }} - {{ rack.location }}
                             </option>
                             {% endfor %}
                         </select>
@@ -119,7 +119,8 @@
                                     Rack Name <span class="text-danger">*</span>
                                 </label>
                                 <input type="text" class="form-control" id="new_rack_name" name="new_rack_name"
-                                       placeholder="e.g., B04 or TestBench-5">
+                                       placeholder="e.g., B04-Rack or TestBench-5">
+                                <div class="form-text">Include "-Rack" or "-Bench" suffix to differentiate</div>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label for="new_rack_type" class="form-label">Type</label>

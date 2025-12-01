@@ -559,6 +559,60 @@ def editor_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def sanitize_hostname(hostname):
+    """
+    Remove domain suffixes from hostnames
+    Examples: "C41431157B0603A.redmond.corp.microsoft.com" -> "C41431157B0603A"
+    """
+    if not hostname:
+        return hostname
+    
+    # Remove common domain suffixes
+    domains_to_remove = [
+        '.redmond.corp.microsoft.com',
+        '.corp.microsoft.com',
+        '.microsoft.com'
+    ]
+    
+    hostname_cleaned = hostname.strip()
+    for domain in domains_to_remove:
+        if hostname_cleaned.lower().endswith(domain.lower()):
+            hostname_cleaned = hostname_cleaned[:-len(domain)]
+            break
+    
+    return hostname_cleaned
+
+def extract_u_height_from_hostname(hostname):
+    """
+    Extract U-height from hostname pattern
+    Examples: 
+        "C41431157B0603A" -> rack "B06", u_height "3"
+        "C41431065C0435A" -> rack "C04", u_height "35"
+    Pattern: ...{Rack}{UU}{Slot}
+    """
+    if not hostname:
+        return None, None
+    
+    import re
+    # Pattern: ends with letter + 2 digits + 2 digits + letter
+    # Example: B0603A means B06 rack, U03, slot A
+    match = re.search(r'([A-Z])(\d{2})(\d{2})([A-Z])$', hostname)
+    
+    if match:
+        rack_letter = match.group(1)
+        rack_number = match.group(2)
+        u_height_raw = match.group(3)
+        
+        # Remove leading zeros from U-height
+        try:
+            u_height = str(int(u_height_raw))
+            rack_name = f"{rack_letter}{rack_number}-Rack"
+            return rack_name, u_height
+        except ValueError:
+            pass
+    
+    return None, None
+
 def normalize_u_height(u_height):
     """
     Normalize U-height to positive integer string
@@ -2269,31 +2323,64 @@ def delete_recipe(recipe_id):
 @login_required
 def systems():
     """List all systems"""
+    # Get current program from session
+    program_id = session.get('program_id')
+    
     with get_db_connection() as conn:
-        systems_rows = conn.execute('''
-            SELECT s.*, 
-                   COUNT(fc.id) as check_count,
-                   MAX(fc.check_date) as last_check,
-                   u.username as created_by_username,
-                   u.first_name as created_by_first_name,
-                   u.last_name as created_by_last_name,
-                   r.name as rack_name,
-                   r.location as rack_location
-            FROM systems s
-            LEFT JOIN firmware_checks fc ON s.id = fc.system_id
-            LEFT JOIN users u ON s.created_by = u.id
-            LEFT JOIN racks r ON s.rack_id = r.id
-            GROUP BY s.id
-            ORDER BY s.name
-        ''').fetchall()
-        
-        # Get list of users who have created systems
-        creators = conn.execute('''
-            SELECT DISTINCT u.id as user_id, u.username, u.first_name, u.last_name
-            FROM users u
-            INNER JOIN systems s ON u.id = s.created_by
-            ORDER BY u.first_name, u.last_name, u.username
-        ''').fetchall()
+        # Build query with program filter if a program is selected
+        if program_id:
+            systems_rows = conn.execute('''
+                SELECT s.*, 
+                       COUNT(fc.id) as check_count,
+                       MAX(fc.check_date) as last_check,
+                       u.username as created_by_username,
+                       u.first_name as created_by_first_name,
+                       u.last_name as created_by_last_name,
+                       r.name as rack_name,
+                       r.location as rack_location
+                FROM systems s
+                LEFT JOIN firmware_checks fc ON s.id = fc.system_id
+                LEFT JOIN users u ON s.created_by = u.id
+                LEFT JOIN racks r ON s.rack_id = r.id
+                WHERE s.program_id = ?
+                GROUP BY s.id
+                ORDER BY s.name
+            ''', (program_id,)).fetchall()
+            
+            # Get list of users who have created systems in this program
+            creators = conn.execute('''
+                SELECT DISTINCT u.id as user_id, u.username, u.first_name, u.last_name
+                FROM users u
+                INNER JOIN systems s ON u.id = s.created_by
+                WHERE s.program_id = ?
+                ORDER BY u.first_name, u.last_name, u.username
+            ''', (program_id,)).fetchall()
+        else:
+            # Show all systems if no program selected
+            systems_rows = conn.execute('''
+                SELECT s.*, 
+                       COUNT(fc.id) as check_count,
+                       MAX(fc.check_date) as last_check,
+                       u.username as created_by_username,
+                       u.first_name as created_by_first_name,
+                       u.last_name as created_by_last_name,
+                       r.name as rack_name,
+                       r.location as rack_location
+                FROM systems s
+                LEFT JOIN firmware_checks fc ON s.id = fc.system_id
+                LEFT JOIN users u ON s.created_by = u.id
+                LEFT JOIN racks r ON s.rack_id = r.id
+                GROUP BY s.id
+                ORDER BY s.name
+            ''').fetchall()
+            
+            # Get list of users who have created systems
+            creators = conn.execute('''
+                SELECT DISTINCT u.id as user_id, u.username, u.first_name, u.last_name
+                FROM users u
+                INNER JOIN systems s ON u.id = s.created_by
+                ORDER BY u.first_name, u.last_name, u.username
+            ''').fetchall()
     
     # Convert Row objects to dictionaries for JSON serialization
     systems_list = [dict(row) for row in systems_rows]
@@ -2433,7 +2520,11 @@ def add_system_metadata():
                                                  racks=racks)
             
             # Get metadata from form
-            system_hostname = request.form.get('system_hostname', '')
+            system_hostname = request.form.get('system_hostname', '').strip()
+            
+            # Sanitize hostname (remove domain)
+            system_hostname = sanitize_hostname(system_hostname)
+            
             rack_selection = request.form.get('rack_selection', 'existing')
             existing_rack_id = request.form.get('existing_rack_id', '')
             new_rack_name = request.form.get('new_rack_name', '').strip()
@@ -2444,6 +2535,13 @@ def add_system_metadata():
             u_height_raw = request.form.get('u_height', '')
             u_height = normalize_u_height(u_height_raw) if u_height_raw else None
             description = request.form.get('description', '')
+            
+            # Try to extract U-height and rack from hostname if not provided
+            if system_hostname and not u_height:
+                detected_rack, detected_u = extract_u_height_from_hostname(system_hostname)
+                if detected_u:
+                    u_height = detected_u
+                    logger.info(f"Auto-detected U-height {u_height} from hostname {system_hostname}")
             
             rack_id = None
             rscm_component_id = None
@@ -2577,12 +2675,6 @@ def add_system_metadata():
                     rscm_component_id,
                     u_height
                 ))
-                    full_description,
-                    program_id,
-                    session.get('user_id'),
-                    rack_id,
-                    rscm_component_id
-                ))
                 system_id = cursor.lastrowid
                 
                 # Save custom field values
@@ -2705,7 +2797,11 @@ def edit_system(system_id):
         rscm_port = request.form.get('rscm_port', 22, type=int)
         
         # Get metadata from form
-        system_hostname = request.form.get('system_hostname', '')
+        system_hostname = request.form.get('system_hostname', '').strip()
+        
+        # Sanitize hostname (remove domain)
+        system_hostname = sanitize_hostname(system_hostname)
+        
         geo_location = request.form.get('geo_location', '')
         building = request.form.get('building', '')
         room = request.form.get('room', '')
@@ -2713,6 +2809,13 @@ def edit_system(system_id):
         u_height_raw = request.form.get('u_height', '')
         u_height = normalize_u_height(u_height_raw) if u_height_raw else None
         additional_notes = request.form.get('additional_notes', '')
+        
+        # Try to extract U-height from hostname if not provided
+        if system_hostname and not u_height:
+            detected_rack, detected_u = extract_u_height_from_hostname(system_hostname)
+            if detected_u:
+                u_height = detected_u
+                logger.info(f"Auto-detected U-height {u_height} from hostname {system_hostname}")
         
         # Build description with metadata
         desc_parts = []
@@ -2756,7 +2859,7 @@ def edit_system(system_id):
     building = ''
     room = ''
     rack = ''
-    u_height = system.get('u_height', '') or ''  # Get from u_height column
+    u_height = system['u_height'] if system['u_height'] else ''  # Get from u_height column
     additional_notes = ''
     
     if system['description']:
@@ -2792,6 +2895,195 @@ def edit_system(system_id):
                          rack=rack,
                          u_height=u_height,
                          additional_notes=additional_notes)
+
+# ==================== RACK MANAGEMENT ====================
+
+@app.route('/racks')
+@login_required
+def racks():
+    """List all racks"""
+    # Get current program from session
+    program_id = session.get('program_id')
+    
+    with get_db_connection() as conn:
+        # Build query with program filter if a program is selected
+        if program_id:
+            racks_raw = conn.execute('''
+                SELECT r.*, COUNT(s.id) as system_count
+                FROM racks r
+                LEFT JOIN systems s ON r.id = s.rack_id AND s.program_id = ?
+                GROUP BY r.id
+                HAVING system_count > 0 OR r.id IN (
+                    SELECT DISTINCT rack_id FROM systems WHERE program_id = ?
+                )
+                ORDER BY r.name
+            ''', (program_id, program_id)).fetchall()
+        else:
+            # Show all racks if no program selected
+            racks_raw = conn.execute('''
+                SELECT r.*, COUNT(s.id) as system_count
+                FROM racks r
+                LEFT JOIN systems s ON r.id = s.rack_id
+                GROUP BY r.id
+                ORDER BY r.name
+            ''').fetchall()
+        
+        # Convert Row objects to dictionaries and add RSCM info
+        racks = []
+        for row in racks_raw:
+            rack_dict = dict(row)
+            
+            # Get RSCM components for this rack
+            rscm_components = conn.execute('''
+                SELECT name, ip_address, position
+                FROM rscm_components
+                WHERE rack_id = ?
+                ORDER BY name
+            ''', (rack_dict['id'],)).fetchall()
+            
+            rack_dict['rscm_upper'] = None
+            rack_dict['rscm_lower'] = None
+            
+            for rscm in rscm_components:
+                if 'upper' in rscm['name'].lower():
+                    rack_dict['rscm_upper'] = rscm['ip_address']
+                elif 'lower' in rscm['name'].lower():
+                    rack_dict['rscm_lower'] = rscm['ip_address']
+            
+            racks.append(rack_dict)
+    
+    return render_template('racks.html', racks=racks)
+
+@app.route('/racks/<int:rack_id>/edit', methods=['GET', 'POST'])
+@editor_required
+def edit_rack(rack_id):
+    """Edit rack information"""
+    with get_db_connection() as conn:
+        rack = conn.execute('SELECT * FROM racks WHERE id = ?', (rack_id,)).fetchone()
+        if not rack:
+            flash('Rack not found!', 'error')
+            return redirect(url_for('racks'))
+        
+        # Get RSCM components
+        rscm_components = conn.execute('''
+            SELECT * FROM rscm_components WHERE rack_id = ? ORDER BY name
+        ''', (rack_id,)).fetchall()
+        
+        rscm_upper = None
+        rscm_lower = None
+        rscm_upper_id = None
+        rscm_lower_id = None
+        
+        for rscm in rscm_components:
+            if 'upper' in rscm['name'].lower():
+                rscm_upper = rscm['ip_address']
+                rscm_upper_id = rscm['id']
+            elif 'lower' in rscm['name'].lower():
+                rscm_lower = rscm['ip_address']
+                rscm_lower_id = rscm['id']
+    
+    if request.method == 'POST':
+        name = request.form['name'].strip()
+        location = request.form['location'].strip()
+        rack_type = request.form['rack_type']
+        description = request.form.get('description', '').strip()
+        rscm_upper_ip = request.form.get('rscm_upper', '').strip()
+        rscm_lower_ip = request.form.get('rscm_lower', '').strip()
+        
+        if not name or not location:
+            flash('Name and location are required!', 'error')
+            return render_template('edit_rack.html', rack=rack, rscm_upper=rscm_upper, rscm_lower=rscm_lower)
+        
+        try:
+            with get_db_connection() as conn:
+                # Update rack info
+                conn.execute('''
+                    UPDATE racks 
+                    SET name = ?, location = ?, rack_type = ?, description = ?
+                    WHERE id = ?
+                ''', (name, location, rack_type, description, rack_id))
+                
+                # Update or insert RSCM Upper
+                if rscm_upper_ip:
+                    if rscm_upper_id:
+                        conn.execute('''
+                            UPDATE rscm_components
+                            SET ip_address = ?, name = 'RSCM-Upper'
+                            WHERE id = ?
+                        ''', (rscm_upper_ip, rscm_upper_id))
+                    else:
+                        conn.execute('''
+                            INSERT INTO rscm_components (rack_id, name, ip_address, port)
+                            VALUES (?, 'RSCM-Upper', ?, 22)
+                        ''', (rack_id, rscm_upper_ip))
+                        rscm_upper_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+                elif rscm_upper_id:
+                    # Remove if IP was cleared
+                    conn.execute('DELETE FROM rscm_components WHERE id = ?', (rscm_upper_id,))
+                    rscm_upper_id = None
+                
+                # Update or insert RSCM Lower
+                if rscm_lower_ip:
+                    if rscm_lower_id:
+                        conn.execute('''
+                            UPDATE rscm_components
+                            SET ip_address = ?, name = 'RSCM-Lower'
+                            WHERE id = ?
+                        ''', (rscm_lower_ip, rscm_lower_id))
+                    else:
+                        conn.execute('''
+                            INSERT INTO rscm_components (rack_id, name, ip_address, port)
+                            VALUES (?, 'RSCM-Lower', ?, 22)
+                        ''', (rack_id, rscm_lower_ip))
+                elif rscm_lower_id:
+                    # Remove if IP was cleared
+                    conn.execute('DELETE FROM rscm_components WHERE id = ?', (rscm_lower_id,))
+                
+                # Associate upper RSCM with all systems in this rack
+                if rscm_upper_id:
+                    conn.execute('''
+                        UPDATE systems
+                        SET rscm_component_id = ?
+                        WHERE rack_id = ?
+                    ''', (rscm_upper_id, rack_id))
+                
+                conn.commit()
+            
+            flash(f'Rack "{name}" updated successfully!', 'success')
+            return redirect(url_for('racks'))
+            
+        except sqlite3.IntegrityError:
+            flash(f'Rack name "{name}" already exists!', 'error')
+        except Exception as e:
+            flash(f'Error updating rack: {str(e)}', 'error')
+    
+    return render_template('edit_rack.html', rack=rack, rscm_upper=rscm_upper, rscm_lower=rscm_lower)
+
+@app.route('/racks/<int:rack_id>/delete', methods=['POST'])
+@editor_required
+def delete_rack(rack_id):
+    """Delete a rack"""
+    with get_db_connection() as conn:
+        # Check if rack has systems
+        system_count = conn.execute('''
+            SELECT COUNT(*) as count FROM systems WHERE rack_id = ?
+        ''', (rack_id,)).fetchone()['count']
+        
+        if system_count > 0:
+            flash(f'Cannot delete rack: {system_count} system(s) still assigned to it!', 'error')
+            return redirect(url_for('racks'))
+        
+        rack = conn.execute('SELECT name FROM racks WHERE id = ?', (rack_id,)).fetchone()
+        if rack:
+            conn.execute('DELETE FROM racks WHERE id = ?', (rack_id,))
+            conn.commit()
+            flash(f'Rack "{rack["name"]}" deleted successfully!', 'success')
+        else:
+            flash('Rack not found!', 'error')
+    
+    return redirect(url_for('racks'))
+
+# ==================== END RACK MANAGEMENT ====================
 
 @app.route('/bulk-check')
 @login_required
