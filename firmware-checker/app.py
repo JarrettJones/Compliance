@@ -2914,6 +2914,16 @@ def racks():
     # Get current program from session
     program_id = session.get('program_id')
     
+    # Get current user's role
+    user_id = session.get('user_id')
+    is_admin = False
+    
+    if user_id:
+        with get_db_connection() as conn:
+            user = conn.execute('SELECT role FROM users WHERE id = ?', (user_id,)).fetchone()
+            if user:
+                is_admin = user['role'] == 'admin'
+    
     with get_db_connection() as conn:
         # Build query with program filter if a program is selected
         if program_id:
@@ -2964,7 +2974,7 @@ def racks():
             
             racks.append(rack_dict)
     
-    return render_template('racks.html', racks=racks)
+    return render_template('racks.html', racks=racks, is_admin=is_admin)
 
 @app.route('/racks/<int:rack_id>/edit', methods=['GET', 'POST'])
 @editor_required

@@ -222,7 +222,7 @@ function renderRacksTree() {
                                    title="Edit">
                                     <i class="bi bi-pencil"></i>
                                 </a>
-                                {% if current_user.role == 'admin' %}
+                                {% if is_admin %}
                                 <button class="btn btn-sm btn-outline-danger" 
                                         data-bs-toggle="modal" 
                                         data-bs-target="#deleteModal"
