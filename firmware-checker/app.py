@@ -3073,26 +3073,42 @@ def edit_rack(rack_id):
     return render_template('edit_rack.html', rack=rack, rscm_upper=rscm_upper, rscm_lower=rscm_lower)
 
 @app.route('/racks/<int:rack_id>/delete', methods=['POST'])
-@editor_required
+@admin_required
 def delete_rack(rack_id):
-    """Delete a rack"""
+    """Delete a rack and all its systems (Admin only)"""
+    confirmation_name = request.form.get('confirmation_name', '').strip()
+    
     with get_db_connection() as conn:
-        # Check if rack has systems
+        rack = conn.execute('SELECT name FROM racks WHERE id = ?', (rack_id,)).fetchone()
+        
+        if not rack:
+            flash('Rack not found!', 'error')
+            return redirect(url_for('racks'))
+        
+        rack_name = rack['name']
+        
+        # Verify user typed the rack name correctly
+        if confirmation_name != rack_name:
+            flash('Rack name confirmation does not match. Deletion cancelled.', 'error')
+            return redirect(url_for('racks'))
+        
+        # Get system count for the flash message
         system_count = conn.execute('''
             SELECT COUNT(*) as count FROM systems WHERE rack_id = ?
         ''', (rack_id,)).fetchone()['count']
         
+        # Delete all systems in the rack first (cascading delete)
         if system_count > 0:
-            flash(f'Cannot delete rack: {system_count} system(s) still assigned to it!', 'error')
-            return redirect(url_for('racks'))
+            conn.execute('DELETE FROM systems WHERE rack_id = ?', (rack_id,))
         
-        rack = conn.execute('SELECT name FROM racks WHERE id = ?', (rack_id,)).fetchone()
-        if rack:
-            conn.execute('DELETE FROM racks WHERE id = ?', (rack_id,))
-            conn.commit()
-            flash(f'Rack "{rack["name"]}" deleted successfully!', 'success')
+        # Delete the rack
+        conn.execute('DELETE FROM racks WHERE id = ?', (rack_id,))
+        conn.commit()
+        
+        if system_count > 0:
+            flash(f'Rack "{rack_name}" and {system_count} system(s) deleted successfully!', 'success')
         else:
-            flash('Rack not found!', 'error')
+            flash(f'Rack "{rack_name}" deleted successfully!', 'success')
     
     return redirect(url_for('racks'))
 
