@@ -3178,41 +3178,62 @@ def quick_check():
 @login_required
 def api_racks_hierarchy():
     """API endpoint to get rack hierarchy organized by location/building/room"""
-    with get_db_connection() as conn:
-        # Get racks with system counts
-        racks = conn.execute('''
-            SELECT r.id, r.name, r.location, r.room,
-                   COUNT(s.id) as system_count
-            FROM racks r
-            LEFT JOIN systems s ON r.id = s.rack_id
-            GROUP BY r.id
-            ORDER BY r.location, r.room, r.name
-        ''').fetchall()
-        
-        # Build hierarchy: location -> building -> room -> racks
-        hierarchy = {}
-        for rack in racks:
-            # Parse location (e.g., "Redmond - Building 50")
-            location_str = rack['location'] or 'Unknown Location'
-            parts = location_str.split(' - ')
-            location = parts[0] if parts else 'Unknown Location'
-            building = parts[1] if len(parts) > 1 else 'Unknown Building'
-            room = rack['room'] or 'Unknown Room'
+    try:
+        with get_db_connection() as conn:
+            # Check if room column exists
+            cursor = conn.execute("PRAGMA table_info(racks)")
+            columns = [col[1] for col in cursor.fetchall()]
+            has_room_column = 'room' in columns
             
-            if location not in hierarchy:
-                hierarchy[location] = {}
-            if building not in hierarchy[location]:
-                hierarchy[location][building] = {}
-            if room not in hierarchy[location][building]:
-                hierarchy[location][building][room] = []
+            # Get racks with system counts - conditionally include room column
+            if has_room_column:
+                racks = conn.execute('''
+                    SELECT r.id, r.name, r.location, r.room,
+                           COUNT(s.id) as system_count
+                    FROM racks r
+                    LEFT JOIN systems s ON r.id = s.rack_id
+                    GROUP BY r.id
+                    ORDER BY r.location, r.room, r.name
+                ''').fetchall()
+            else:
+                racks = conn.execute('''
+                    SELECT r.id, r.name, r.location,
+                           COUNT(s.id) as system_count
+                    FROM racks r
+                    LEFT JOIN systems s ON r.id = s.rack_id
+                    GROUP BY r.id
+                    ORDER BY r.location, r.name
+                ''').fetchall()
             
-            hierarchy[location][building][room].append({
-                'id': rack['id'],
-                'name': rack['name'],
-                'system_count': rack['system_count']
-            })
-        
-        return jsonify(hierarchy)
+            # Build hierarchy: location -> building -> room -> racks
+            hierarchy = {}
+            for rack in racks:
+                # Parse location (e.g., "Redmond - Building 50")
+                location_str = rack['location'] or 'Unknown Location'
+                parts = location_str.split(' - ')
+                location = parts[0] if parts else 'Unknown Location'
+                building = parts[1] if len(parts) > 1 else 'Unknown Building'
+                
+                # Use room column if available, otherwise default
+                room = rack['room'] if has_room_column and rack['room'] else 'Unknown Room'
+                
+                if location not in hierarchy:
+                    hierarchy[location] = {}
+                if building not in hierarchy[location]:
+                    hierarchy[location][building] = {}
+                if room not in hierarchy[location][building]:
+                    hierarchy[location][building][room] = []
+                
+                hierarchy[location][building][room].append({
+                    'id': rack['id'],
+                    'name': rack['name'],
+                    'system_count': rack['system_count']
+                })
+            
+            return jsonify(hierarchy)
+    except Exception as e:
+        logger.error(f"Error in api_racks_hierarchy: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/racks/<int:rack_id>/systems')
 @login_required

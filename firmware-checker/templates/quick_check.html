@@ -134,6 +134,11 @@
 let rackData = {};
 let systemsData = {};
 
+// Use Flask url_for to generate correct URLs with prefix
+const API_RACKS_HIERARCHY = "{{ url_for('api_racks_hierarchy') }}";
+const API_RACK_SYSTEMS = "{{ url_for('api_rack_systems', rack_id=0) }}".replace('/0', ''); // Remove placeholder
+const CHECK_FIRMWARE_URL = "{{ url_for('check_firmware', system_id=0) }}".replace('/0', ''); // Remove placeholder
+
 document.addEventListener('DOMContentLoaded', function() {
     loadLocations();
     
@@ -148,8 +153,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function loadLocations() {
     try {
-        const response = await fetch('/api/racks/hierarchy');
+        const response = await fetch(API_RACKS_HIERARCHY);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
         rackData = data;
         
         const locationSelect = document.getElementById('location');
@@ -163,7 +178,7 @@ async function loadLocations() {
         });
     } catch (error) {
         console.error('Error loading locations:', error);
-        alert('Error loading rack data. Please refresh the page.');
+        alert('Error loading rack data: ' + error.message + '\n\nPlease contact your administrator or refresh the page.');
     }
 }
 
@@ -264,7 +279,7 @@ async function handleRackChange() {
     
     if (rackId) {
         try {
-            const response = await fetch(`/api/racks/${rackId}/systems`);
+            const response = await fetch(`${API_RACK_SYSTEMS}/${rackId}/systems`);
             const systems = await response.json();
             systemsData = {};
             
@@ -328,7 +343,7 @@ function handleFormSubmit(e) {
     const systemId = document.getElementById('system').value;
     
     if (systemId) {
-        window.location.href = `/check/${systemId}`;
+        window.location.href = `${CHECK_FIRMWARE_URL}/${systemId}`;
     } else {
         alert('Please select a system');
     }
