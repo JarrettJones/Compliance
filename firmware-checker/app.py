@@ -3168,6 +3168,73 @@ def bulk_check():
                          system_ids=system_ids,
                          firmware_by_category=firmware_by_category)
 
+@app.route('/quick-check', methods=['GET', 'POST'])
+@login_required
+def quick_check():
+    """Quick firmware check - finds or creates system then runs check"""
+    if request.method == 'GET':
+        # Show the quick check form
+        with get_db_connection() as conn:
+            programs = conn.execute('SELECT * FROM programs ORDER BY name').fetchall()
+        return render_template('quick_check.html', programs=programs)
+    
+    # POST - process the quick check
+    rscm_ip = request.form.get('rscm_ip', '').strip()
+    rscm_port = request.form.get('rscm_port', '22').strip()
+    rscm_username = request.form.get('rscm_username', '').strip()
+    rscm_password = request.form.get('rscm_password', '').strip()
+    
+    # Optional fields for new system creation
+    system_name = request.form.get('system_name', '').strip()
+    program_id = request.form.get('program', '').strip()
+    description = request.form.get('description', '').strip()
+    
+    # Validate required fields
+    if not all([rscm_ip, rscm_port, rscm_username, rscm_password]):
+        flash('Please provide all required RSCM connection details!', 'error')
+        return redirect(url_for('quick_check'))
+    
+    with get_db_connection() as conn:
+        # Check if system with this RSCM IP already exists
+        existing_system = conn.execute(
+            'SELECT * FROM systems WHERE rscm_ip = ?', 
+            (rscm_ip,)
+        ).fetchone()
+        
+        if existing_system:
+            # System exists - use it
+            system_id = existing_system['id']
+            flash(f'Found existing system: {existing_system["name"]}. Running firmware check...', 'info')
+        else:
+            # System doesn't exist - create it
+            if not system_name:
+                system_name = f'System-{rscm_ip}'
+            
+            if not program_id:
+                program_id = None
+            
+            try:
+                cursor = conn.execute('''
+                    INSERT INTO systems (name, rscm_ip, rscm_port, description, program_id)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (system_name, rscm_ip, rscm_port, description, program_id if program_id else None))
+                conn.commit()
+                system_id = cursor.lastrowid
+                flash(f'Created new system: {system_name}. Running firmware check...', 'success')
+            except Exception as e:
+                logger.error(f"Error creating system: {e}")
+                flash(f'Error creating system: {str(e)}', 'error')
+                return redirect(url_for('quick_check'))
+        
+        # Now redirect to check_firmware with the system_id
+        # But first, store the credentials in session for this check
+        session['quick_check_credentials'] = {
+            'rscm_username': rscm_username,
+            'rscm_password': rscm_password
+        }
+        
+        return redirect(url_for('check_firmware', system_id=system_id))
+
 @app.route('/check/<int:system_id>')
 @login_required
 def check_firmware(system_id):
