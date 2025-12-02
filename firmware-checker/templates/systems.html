@@ -523,28 +523,30 @@ function generateCompactTableRow(system) {
     `;
 }
 
-// Render hierarchical tree view: Location -> Building -> Rack -> U-Height -> Systems
+// Render hierarchical tree view: Location -> Building -> Room -> Rack -> U-Height -> Systems
 function renderTreeView(systems) {
     const container = document.getElementById('systemsContainer');
     container.innerHTML = '';
     
-    // Build hierarchy: location -> building -> rack -> u_height -> systems
+    // Build hierarchy: location -> building -> room -> rack -> u_height -> systems
     const tree = {};
     
     systems.forEach(system => {
         const metadata = parseMetadata(system.description);
         const location = metadata.location || system.rack_location || 'Unknown Location';
         const building = metadata.building || 'Unknown Building';
+        const room = system.rack_room || 'Unknown Room';
         const rackName = system.rack_name || 'No Rack';
         const uHeight = system.u_height || 'No U-Height';
         
         // Build tree structure
         if (!tree[location]) tree[location] = {};
         if (!tree[location][building]) tree[location][building] = {};
-        if (!tree[location][building][rackName]) tree[location][building][rackName] = {};
-        if (!tree[location][building][rackName][uHeight]) tree[location][building][rackName][uHeight] = [];
+        if (!tree[location][building][room]) tree[location][building][room] = {};
+        if (!tree[location][building][room][rackName]) tree[location][building][room][rackName] = {};
+        if (!tree[location][building][room][rackName][uHeight]) tree[location][building][room][rackName][uHeight] = [];
         
-        tree[location][building][rackName][uHeight].push(system);
+        tree[location][building][room][rackName][uHeight].push(system);
     });
     
     // Sort locations
@@ -577,8 +579,8 @@ function renderTreeView(systems) {
         `;
         
         sortedBuildings.forEach((building, bldgIndex) => {
-            const racks = buildings[building];
-            const sortedRacks = Object.keys(racks).sort();
+            const rooms = buildings[building];
+            const sortedRooms = Object.keys(rooms).sort();
             
             locationHtml += `
                 <div class="border-bottom">
@@ -587,40 +589,57 @@ function renderTreeView(systems) {
                         <i class="bi bi-chevron-right me-2" id="icon-building-${locIndex}-${bldgIndex}"></i>
                         <i class="bi bi-building me-2"></i>
                         <strong>${building}</strong>
-                        <span class="badge bg-secondary ms-2">${Object.keys(racks).length} rack(s)</span>
+                        <span class="badge bg-secondary ms-2">${Object.keys(rooms).length} room(s)</span>
                         <small class="text-muted ms-2">Click to expand</small>
                     </div>
                     <div class="collapse" id="building-${locIndex}-${bldgIndex}">
             `;
             
-            sortedRacks.forEach((rackName, rackIndex) => {
-                const uGroups = racks[rackName];
-                const sortedUHeights = Object.keys(uGroups).sort((a, b) => {
-                    if (a === 'No U-Height') return 1;
-                    if (b === 'No U-Height') return -1;
-                    return parseInt(a) - parseInt(b);
-                });
-                
-                // Calculate total servers in this rack
-                const totalServers = sortedUHeights.reduce((sum, uHeight) => sum + uGroups[uHeight].length, 0);
+            sortedRooms.forEach((room, roomIndex) => {
+                const racks = rooms[room];
+                const sortedRacks = Object.keys(racks).sort();
                 
                 locationHtml += `
-                    <div class="ms-3 border-start border-3 border-primary">
-                        <div class="p-2" style="background-color: #e9ecef; cursor: pointer;"
-                             data-bs-toggle="collapse" data-bs-target="#rack-${locIndex}-${bldgIndex}-${rackIndex}">
-                            <i class="bi bi-chevron-right me-2" id="icon-rack-${locIndex}-${bldgIndex}-${rackIndex}"></i>
-                            <i class="bi bi-hdd-rack me-2"></i>
-                            <strong>${rackName}</strong>
-                            <span class="badge bg-info ms-2">${totalServers} server${totalServers !== 1 ? 's' : ''}</span>
+                    <div class="ms-2 border-bottom">
+                        <div class="p-2" style="background-color: #f0f0f0; cursor: pointer;"
+                             data-bs-toggle="collapse" data-bs-target="#room-${locIndex}-${bldgIndex}-${roomIndex}">
+                            <i class="bi bi-chevron-right me-2" id="icon-room-${locIndex}-${bldgIndex}-${roomIndex}"></i>
+                            <i class="bi bi-door-open me-2"></i>
+                            <strong>${room}</strong>
+                            <span class="badge bg-secondary ms-2">${Object.keys(racks).length} rack(s)</span>
                             <small class="text-muted ms-2">Click to expand</small>
                         </div>
-                        <div class="collapse" id="rack-${locIndex}-${bldgIndex}-${rackIndex}">
+                        <div class="collapse" id="room-${locIndex}-${bldgIndex}-${roomIndex}">
                 `;
+            
+                sortedRacks.forEach((rackName, rackIndex) => {
+                    const uGroups = racks[rackName];
+                    const sortedUHeights = Object.keys(uGroups).sort((a, b) => {
+                        if (a === 'No U-Height') return 1;
+                        if (b === 'No U-Height') return -1;
+                        return parseInt(a) - parseInt(b);
+                    });
+                    
+                    // Calculate total servers in this rack
+                    const totalServers = sortedUHeights.reduce((sum, uHeight) => sum + uGroups[uHeight].length, 0);
                 
-                sortedUHeights.forEach((uHeight, uIndex) => {
-                    const uSystems = uGroups[uHeight];
-                    const displayUHeight = uHeight === 'No U-Height' ? uHeight : `U${uHeight}`;
-                    const collapseId = `tree-u-${locIndex}-${bldgIndex}-${rackIndex}-${uIndex}`;
+                    locationHtml += `
+                        <div class="ms-3 border-start border-3 border-primary">
+                            <div class="p-2" style="background-color: #e9ecef; cursor: pointer;"
+                                 data-bs-toggle="collapse" data-bs-target="#rack-${locIndex}-${bldgIndex}-${roomIndex}-${rackIndex}">
+                                <i class="bi bi-chevron-right me-2" id="icon-rack-${locIndex}-${bldgIndex}-${roomIndex}-${rackIndex}"></i>
+                                <i class="bi bi-hdd-rack me-2"></i>
+                                <strong>${rackName}</strong>
+                                <span class="badge bg-info ms-2">${totalServers} server${totalServers !== 1 ? 's' : ''}</span>
+                                <small class="text-muted ms-2">Click to expand</small>
+                            </div>
+                            <div class="collapse" id="rack-${locIndex}-${bldgIndex}-${roomIndex}-${rackIndex}">
+                    `;
+                    
+                    sortedUHeights.forEach((uHeight, uIndex) => {
+                        const uSystems = uGroups[uHeight];
+                        const displayUHeight = uHeight === 'No U-Height' ? uHeight : `U${uHeight}`;
+                        const collapseId = `tree-u-${locIndex}-${bldgIndex}-${roomIndex}-${rackIndex}-${uIndex}`;
                     
                     locationHtml += `
                         <div class="ms-3 border-bottom">
@@ -658,6 +677,12 @@ function renderTreeView(systems) {
                 });
                 
                 locationHtml += `
+                        </div>
+                    </div>
+                `;
+            });
+            
+            locationHtml += `
                         </div>
                     </div>
                 `;

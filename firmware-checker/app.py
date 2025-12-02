@@ -2338,7 +2338,8 @@ def systems():
                        u.first_name as created_by_first_name,
                        u.last_name as created_by_last_name,
                        r.name as rack_name,
-                       r.location as rack_location
+                       r.location as rack_location,
+                       r.room as rack_room
                 FROM systems s
                 LEFT JOIN firmware_checks fc ON s.id = fc.system_id
                 LEFT JOIN users u ON s.created_by = u.id
@@ -2366,7 +2367,8 @@ def systems():
                        u.first_name as created_by_first_name,
                        u.last_name as created_by_last_name,
                        r.name as rack_name,
-                       r.location as rack_location
+                       r.location as rack_location,
+                       r.room as rack_room
                 FROM systems s
                 LEFT JOIN firmware_checks fc ON s.id = fc.system_id
                 LEFT JOIN users u ON s.created_by = u.id
