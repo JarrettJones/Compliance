@@ -94,6 +94,7 @@ def get_db_connection():
     conn = sqlite3.connect(DATABASE, timeout=30.0)  # Increase timeout to handle concurrent access
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA journal_mode=WAL')  # Enable Write-Ahead Logging for better concurrency
+    conn.execute('PRAGMA wal_checkpoint(PASSIVE)')  # Force WAL checkpoint to ensure readers see latest data
     try:
         yield conn
     finally:
@@ -2839,11 +2840,18 @@ def edit_system(system_id):
         
         try:
             with get_db_connection() as conn:
+                # Look up rack_id by rack name if rack is provided
+                rack_id = None
+                if rack:
+                    rack_row = conn.execute('SELECT id FROM racks WHERE name = ?', (rack,)).fetchone()
+                    if rack_row:
+                        rack_id = rack_row['id']
+                
                 conn.execute('''
                     UPDATE systems 
-                    SET name = ?, rscm_ip = ?, rscm_port = ?, description = ?, u_height = ?, updated_at = CURRENT_TIMESTAMP
+                    SET name = ?, rscm_ip = ?, rscm_port = ?, description = ?, u_height = ?, rack_id = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
-                ''', (name, rscm_ip, rscm_port, description, u_height, system_id))
+                ''', (name, rscm_ip, rscm_port, description, u_height, rack_id, system_id))
                 conn.commit()
             
             flash(f'System "{name}" updated successfully!', 'success')
