@@ -3215,7 +3215,22 @@ def api_racks_hierarchy():
                 building = parts[1] if len(parts) > 1 else 'Unknown Building'
                 
                 # Use room column if available, otherwise default
-                room = rack['room'] if has_room_column and rack['room'] else 'Unknown Room'
+                room_value = rack['room'] if has_room_column and rack['room'] else 'Unknown Room'
+                
+                # Normalize room format - ensure it starts with "Room "
+                if room_value and room_value != 'Unknown Room':
+                    # If it's just a number, add "Room " prefix
+                    if room_value.strip().isdigit():
+                        room = f"Room {room_value.strip()}"
+                    # If it already starts with "Room ", keep it as is
+                    elif room_value.strip().lower().startswith('room '):
+                        # Normalize capitalization
+                        room_parts = room_value.strip().split(None, 1)
+                        room = f"Room {room_parts[1]}" if len(room_parts) > 1 else room_value
+                    else:
+                        room = room_value
+                else:
+                    room = 'Unknown Room'
                 
                 if location not in hierarchy:
                     hierarchy[location] = {}
