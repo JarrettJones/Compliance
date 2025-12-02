@@ -3181,19 +3181,22 @@ def api_racks_hierarchy():
     with get_db_connection() as conn:
         # Get racks with system counts
         racks = conn.execute('''
-            SELECT r.id, r.name, r.location, r.building, r.room,
+            SELECT r.id, r.name, r.location, r.room,
                    COUNT(s.id) as system_count
             FROM racks r
             LEFT JOIN systems s ON r.id = s.rack_id
             GROUP BY r.id
-            ORDER BY r.location, r.building, r.room, r.name
+            ORDER BY r.location, r.room, r.name
         ''').fetchall()
         
         # Build hierarchy: location -> building -> room -> racks
         hierarchy = {}
         for rack in racks:
-            location = rack['location'] or 'Unknown Location'
-            building = rack['building'] or 'Unknown Building'
+            # Parse location (e.g., "Redmond - Building 50")
+            location_str = rack['location'] or 'Unknown Location'
+            parts = location_str.split(' - ')
+            location = parts[0] if parts else 'Unknown Location'
+            building = parts[1] if len(parts) > 1 else 'Unknown Building'
             room = rack['room'] or 'Unknown Room'
             
             if location not in hierarchy:
