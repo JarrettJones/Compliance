@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+
+{% block title %}Quick Firmware Check - Firmware Version Checker{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1><i class="bi bi-lightning-charge"></i> Quick Firmware Check</h1>
+        <p class="lead">Select a system by navigating through your rack organization</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-funnel"></i> Find Your System</h5>
+            </div>
+            <div class="card-body">
+                <form id="quickCheckForm">
+                    <!-- Location Selection -->
+                    <div class="mb-4">
+                        <label for="location" class="form-label">
+                            <i class="bi bi-geo-alt"></i> <strong>1. Select Location</strong>
+                        </label>
+                        <select class="form-select form-select-lg" id="location" name="location" required>
+                            <option value="">Choose a location...</option>
+                        </select>
+                    </div>
+
+                    <!-- Building Selection -->
+                    <div class="mb-4" id="buildingSection" style="display: none;">
+                        <label for="building" class="form-label">
+                            <i class="bi bi-building"></i> <strong>2. Select Building</strong>
+                        </label>
+                        <select class="form-select form-select-lg" id="building" name="building" required>
+                            <option value="">Choose a building...</option>
+                        </select>
+                    </div>
+
+                    <!-- Room Selection -->
+                    <div class="mb-4" id="roomSection" style="display: none;">
+                        <label for="room" class="form-label">
+                            <i class="bi bi-door-open"></i> <strong>3. Select Room</strong>
+                        </label>
+                        <select class="form-select form-select-lg" id="room" name="room" required>
+                            <option value="">Choose a room...</option>
+                        </select>
+                    </div>
+
+                    <!-- Rack Selection -->
+                    <div class="mb-4" id="rackSection" style="display: none;">
+                        <label for="rack" class="form-label">
+                            <i class="bi bi-server"></i> <strong>4. Select Rack</strong>
+                        </label>
+                        <select class="form-select form-select-lg" id="rack" name="rack" required>
+                            <option value="">Choose a rack...</option>
+                        </select>
+                    </div>
+
+                    <!-- System Selection -->
+                    <div class="mb-4" id="systemSection" style="display: none;">
+                        <label for="system" class="form-label">
+                            <i class="bi bi-hdd-network"></i> <strong>5. Select System</strong>
+                        </label>
+                        <select class="form-select form-select-lg" id="system" name="system" required>
+                            <option value="">Choose a system...</option>
+                        </select>
+                        <small class="form-text text-muted mt-2 d-block">
+                            Systems are displayed with their hostname and U position
+                        </small>
+                    </div>
+
+                    <!-- No Systems Message -->
+                    <div class="alert alert-warning mt-3" id="noSystemsAlert" style="display: none;">
+                        <i class="bi bi-exclamation-triangle"></i> 
+                        <strong>No systems found in this rack.</strong>
+                        <div class="mt-2">
+                            <a href="{{ url_for('add_system') }}" class="btn btn-warning btn-sm">
+                                <i class="bi bi-plus-circle"></i> Add a New System
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4" id="actionButtons" style="display: none;">
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary btn-lg" id="runCheckBtn">
+                            <i class="bi bi-play-circle"></i> Run Firmware Check
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Selected System Info -->
+        <div class="card mt-4" id="systemInfoCard" style="display: none;">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0"><i class="bi bi-info-circle"></i> Selected System</h6>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-3">System Name:</dt>
+                    <dd class="col-sm-9" id="selectedSystemName">-</dd>
+                    
+                    <dt class="col-sm-3">Hostname:</dt>
+                    <dd class="col-sm-9" id="selectedHostname">-</dd>
+                    
+                    <dt class="col-sm-3">Location:</dt>
+                    <dd class="col-sm-9" id="selectedLocation">-</dd>
+                    
+                    <dt class="col-sm-3">RSCM IP:</dt>
+                    <dd class="col-sm-9" id="selectedRscmIp">-</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let rackData = {};
+let systemsData = {};
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadLocations();
+    
+    document.getElementById('location').addEventListener('change', handleLocationChange);
+    document.getElementById('building').addEventListener('change', handleBuildingChange);
+    document.getElementById('room').addEventListener('change', handleRoomChange);
+    document.getElementById('rack').addEventListener('change', handleRackChange);
+    document.getElementById('system').addEventListener('change', handleSystemChange);
+    
+    document.getElementById('quickCheckForm').addEventListener('submit', handleFormSubmit);
+});
+
+async function loadLocations() {
+    try {
+        const response = await fetch('/api/racks/hierarchy');
+        const data = await response.json();
+        rackData = data;
+        
+        const locationSelect = document.getElementById('location');
+        const locations = Object.keys(data).sort();
+        
+        locations.forEach(location => {
+            const option = document.createElement('option');
+            option.value = location;
+            option.textContent = location;
+            locationSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading locations:', error);
+        alert('Error loading rack data. Please refresh the page.');
+    }
+}
+
+function handleLocationChange() {
+    const location = this.value;
+    const buildingSelect = document.getElementById('building');
+    
+    // Reset subsequent selections
+    buildingSelect.innerHTML = '<option value="">Choose a building...</option>';
+    document.getElementById('room').innerHTML = '<option value="">Choose a room...</option>';
+    document.getElementById('rack').innerHTML = '<option value="">Choose a rack...</option>';
+    document.getElementById('system').innerHTML = '<option value="">Choose a system...</option>';
+    
+    document.getElementById('buildingSection').style.display = 'none';
+    document.getElementById('roomSection').style.display = 'none';
+    document.getElementById('rackSection').style.display = 'none';
+    document.getElementById('systemSection').style.display = 'none';
+    document.getElementById('noSystemsAlert').style.display = 'none';
+    document.getElementById('actionButtons').style.display = 'none';
+    document.getElementById('systemInfoCard').style.display = 'none';
+    
+    if (location && rackData[location]) {
+        const buildings = Object.keys(rackData[location]).sort();
+        buildings.forEach(building => {
+            const option = document.createElement('option');
+            option.value = building;
+            option.textContent = building;
+            buildingSelect.appendChild(option);
+        });
+        document.getElementById('buildingSection').style.display = 'block';
+    }
+}
+
+function handleBuildingChange() {
+    const location = document.getElementById('location').value;
+    const building = this.value;
+    const roomSelect = document.getElementById('room');
+    
+    roomSelect.innerHTML = '<option value="">Choose a room...</option>';
+    document.getElementById('rack').innerHTML = '<option value="">Choose a rack...</option>';
+    document.getElementById('system').innerHTML = '<option value="">Choose a system...</option>';
+    
+    document.getElementById('roomSection').style.display = 'none';
+    document.getElementById('rackSection').style.display = 'none';
+    document.getElementById('systemSection').style.display = 'none';
+    document.getElementById('noSystemsAlert').style.display = 'none';
+    document.getElementById('actionButtons').style.display = 'none';
+    document.getElementById('systemInfoCard').style.display = 'none';
+    
+    if (building && rackData[location] && rackData[location][building]) {
+        const rooms = Object.keys(rackData[location][building]).sort();
+        rooms.forEach(room => {
+            const option = document.createElement('option');
+            option.value = room;
+            option.textContent = room;
+            roomSelect.appendChild(option);
+        });
+        document.getElementById('roomSection').style.display = 'block';
+    }
+}
+
+function handleRoomChange() {
+    const location = document.getElementById('location').value;
+    const building = document.getElementById('building').value;
+    const room = this.value;
+    const rackSelect = document.getElementById('rack');
+    
+    rackSelect.innerHTML = '<option value="">Choose a rack...</option>';
+    document.getElementById('system').innerHTML = '<option value="">Choose a system...</option>';
+    
+    document.getElementById('rackSection').style.display = 'none';
+    document.getElementById('systemSection').style.display = 'none';
+    document.getElementById('noSystemsAlert').style.display = 'none';
+    document.getElementById('actionButtons').style.display = 'none';
+    document.getElementById('systemInfoCard').style.display = 'none';
+    
+    if (room && rackData[location] && rackData[location][building] && rackData[location][building][room]) {
+        const racks = rackData[location][building][room];
+        racks.forEach(rack => {
+            const option = document.createElement('option');
+            option.value = rack.id;
+            option.textContent = `${rack.name} (${rack.system_count} systems)`;
+            rackSelect.appendChild(option);
+        });
+        document.getElementById('rackSection').style.display = 'block';
+    }
+}
+
+async function handleRackChange() {
+    const rackId = this.value;
+    const systemSelect = document.getElementById('system');
+    
+    systemSelect.innerHTML = '<option value="">Choose a system...</option>';
+    document.getElementById('systemSection').style.display = 'none';
+    document.getElementById('noSystemsAlert').style.display = 'none';
+    document.getElementById('actionButtons').style.display = 'none';
+    document.getElementById('systemInfoCard').style.display = 'none';
+    
+    if (rackId) {
+        try {
+            const response = await fetch(`/api/racks/${rackId}/systems`);
+            const systems = await response.json();
+            systemsData = {};
+            
+            if (systems.length === 0) {
+                document.getElementById('noSystemsAlert').style.display = 'block';
+            } else {
+                systems.forEach(system => {
+                    systemsData[system.id] = system;
+                    const option = document.createElement('option');
+                    option.value = system.id;
+                    
+                    // Extract hostname from description if available
+                    let hostname = 'No hostname';
+                    if (system.description && system.description.includes('Host:')) {
+                        hostname = system.description.split('Host:')[1].split('|')[0].trim();
+                    }
+                    
+                    const uHeight = system.u_height ? ` (U${system.u_height})` : '';
+                    option.textContent = `${system.name} - ${hostname}${uHeight}`;
+                    systemSelect.appendChild(option);
+                });
+                document.getElementById('systemSection').style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Error loading systems:', error);
+            alert('Error loading systems for this rack.');
+        }
+    }
+}
+
+function handleSystemChange() {
+    const systemId = this.value;
+    
+    if (systemId && systemsData[systemId]) {
+        const system = systemsData[systemId];
+        
+        // Extract hostname
+        let hostname = 'Not available';
+        if (system.description && system.description.includes('Host:')) {
+            hostname = system.description.split('Host:')[1].split('|')[0].trim();
+        }
+        
+        // Update info card
+        document.getElementById('selectedSystemName').textContent = system.name;
+        document.getElementById('selectedHostname').textContent = hostname;
+        document.getElementById('selectedLocation').textContent = 
+            `${document.getElementById('location').value} › ${document.getElementById('building').value} › ` +
+            `${document.getElementById('room').value} › ${document.getElementById('rack').options[document.getElementById('rack').selectedIndex].text}`;
+        document.getElementById('selectedRscmIp').textContent = system.rscm_ip || 'Not configured';
+        
+        document.getElementById('systemInfoCard').style.display = 'block';
+        document.getElementById('actionButtons').style.display = 'flex';
+    } else {
+        document.getElementById('systemInfoCard').style.display = 'none';
+        document.getElementById('actionButtons').style.display = 'none';
+    }
+}
+
+function handleFormSubmit(e) {
+    e.preventDefault();
+    const systemId = document.getElementById('system').value;
+    
+    if (systemId) {
+        window.location.href = `/check/${systemId}`;
+    } else {
+        alert('Please select a system');
+    }
+}
+</script>
+{% endblock %}

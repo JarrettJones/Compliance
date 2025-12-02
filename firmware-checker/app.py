@@ -3168,6 +3168,63 @@ def bulk_check():
                          system_ids=system_ids,
                          firmware_by_category=firmware_by_category)
 
+@app.route('/quick-check')
+@login_required
+def quick_check():
+    """Quick firmware check - select system by rack hierarchy"""
+    return render_template('quick_check.html')
+
+@app.route('/api/racks/hierarchy')
+@login_required
+def api_racks_hierarchy():
+    """API endpoint to get rack hierarchy organized by location/building/room"""
+    with get_db_connection() as conn:
+        # Get racks with system counts
+        racks = conn.execute('''
+            SELECT r.id, r.name, r.location, r.building, r.room,
+                   COUNT(s.id) as system_count
+            FROM racks r
+            LEFT JOIN systems s ON r.id = s.rack_id
+            GROUP BY r.id
+            ORDER BY r.location, r.building, r.room, r.name
+        ''').fetchall()
+        
+        # Build hierarchy: location -> building -> room -> racks
+        hierarchy = {}
+        for rack in racks:
+            location = rack['location'] or 'Unknown Location'
+            building = rack['building'] or 'Unknown Building'
+            room = rack['room'] or 'Unknown Room'
+            
+            if location not in hierarchy:
+                hierarchy[location] = {}
+            if building not in hierarchy[location]:
+                hierarchy[location][building] = {}
+            if room not in hierarchy[location][building]:
+                hierarchy[location][building][room] = []
+            
+            hierarchy[location][building][room].append({
+                'id': rack['id'],
+                'name': rack['name'],
+                'system_count': rack['system_count']
+            })
+        
+        return jsonify(hierarchy)
+
+@app.route('/api/racks/<int:rack_id>/systems')
+@login_required
+def api_rack_systems(rack_id):
+    """API endpoint to get systems in a specific rack"""
+    with get_db_connection() as conn:
+        systems = conn.execute('''
+            SELECT id, name, rscm_ip, description, u_height
+            FROM systems
+            WHERE rack_id = ?
+            ORDER BY u_height, name
+        ''', (rack_id,)).fetchall()
+        
+        return jsonify([dict(s) for s in systems])
+
 @app.route('/check/<int:system_id>')
 @login_required
 def check_firmware(system_id):
