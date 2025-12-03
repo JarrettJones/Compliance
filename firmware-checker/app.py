@@ -423,6 +423,53 @@ def init_db():
         except Exception as e:
             logger.warning(f"Racks RSCM IP migration warning (may be safe to ignore): {e}")
         
+        # Migrate RSCM IP data from rscm_components table to racks columns
+        try:
+            # Check if rscm_components table exists
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='rscm_components'")
+            if cursor.fetchone():
+                # Get all racks that don't have RSCM IPs set
+                racks_needing_migration = conn.execute('''
+                    SELECT id FROM racks 
+                    WHERE (rscm_upper_ip IS NULL OR rscm_lower_ip IS NULL)
+                ''').fetchall()
+                
+                migrated_count = 0
+                for rack in racks_needing_migration:
+                    rack_id = rack['id']
+                    
+                    # Get RSCM components for this rack
+                    rscm_components = conn.execute('''
+                        SELECT ip_address, name, position
+                        FROM rscm_components
+                        WHERE rack_id = ?
+                    ''', (rack_id,)).fetchall()
+                    
+                    upper_ip = None
+                    lower_ip = None
+                    
+                    for rscm in rscm_components:
+                        if rscm['ip_address']:
+                            if 'upper' in rscm['name'].lower() or rscm['position'] == 'upper':
+                                upper_ip = rscm['ip_address']
+                            elif 'lower' in rscm['name'].lower() or rscm['position'] == 'lower':
+                                lower_ip = rscm['ip_address']
+                    
+                    # Update the rack with RSCM IPs if found
+                    if upper_ip or lower_ip:
+                        conn.execute('''
+                            UPDATE racks 
+                            SET rscm_upper_ip = ?, rscm_lower_ip = ?
+                            WHERE id = ?
+                        ''', (upper_ip, lower_ip, rack_id))
+                        migrated_count += 1
+                
+                if migrated_count > 0:
+                    conn.commit()
+                    logger.info(f"Migrated RSCM IP data for {migrated_count} rack(s) from rscm_components table")
+        except Exception as e:
+            logger.warning(f"RSCM components migration warning: {e}")
+        
         conn.commit()
         
         # Insert firmware types if they don't exist
