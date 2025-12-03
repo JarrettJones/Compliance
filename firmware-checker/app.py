@@ -4150,6 +4150,107 @@ def api_cleanup_orphaned_checks():
             'error': str(e)
         }), 500
 
+@app.route('/rscm/result/<int:check_id>')
+@login_required
+def rscm_check_result(check_id):
+    """View RSCM firmware check result"""
+    with get_db_connection() as conn:
+        # Get the RSCM check
+        check = conn.execute('''
+            SELECT rc.*, r.name as rack_name, r.location,
+                   u.username as checked_by_username,
+                   u.first_name as checked_by_first_name,
+                   u.last_name as checked_by_last_name
+            FROM rscm_firmware_checks rc
+            JOIN racks r ON rc.rack_id = r.id
+            LEFT JOIN users u ON rc.user_id = u.id
+            WHERE rc.id = ?
+        ''', (check_id,)).fetchone()
+        
+        if not check:
+            flash('RSCM firmware check not found!', 'error')
+            return redirect(url_for('racks'))
+        
+        # Parse firmware data
+        firmware_data = None
+        if check['firmware_data']:
+            try:
+                firmware_data = json.loads(check['firmware_data'])
+            except json.JSONDecodeError:
+                firmware_data = None
+        
+        return render_template('rscm_check_result.html',
+                             check=check,
+                             firmware_data=firmware_data)
+
+@app.route('/api/check-rscm-firmware', methods=['POST'])
+@login_required
+def api_check_rscm_firmware():
+    """API endpoint to check RSCM firmware for a rack"""
+    try:
+        data = request.get_json()
+        rack_id = data.get('rack_id')
+        rscm_ip = data.get('rscm_ip')
+        rscm_port = data.get('rscm_port', 8080)
+        position = data.get('position', 'unknown')  # 'upper' or 'lower'
+        username = data.get('username', 'root')
+        password = data.get('password')
+        
+        if not rack_id or not rscm_ip or not password:
+            return jsonify({'error': 'rack_id, rscm_ip, and password are required'}), 400
+        
+        # Get rack information
+        with get_db_connection() as conn:
+            rack = conn.execute('SELECT * FROM racks WHERE id = ?', (rack_id,)).fetchone()
+            if not rack:
+                return jsonify({'error': 'Rack not found'}), 404
+        
+        print(f"[API] Starting RSCM firmware check for Rack: {rack['name']}, Position: {position}, IP: {rscm_ip}")
+        
+        # Initialize RSCM checker
+        rscm_checker = RSCMChecker(username=username, password=password, timeout=30)
+        
+        # Perform firmware check
+        results = rscm_checker.check_firmware(rscm_ip, rscm_port)
+        
+        if results['status'] == 'error':
+            print(f"[API] RSCM firmware check failed: {results.get('errors', ['Unknown error'])}")
+            return jsonify({
+                'status': 'error',
+                'error': ', '.join(results.get('errors', ['Unknown error']))
+            }), 500
+        
+        # Save results to database
+        with get_db_connection() as conn:
+            cursor = conn.execute('''
+                INSERT INTO rscm_firmware_checks 
+                (rack_id, rscm_ip, rscm_port, position, firmware_data, status, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                rack_id,
+                rscm_ip,
+                rscm_port,
+                position,
+                json.dumps(results),
+                'success',
+                session.get('user_id')
+            ))
+            check_id = cursor.lastrowid
+            conn.commit()
+        
+        print(f"[API] RSCM firmware check completed successfully [Check ID: {check_id}]")
+        
+        return jsonify({
+            'status': 'success',
+            'check_id': check_id,
+            'message': f'RSCM firmware check completed for {position} RSCM',
+            'firmware_versions_count': len(results.get('firmware_versions', {}))
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error checking RSCM firmware: {str(e)}")
+        return jsonify({'error': str(e), 'status': 'error'}), 500
+
 @app.route('/api/restart-application', methods=['POST'])
 @admin_required
 def api_restart_application():

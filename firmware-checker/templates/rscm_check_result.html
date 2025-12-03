@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}RSCM Firmware Check Result{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-hdd-network-fill"></i> RSCM Firmware Check Result</h1>
+                <p class="text-muted">Check ID: {{ check['id'] }} - {{ check['check_date'] }}</p>
+            </div>
+            <div>
+                <a href="{{ url_for('racks') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Racks
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Check Information Card -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Check Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>Rack:</strong><br>
+                        {{ check['rack_name'] }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Location:</strong><br>
+                        {{ check['location'] }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Position:</strong><br>
+                        <span class="badge bg-info">{{ check['position']|upper }}</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>RSCM IP:Port:</strong><br>
+                        {{ check['rscm_ip'] }}:{{ check['rscm_port'] }}
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>Check Date:</strong><br>
+                        {{ check['check_date'] }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Status:</strong><br>
+                        {% if check['status'] == 'success' %}
+                            <span class="badge bg-success">Success</span>
+                        {% else %}
+                            <span class="badge bg-danger">{{ check['status']|upper }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Checked By:</strong><br>
+                        {% if check['checked_by_username'] %}
+                            {{ check['checked_by_first_name'] }} {{ check['checked_by_last_name'] }} ({{ check['checked_by_username'] }})
+                        {% else %}
+                            Unknown
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if firmware_data %}
+<!-- Firmware Versions Card -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-hdd-stack"></i> RSCM Firmware Versions</h5>
+            </div>
+            <div class="card-body">
+                {% if firmware_data.firmware_versions %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Component</th>
+                                    <th>Version</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for fw_name, fw_info in firmware_data.firmware_versions.items() %}
+                                <tr>
+                                    <td><strong>{{ fw_name }}</strong></td>
+                                    <td>
+                                        <code>{{ fw_info.version }}</code>
+                                    </td>
+                                    <td>
+                                        {% if fw_info.status == 'success' %}
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-check-circle"></i> Success
+                                            </span>
+                                        {% elif fw_info.status == 'not_found' %}
+                                            <span class="badge bg-warning text-dark">
+                                                <i class="bi bi-exclamation-circle"></i> Not Found
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-danger">
+                                                <i class="bi bi-x-circle"></i> {{ fw_info.status|upper }}
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> No firmware versions found in check results.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if firmware_data.errors %}
+<!-- Errors Card -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Errors</h5>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0">
+                    {% for error in firmware_data.errors %}
+                    <li class="text-danger">{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+<!-- No Data Available -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="alert alert-danger">
+            <i class="bi bi-x-circle"></i> <strong>Error:</strong> No firmware data available for this check.
+            {% if check['error_message'] %}
+                <br>{{ check['error_message'] }}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Raw Data (Collapsible) -->
+{% if firmware_data %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <button class="btn btn-sm btn-outline-secondary" 
+                        type="button" 
+                        data-bs-toggle="collapse" 
+                        data-bs-target="#rawData">
+                    <i class="bi bi-code-square"></i> Show Raw Data
+                </button>
+            </div>
+            <div class="collapse" id="rawData">
+                <div class="card-body">
+                    <pre class="bg-light p-3 rounded"><code>{{ firmware_data|tojson(indent=2) }}</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
