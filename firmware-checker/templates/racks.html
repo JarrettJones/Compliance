@@ -200,7 +200,6 @@ function renderRacksTree() {
             
                 
                 racks.forEach(rack => {
-                    console.log('Rendering rack:', rack);
                     html += `
                         <tr>
                             <td><strong>${rack.name}</strong></td>
@@ -359,11 +358,7 @@ if (deleteModal) {
         const rackName = button.getAttribute('data-rack-name');
         const systemCount = parseInt(button.getAttribute('data-rack-systems') || '0');
         
-        console.log('Delete modal opening:', { rackId, rackName, systemCount });
-        console.log('Button attributes:', button.dataset);
-        
-        document.getElementById('deleteRackName').textContent = rackName || 'UNKNOWN';
-        document.getElementById('expectedRackName').value = rackName || '';
+        document.getElementById('deleteRackName').textContent = rackName || 'Unknown Rack';
         document.getElementById('deleteForm').action = `/racks/${rackId}/delete`;
         
         // Show system count warning
@@ -380,15 +375,14 @@ if (deleteModal) {
         document.getElementById('confirmDeleteBtn').disabled = true;
     });
 
-    // Enable delete button only when rack name matches
+    // Enable delete button only when user types DELETE
     const confirmationInput = document.getElementById('confirmationInput');
     if (confirmationInput) {
         confirmationInput.addEventListener('input', function() {
-            const expectedName = document.getElementById('expectedRackName').value;
-            const enteredName = this.value;
+            const enteredText = this.value.trim().toUpperCase();
             const deleteBtn = document.getElementById('confirmDeleteBtn');
             
-            deleteBtn.disabled = enteredName !== expectedName;
+            deleteBtn.disabled = enteredText !== 'DELETE';
         });
     }
 
@@ -688,16 +682,15 @@ async function submitAddRack() {
                 </div>
                 <p>You are about to delete the rack: <strong id="deleteRackName"></strong></p>
                 <p id="deleteSystemCount" class="text-danger fw-bold"></p>
-                <p>To confirm deletion, please type the rack name exactly as shown above:</p>
+                <p>To confirm deletion, please type <strong>DELETE</strong> in the box below:</p>
                 <form id="deleteForm" method="POST">
                     <input type="text" 
                            id="confirmationInput" 
-                           name="confirmation_name"
+                           name="confirmation_text"
                            class="form-control" 
-                           placeholder="Type rack name here"
+                           placeholder="Type DELETE here"
                            autocomplete="off"
                            required>
-                    <input type="hidden" id="expectedRackName" value="">
                 </form>
             </div>
             <div class="modal-footer">
