@@ -737,20 +737,21 @@ async function submitAddRack() {
                                class="form-control" 
                                id="rackLocation" 
                                name="location"
-                               placeholder="e.g., Redmond, WA - Building 50"
-                               value="Redmond, WA - Building 50"
+                               placeholder="e.g., Redmond - Building 50"
+                               value="Redmond - Building 50"
                                required>
-                        <small class="text-muted">Format: City, State - Building</small>
+                        <small class="text-muted">Format: City - Building Number</small>
                     </div>
                     
                     <div class="mb-3">
-                        <label for="rackRoom" class="form-label">Room</label>
+                        <label for="rackRoom" class="form-label">Room <span class="text-danger">*</span></label>
                         <input type="text" 
                                class="form-control" 
                                id="rackRoom" 
                                name="room"
-                               placeholder="e.g., 1234, Lab A">
-                        <small class="text-muted">Room or lab number (optional)</small>
+                               placeholder="e.g., Room 1234"
+                               required>
+                        <small class="text-muted">Room number or name</small>
                     </div>
                     
                     <div class="mb-3">
