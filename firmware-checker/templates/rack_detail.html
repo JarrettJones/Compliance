@@ -125,7 +125,7 @@
                 <h5 class="mb-0"><i class="bi bi-clock-history"></i> RSCM Firmware Check History</h5>
                 {% if rscm_components %}
                 <button class="btn btn-success btn-sm" 
-                        onclick="window.location.href='{{ url_for('racks') }}'; setTimeout(() => checkRSCMFirmware({{ rack.id }}, '{{ rack.name }}', '{{ rscm_upper_ip or '' }}', '{{ rscm_lower_ip or '' }}'), 500)">
+                        onclick="openRSCMCheckModal()">
                     <i class="bi bi-plus"></i> New Check
                 </button>
                 {% endif %}
@@ -209,7 +209,7 @@
                         {% if rscm_components %}
                             <p class="text-muted">Run your first RSCM firmware check to see the results here</p>
                             <button class="btn btn-success"
-                                    onclick="window.location.href='{{ url_for('racks') }}'; setTimeout(() => checkRSCMFirmware({{ rack.id }}, '{{ rack.name }}', '{{ rscm_upper_ip or '' }}', '{{ rscm_lower_ip or '' }}'), 500)">
+                                    onclick="openRSCMCheckModal()">
                                 <i class="bi bi-check-circle"></i> Run First Check
                             </button>
                         {% else %}
@@ -251,5 +251,195 @@ function deleteRSCMCheck(button) {
         alert('Error deleting check');
     });
 }
+
+function openRSCMCheckModal() {
+    // Set rack information
+    document.getElementById('rscmRackName').textContent = '{{ rack.name }}';
+    document.getElementById('rscmRackId').value = {{ rack.id }};
+    
+    // Build RSCM list
+    const rscmList = document.getElementById('rscmList');
+    rscmList.innerHTML = '';
+    
+    {% if rscm_upper_ip %}
+    document.getElementById('rscmUpperIp').value = '{{ rscm_upper_ip }}';
+    rscmList.innerHTML += `
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" value="upper" id="rscmUpper" checked>
+            <label class="form-check-label" for="rscmUpper">
+                <i class="bi bi-hdd-network"></i> Upper RSCM ({{ rscm_upper_ip }})
+            </label>
+        </div>
+    `;
+    {% endif %}
+    
+    {% if rscm_lower_ip %}
+    document.getElementById('rscmLowerIp').value = '{{ rscm_lower_ip }}';
+    rscmList.innerHTML += `
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" value="lower" id="rscmLower" checked>
+            <label class="form-check-label" for="rscmLower">
+                <i class="bi bi-hdd-network"></i> Lower RSCM ({{ rscm_lower_ip }})
+            </label>
+        </div>
+    `;
+    {% endif %}
+    
+    // Reset credentials section
+    document.getElementById('rscmCredentialsSection').style.display = 'none';
+    document.getElementById('rscmPassword').value = '';
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('rscmCheckModal'));
+    modal.show();
+}
+
+function startRSCMCheck() {
+    const rackId = document.getElementById('rscmRackId').value;
+    const username = document.getElementById('rscmUsername').value;
+    const password = document.getElementById('rscmPassword').value;
+    const rscmUpperIp = document.getElementById('rscmUpperIp').value;
+    const rscmLowerIp = document.getElementById('rscmLowerIp').value;
+    
+    // Get selected RSCMs
+    const selectedRSCMs = [];
+    const upperCheckbox = document.getElementById('rscmUpper');
+    const lowerCheckbox = document.getElementById('rscmLower');
+    
+    if (upperCheckbox && upperCheckbox.checked && rscmUpperIp) {
+        selectedRSCMs.push({ position: 'upper', ip: rscmUpperIp });
+    }
+    if (lowerCheckbox && lowerCheckbox.checked && rscmLowerIp) {
+        selectedRSCMs.push({ position: 'lower', ip: rscmLowerIp });
+    }
+    
+    // Validate
+    if (selectedRSCMs.length === 0) {
+        alert('Please select at least one RSCM to check');
+        return;
+    }
+    
+    if (!username || !password) {
+        alert('Please enter RSCM credentials');
+        return;
+    }
+    
+    // Disable button and show loading
+    const btn = document.getElementById('rscmCheckBtn');
+    btn.disabled = true;
+    btn.innerHTML = `
+        <span class="spinner-border spinner-border-sm" role="status"></span>
+        Starting...
+    `;
+    
+    // Start check
+    fetch('/api/check-rscm-firmware', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            rack_id: rackId,
+            rscm_positions: selectedRSCMs,
+            username: username,
+            password: password
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'started') {
+            // Redirect to progress page
+            window.location.href = data.progress_url;
+        } else {
+            alert('Error starting RSCM firmware check: ' + (data.error || 'Unknown error'));
+            btn.disabled = false;
+            btn.innerHTML = `
+                <i class="bi bi-play-fill"></i> Start Firmware Check
+            `;
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error.message);
+        btn.disabled = false;
+        btn.innerHTML = `
+            <i class="bi bi-play-fill"></i> Start Firmware Check
+        `;
+    });
+}
+
+function toggleRSCMCredentials() {
+    const section = document.getElementById('rscmCredentialsSection');
+    section.style.display = section.style.display === 'none' ? 'block' : 'none';
+}
 </script>
+
+<!-- RSCM Firmware Check Modal -->
+<div class="modal fade" id="rscmCheckModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-hdd-network-fill"></i> Check RSCM Firmware
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6>Rack: <span id="rscmRackName"></span></h6>
+                <hr>
+                
+                <!-- RSCM Selection -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Select RSCMs to Check:</label>
+                    <div id="rscmList"></div>
+                </div>
+                
+                <!-- Credentials -->
+                <div class="mb-3">
+                    <button class="btn btn-sm btn-outline-secondary w-100" 
+                            type="button" 
+                            onclick="toggleRSCMCredentials()">
+                        <i class="bi bi-key"></i> Enter RSCM Credentials
+                    </button>
+                </div>
+                
+                <div id="rscmCredentialsSection" style="display: none;">
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="mb-2">
+                                <label for="rscmUsername" class="form-label">RSCM Username</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="rscmUsername" 
+                                       value="root" 
+                                       autocomplete="off">
+                            </div>
+                            <div class="mb-2">
+                                <label for="rscmPassword" class="form-label">RSCM Password</label>
+                                <input type="password" 
+                                       class="form-control" 
+                                       id="rscmPassword" 
+                                       placeholder="Enter password"
+                                       autocomplete="off">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Hidden fields -->
+                <input type="hidden" id="rscmRackId">
+                <input type="hidden" id="rscmUpperIp">
+                <input type="hidden" id="rscmLowerIp">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" 
+                        id="rscmCheckBtn"
+                        class="btn btn-success" 
+                        onclick="startRSCMCheck()">
+                    <i class="bi bi-play-fill"></i> Start Firmware Check
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
