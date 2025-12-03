@@ -10,6 +10,11 @@
                 <h1><i class="bi bi-box"></i> Rack Management</h1>
                 <p class="text-muted">Manage racks and benches in your datacenter</p>
             </div>
+            <div>
+                <button class="btn btn-primary" onclick="openAddRackModal()">
+                    <i class="bi bi-plus-circle"></i> Add Rack
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -515,6 +520,59 @@ function toggleRSCMCredentials() {
     const section = document.getElementById('rscmCredentialsSection');
     section.style.display = section.style.display === 'none' ? 'block' : 'none';
 }
+
+// Open Add Rack Modal
+function openAddRackModal() {
+    const modal = new bootstrap.Modal(document.getElementById('addRackModal'));
+    document.getElementById('addRackForm').reset();
+    modal.show();
+}
+
+// Submit Add Rack Form
+async function submitAddRack() {
+    const form = document.getElementById('addRackForm');
+    
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+    
+    const formData = new FormData(form);
+    const rackData = {
+        name: formData.get('name'),
+        location: formData.get('location'),
+        room: formData.get('room') || null,
+        rack_type: formData.get('rack_type'),
+        description: formData.get('description') || null
+    };
+    
+    try {
+        const response = await fetch('/api/racks', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(rackData)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            // Close modal
+            bootstrap.Modal.getInstance(document.getElementById('addRackModal')).hide();
+            
+            // Show success message
+            alert('Rack added successfully!');
+            
+            // Reload page to show new rack
+            window.location.reload();
+        } else {
+            alert('Error adding rack: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
 </script>
 
 <!-- RSCM Firmware Check Modal -->
@@ -627,4 +685,79 @@ function toggleRSCMCredentials() {
     </div>
 </div>
 {% endif %}
+
+<!-- Add Rack Modal -->
+<div class="modal fade" id="addRackModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Add New Rack</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addRackForm">
+                    <div class="mb-3">
+                        <label for="rackName" class="form-label">Rack Name <span class="text-danger">*</span></label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="rackName" 
+                               name="name"
+                               placeholder="e.g., B02-Rack, Lab-Bench-1"
+                               required>
+                        <small class="text-muted">Enter a unique identifier for this rack</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="rackLocation" class="form-label">Location <span class="text-danger">*</span></label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="rackLocation" 
+                               name="location"
+                               placeholder="e.g., Redmond, WA - Building 50"
+                               value="Redmond, WA - Building 50"
+                               required>
+                        <small class="text-muted">Format: City, State - Building</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="rackRoom" class="form-label">Room</label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="rackRoom" 
+                               name="room"
+                               placeholder="e.g., 1234, Lab A">
+                        <small class="text-muted">Room or lab number (optional)</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="rackType" class="form-label">Rack Type <span class="text-danger">*</span></label>
+                        <select class="form-select" id="rackType" name="rack_type" required>
+                            <option value="rack" selected>Rack</option>
+                            <option value="bench">Bench</option>
+                        </select>
+                        <small class="text-muted">Rack for server racks, Bench for lab benches</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="rackDescription" class="form-label">Description</label>
+                        <textarea class="form-control" 
+                                  id="rackDescription" 
+                                  name="description"
+                                  rows="3"
+                                  placeholder="Optional description or notes about this rack"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" 
+                        class="btn btn-primary" 
+                        onclick="submitAddRack()">
+                    <i class="bi bi-plus-circle"></i> Add Rack
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}

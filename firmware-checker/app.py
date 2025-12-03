@@ -3522,6 +3522,55 @@ def quick_check():
     """Quick firmware check - select system by rack hierarchy"""
     return render_template('quick_check.html')
 
+@app.route('/api/racks', methods=['POST'])
+@login_required
+def api_add_rack():
+    """API endpoint to add a new rack"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        name = data.get('name', '').strip()
+        location = data.get('location', '').strip()
+        rack_type = data.get('rack_type', 'rack').strip()
+        
+        if not name:
+            return jsonify({'error': 'Rack name is required'}), 400
+        
+        if not location:
+            return jsonify({'error': 'Location is required'}), 400
+        
+        # Optional fields
+        room = data.get('room', '').strip() or None
+        description = data.get('description', '').strip() or None
+        
+        with get_db_connection() as conn:
+            # Check if rack with this name already exists
+            existing = conn.execute('SELECT id FROM racks WHERE name = ?', (name,)).fetchone()
+            if existing:
+                return jsonify({'error': f'Rack with name "{name}" already exists'}), 400
+            
+            # Insert new rack
+            cursor = conn.execute('''
+                INSERT INTO racks (name, location, room, rack_type, description)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (name, location, room, rack_type, description))
+            
+            rack_id = cursor.lastrowid
+            conn.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Rack added successfully',
+                'rack_id': rack_id
+            }), 201
+            
+    except Exception as e:
+        print(f"Error adding rack: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/racks/hierarchy')
 @login_required
 def api_racks_hierarchy():
