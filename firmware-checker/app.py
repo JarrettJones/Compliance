@@ -3615,7 +3615,8 @@ def api_racks_hierarchy():
             # Get racks with system counts - conditionally include room column and RSCM IPs
             if has_room_column:
                 racks = conn.execute('''
-                    SELECT r.id, r.name, r.location, r.room, r.rscm_upper_ip, r.rscm_lower_ip, r.rscm_ip,
+                    SELECT r.id, r.name, r.location, r.room, r.rack_type, r.description,
+                           r.rscm_upper_ip, r.rscm_lower_ip, r.rscm_ip,
                            COUNT(s.id) as system_count
                     FROM racks r
                     LEFT JOIN systems s ON r.id = s.rack_id
@@ -3624,7 +3625,8 @@ def api_racks_hierarchy():
                 ''').fetchall()
             else:
                 racks = conn.execute('''
-                    SELECT r.id, r.name, r.location, r.rscm_upper_ip, r.rscm_lower_ip, r.rscm_ip,
+                    SELECT r.id, r.name, r.location, r.rack_type, r.description,
+                           r.rscm_upper_ip, r.rscm_lower_ip, r.rscm_ip,
                            COUNT(s.id) as system_count
                     FROM racks r
                     LEFT JOIN systems s ON r.id = s.rack_id
@@ -3669,10 +3671,13 @@ def api_racks_hierarchy():
                 hierarchy[location][building][room].append({
                     'id': rack['id'],
                     'name': rack['name'],
+                    'rack_type': rack.get('rack_type', 'rack'),
+                    'description': rack.get('description'),
                     'system_count': rack['system_count'],
                     'rscm_upper': rack['rscm_upper_ip'],
                     'rscm_lower': rack['rscm_lower_ip'],
-                    'rscm_ip': rack['rscm_ip']
+                    'rscm_ip': rack['rscm_ip'],
+                    'edit_url': f'/edit-rack/{rack["id"]}'
                 })
             
             return jsonify(hierarchy)
