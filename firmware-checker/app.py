@@ -2034,16 +2034,42 @@ def index():
         ''', program_params).fetchall()
         
         # Get recent firmware checks for this program
-        recent_checks = conn.execute(f'''
+        recent_checks_query = f'''
             SELECT fc.*, s.name as system_name, u.username as checked_by_username,
-                   u.first_name as checked_by_first_name, u.last_name as checked_by_last_name
+                   u.first_name as checked_by_first_name, u.last_name as checked_by_last_name,
+                   'system' as check_type
             FROM firmware_checks fc
             JOIN systems s ON fc.system_id = s.id
             LEFT JOIN users u ON fc.user_id = u.id
             {program_filter}
             ORDER BY fc.check_date DESC
             LIMIT 5
-        ''', program_params).fetchall()
+        '''
+        
+        recent_checks_systems = list(conn.execute(recent_checks_query, program_params).fetchall())
+        
+        # Get recent RSCM firmware checks (no program filter for racks)
+        recent_checks_rscm = list(conn.execute('''
+            SELECT rc.id, rc.rack_id, rc.check_date, rc.status, rc.error_message, rc.user_id,
+                   r.name as system_name, r.location,
+                   u.username as checked_by_username,
+                   u.first_name as checked_by_first_name,
+                   u.last_name as checked_by_last_name,
+                   'rscm' as check_type,
+                   NULL as system_id
+            FROM rscm_firmware_checks rc
+            JOIN racks r ON rc.rack_id = r.id
+            LEFT JOIN users u ON rc.user_id = u.id
+            ORDER BY rc.check_date DESC
+            LIMIT 5
+        ''').fetchall())
+        
+        # Merge and sort by check_date
+        recent_checks = sorted(
+            recent_checks_systems + recent_checks_rscm,
+            key=lambda x: x['check_date'],
+            reverse=True
+        )[:5]
         
         # Get stats for this program
         # Count firmware types assigned to this program
@@ -2081,15 +2107,36 @@ def index():
         user_id = session.get('user_id')
         my_recent_checks = []
         if user_id:
-            my_recent_checks = conn.execute(f'''
-                SELECT fc.*, s.name as system_name, s.description as system_description
+            my_recent_checks_systems = list(conn.execute(f'''
+                SELECT fc.*, s.name as system_name, s.description as system_description,
+                       'system' as check_type
                 FROM firmware_checks fc
                 JOIN systems s ON fc.system_id = s.id
                 WHERE fc.user_id = ?
                 {' AND ' + program_filter.replace('WHERE ', '') if program_filter else ''}
                 ORDER BY fc.check_date DESC
                 LIMIT 5
-            ''', [user_id] + program_params).fetchall()
+            ''', [user_id] + program_params).fetchall())
+            
+            # Get user's RSCM checks
+            my_recent_checks_rscm = list(conn.execute('''
+                SELECT rc.id, rc.rack_id, rc.check_date, rc.status, rc.error_message,
+                       r.name as system_name, r.location as system_description,
+                       'rscm' as check_type,
+                       NULL as system_id
+                FROM rscm_firmware_checks rc
+                JOIN racks r ON rc.rack_id = r.id
+                WHERE rc.user_id = ?
+                ORDER BY rc.check_date DESC
+                LIMIT 5
+            ''', (user_id,)).fetchall())
+            
+            # Merge and sort by check_date
+            my_recent_checks = sorted(
+                my_recent_checks_systems + my_recent_checks_rscm,
+                key=lambda x: x['check_date'],
+                reverse=True
+            )[:5]
         
         stats = {
             'total_systems': conn.execute(f'SELECT COUNT(*) as count FROM systems s {program_filter}', program_params).fetchone()['count'],

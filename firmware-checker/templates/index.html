@@ -318,13 +318,22 @@
                         {% if stats.my_recent_checks %}
                             <div class="list-group list-group-flush flex-grow-1">
                                 {% for check in stats.my_recent_checks %}
-                                    <a href="{% if check.status == 'running' %}{{ url_for('check_firmware', system_id=check.system_id) }}{% else %}{{ url_for('check_result', check_id=check.id) }}{% endif %}" class="list-group-item list-group-item-action">
+                                    <a href="{% if check.check_type == 'rscm' %}{% if check.status == 'running' %}{{ url_for('rscm_check_progress', check_id=check.id) }}{% else %}{{ url_for('rscm_check_result', check_id=check.id) }}{% endif %}{% else %}{% if check.status == 'running' %}{{ url_for('check_firmware', system_id=check.system_id) }}{% else %}{{ url_for('check_result', check_id=check.id) }}{% endif %}{% endif %}" class="list-group-item list-group-item-action">
                                         <div class="d-flex w-100 justify-content-between">
                                             <div>
-                                                <h6 class="mb-1">{{ check.system_name }}</h6>
-                                                {% if check.system_description and 'Host:' in check.system_description %}
-                                                    {% set host_part = check.system_description.split('Host:')[1].split('|')[0].strip() %}
-                                                    <small class="text-muted">{{ host_part }}</small>
+                                                <h6 class="mb-1">
+                                                    {% if check.check_type == 'rscm' %}
+                                                        <i class="bi bi-hdd-network"></i>
+                                                    {% endif %}
+                                                    {{ check.system_name }}
+                                                </h6>
+                                                {% if check.system_description %}
+                                                    {% if check.check_type == 'rscm' %}
+                                                        <small class="text-muted">{{ check.system_description }}</small>
+                                                    {% elif 'Host:' in check.system_description %}
+                                                        {% set host_part = check.system_description.split('Host:')[1].split('|')[0].strip() %}
+                                                        <small class="text-muted">{{ host_part }}</small>
+                                                    {% endif %}
                                                 {% endif %}
                                             </div>
                                             <small class="text-muted">{{ check.check_date[:19] }}</small>
@@ -339,6 +348,9 @@
                                                     <i class="bi bi-x-circle"></i> Failed
                                                 {% endif %}
                                             </span>
+                                            {% if check.check_type == 'rscm' %}
+                                                <small class="text-info">RSCM Check</small>
+                                            {% endif %}
                                             {% if check.error_message %}
                                                 <small class="text-danger">{{ check.error_message[:50] }}...</small>
                                             {% endif %}
@@ -373,11 +385,18 @@
                         {% if stats.recent_checks %}
                             <div class="list-group list-group-flush flex-grow-1">
                                 {% for check in stats.recent_checks %}
-                                    <a href="{% if check.status == 'running' %}{{ url_for('check_firmware', system_id=check.system_id) }}{% else %}{{ url_for('check_result', check_id=check.id) }}{% endif %}" class="list-group-item list-group-item-action">
+                                    <a href="{% if check.check_type == 'rscm' %}{% if check.status == 'running' %}{{ url_for('rscm_check_progress', check_id=check.id) }}{% else %}{{ url_for('rscm_check_result', check_id=check.id) }}{% endif %}{% else %}{% if check.status == 'running' %}{{ url_for('check_firmware', system_id=check.system_id) }}{% else %}{{ url_for('check_result', check_id=check.id) }}{% endif %}{% endif %}" class="list-group-item list-group-item-action">
                                         <div class="d-flex w-100 justify-content-between">
                                             <div>
-                                                <h6 class="mb-1">{{ check.system_name }}</h6>
-                                                {% if check.system_description and 'Host:' in check.system_description %}
+                                                <h6 class="mb-1">
+                                                    {% if check.check_type == 'rscm' %}
+                                                        <i class="bi bi-hdd-network"></i>
+                                                    {% endif %}
+                                                    {{ check.system_name }}
+                                                </h6>
+                                                {% if check.check_type == 'rscm' and check.location %}
+                                                    <small class="text-muted">{{ check.location }}</small>
+                                                {% elif check.system_description and 'Host:' in check.system_description %}
                                                     {% set host_part = check.system_description.split('Host:')[1].split('|')[0].strip() %}
                                                     <small class="text-muted">{{ host_part }}</small>
                                                 {% endif %}
@@ -406,6 +425,9 @@
                                                     <i class="bi bi-x-circle"></i> Failed
                                                 {% endif %}
                                             </span>
+                                            {% if check.check_type == 'rscm' %}
+                                                <small class="text-info">RSCM Check</small>
+                                            {% endif %}
                                             {% if check.error_message %}
                                                 <small class="text-danger">{{ check.error_message[:50] }}...</small>
                                             {% endif %}
