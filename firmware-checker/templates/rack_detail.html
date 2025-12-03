@@ -125,7 +125,7 @@
                 <h5 class="mb-0"><i class="bi bi-clock-history"></i> RSCM Firmware Check History</h5>
                 {% if rscm_components %}
                 <button class="btn btn-success btn-sm" 
-                        onclick="window.location.href='{{ url_for('racks') }}'; setTimeout(() => checkRSCMFirmware({{ rack.id }}, '{{ rack.name }}', '{{ rscm_components|selectattr('name', 'search', 'upper')|map(attribute='ip_address')|first or '' }}', '{{ rscm_components|selectattr('name', 'search', 'lower')|map(attribute='ip_address')|first or '' }}'), 500)">
+                        onclick="window.location.href='{{ url_for('racks') }}'; setTimeout(() => checkRSCMFirmware({{ rack.id }}, '{{ rack.name }}', '{{ rscm_upper_ip or '' }}', '{{ rscm_lower_ip or '' }}'), 500)">
                     <i class="bi bi-plus"></i> New Check
                 </button>
                 {% endif %}
@@ -210,7 +210,7 @@
                         {% if rscm_components %}
                             <p class="text-muted">Run your first RSCM firmware check to see the results here</p>
                             <button class="btn btn-success"
-                                    onclick="window.location.href='{{ url_for('racks') }}'; setTimeout(() => checkRSCMFirmware({{ rack.id }}, '{{ rack.name }}', '{{ rscm_components|selectattr('name', 'search', 'upper')|map(attribute='ip_address')|first or '' }}', '{{ rscm_components|selectattr('name', 'search', 'lower')|map(attribute='ip_address')|first or '' }}'), 500)">
+                                    onclick="window.location.href='{{ url_for('racks') }}'; setTimeout(() => checkRSCMFirmware({{ rack.id }}, '{{ rack.name }}', '{{ rscm_upper_ip or '' }}', '{{ rscm_lower_ip or '' }}'), 500)">
                                 <i class="bi bi-check-circle"></i> Run First Check
                             </button>
                         {% else %}

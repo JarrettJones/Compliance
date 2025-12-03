@@ -3198,6 +3198,15 @@ def rack_detail(rack_id):
             ORDER BY name
         ''', (rack_id,)).fetchall()
         
+        # Extract upper and lower RSCM IPs for easy access
+        rscm_upper_ip = None
+        rscm_lower_ip = None
+        for rscm in rscm_components:
+            if 'upper' in rscm['name'].lower():
+                rscm_upper_ip = rscm['ip_address']
+            elif 'lower' in rscm['name'].lower():
+                rscm_lower_ip = rscm['ip_address']
+        
         # Get RSCM firmware check history
         checks = conn.execute('''
             SELECT c.*, u.username, u.first_name, u.last_name
@@ -3223,6 +3232,8 @@ def rack_detail(rack_id):
     return render_template('rack_detail.html',
                          rack=rack,
                          rscm_components=rscm_components,
+                         rscm_upper_ip=rscm_upper_ip,
+                         rscm_lower_ip=rscm_lower_ip,
                          checks=checks,
                          active_check=active_check,
                          system_count=system_count)
