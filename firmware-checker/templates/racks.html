@@ -349,51 +349,54 @@ function restoreCollapseStates() {
 // Render tree on page load
 renderRacksTree();
 
-// Set up delete modal (only if it exists - admin users only)
-const deleteModal = document.getElementById('deleteModal');
-if (deleteModal) {
-    deleteModal.addEventListener('show.bs.modal', function (event) {
-        const button = event.relatedTarget;
-        const rackId = button.getAttribute('data-rack-id');
-        const rackName = button.getAttribute('data-rack-name');
-        const systemCount = parseInt(button.getAttribute('data-rack-systems') || '0');
-        
-        document.getElementById('deleteRackName').textContent = rackName || 'Unknown Rack';
-        document.getElementById('deleteForm').action = `/racks/${rackId}/delete`;
-        
-        // Show system count warning
-        const systemCountEl = document.getElementById('deleteSystemCount');
-        if (systemCount > 0) {
-            systemCountEl.textContent = `This will also delete ${systemCount} system(s) in this rack!`;
-            systemCountEl.style.display = 'block';
-        } else {
-            systemCountEl.style.display = 'none';
-        }
-        
-        // Reset confirmation input
-        document.getElementById('confirmationInput').value = '';
-        document.getElementById('confirmDeleteBtn').disabled = true;
-    });
-
-    // Enable delete button only when user types DELETE
-    const confirmationInput = document.getElementById('confirmationInput');
-    if (confirmationInput) {
-        confirmationInput.addEventListener('input', function() {
-            const enteredText = this.value.trim().toUpperCase();
-            const deleteBtn = document.getElementById('confirmDeleteBtn');
+// Set up delete modal after DOM is fully loaded
+document.addEventListener('DOMContentLoaded', function() {
+    // Set up delete modal (only if it exists - admin users only)
+    const deleteModal = document.getElementById('deleteModal');
+    if (deleteModal) {
+        deleteModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const rackId = button.getAttribute('data-rack-id');
+            const rackName = button.getAttribute('data-rack-name');
+            const systemCount = parseInt(button.getAttribute('data-rack-systems') || '0');
             
-            deleteBtn.disabled = enteredText !== 'DELETE';
+            document.getElementById('deleteRackName').textContent = rackName || 'Unknown Rack';
+            document.getElementById('deleteForm').action = `/racks/${rackId}/delete`;
+            
+            // Show system count warning
+            const systemCountEl = document.getElementById('deleteSystemCount');
+            if (systemCount > 0) {
+                systemCountEl.textContent = `This will also delete ${systemCount} system(s) in this rack!`;
+                systemCountEl.style.display = 'block';
+            } else {
+                systemCountEl.style.display = 'none';
+            }
+            
+            // Reset confirmation input
+            document.getElementById('confirmationInput').value = '';
+            document.getElementById('confirmDeleteBtn').disabled = true;
         });
-    }
 
-    // Handle delete button click
-    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
-    if (confirmDeleteBtn) {
-        confirmDeleteBtn.addEventListener('click', function() {
-            document.getElementById('deleteForm').submit();
-        });
+        // Enable delete button only when user types DELETE
+        const confirmationInput = document.getElementById('confirmationInput');
+        if (confirmationInput) {
+            confirmationInput.addEventListener('input', function() {
+                const enteredText = this.value.trim().toUpperCase();
+                const deleteBtn = document.getElementById('confirmDeleteBtn');
+                
+                deleteBtn.disabled = enteredText !== 'DELETE';
+            });
+        }
+
+        // Handle delete button click
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        if (confirmDeleteBtn) {
+            confirmDeleteBtn.addEventListener('click', function() {
+                document.getElementById('deleteForm').submit();
+            });
+        }
     }
-}
+});
 
 // RSCM Firmware Check Function
 function checkRSCMFirmware(rackId, rackName, rscmUpper, rscmLower) {
