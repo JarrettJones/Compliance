@@ -154,10 +154,9 @@
                                     </td>
                                     <td>
                                         {% if check.firmware_data and check.firmware_data != '{}' %}
-                                            {% set fw_data = check.firmware_data|from_json %}
-                                            {% if fw_data and fw_data.rscm_checks %}
+                                            {% if check.firmware_data_parsed and check.firmware_data_parsed.rscm_checks %}
                                                 <span class="badge bg-info">
-                                                    {{ fw_data.rscm_checks.keys()|list|length }} RSCM(s)
+                                                    {{ check.firmware_data_parsed.rscm_checks.keys()|list|length }} RSCM(s)
                                                 </span>
                                             {% else %}
                                                 <span class="text-muted">-</span>

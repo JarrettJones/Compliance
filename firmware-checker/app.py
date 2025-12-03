@@ -3208,13 +3208,26 @@ def rack_detail(rack_id):
                 rscm_lower_ip = rscm['ip_address']
         
         # Get RSCM firmware check history
-        checks = conn.execute('''
+        checks_raw = conn.execute('''
             SELECT c.*, u.username, u.first_name, u.last_name
             FROM rscm_firmware_checks c
             LEFT JOIN users u ON c.user_id = u.id
             WHERE c.rack_id = ?
             ORDER BY c.check_date DESC
         ''', (rack_id,)).fetchall()
+        
+        # Parse firmware_data JSON for each check
+        checks = []
+        for check in checks_raw:
+            check_dict = dict(check)
+            if check_dict['firmware_data']:
+                try:
+                    check_dict['firmware_data_parsed'] = json.loads(check_dict['firmware_data'])
+                except:
+                    check_dict['firmware_data_parsed'] = None
+            else:
+                check_dict['firmware_data_parsed'] = None
+            checks.append(check_dict)
         
         # Check for active/running RSCM firmware check
         active_check = conn.execute('''
