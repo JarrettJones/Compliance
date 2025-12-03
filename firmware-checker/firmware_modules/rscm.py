@@ -33,6 +33,7 @@ class RSCMChecker:
         
         # RSCM Redfish endpoint
         self.manager_endpoint = '/redfish/v1/Managers/RackManager'
+        self.cpld_endpoint = '/redfish/v1/Chassis/RackManager/CPLD'
     
     def check_firmware(self, rscm_ip, rscm_port=8080):
         """Check RSCM firmware version using Redfish API
@@ -122,6 +123,34 @@ class RSCMChecker:
                         'version': fw_version,
                         'status': 'success' if fw_version != 'Unknown' else 'not_found'
                     }
+            
+            # Get CPLD version
+            print(f"[RSCM] Fetching CPLD information...")
+            cpld_data = self._get_redfish_data(rscm_ip, rscm_port, self.cpld_endpoint)
+            
+            if cpld_data:
+                cpld_version = cpld_data.get('Version', 'Unknown')
+                cpld_usercode = cpld_data.get('Usercode', 'Unknown')
+                
+                results['firmware_versions']['CPLD Version'] = {
+                    'version': cpld_version,
+                    'status': 'success' if cpld_version != 'Unknown' else 'not_found'
+                }
+                
+                # Optionally include usercode as additional info
+                if cpld_usercode != 'Unknown':
+                    results['firmware_versions']['CPLD Usercode'] = {
+                        'version': cpld_usercode,
+                        'status': 'success'
+                    }
+                
+                print(f"[RSCM] CPLD Version: {cpld_version}, Usercode: {cpld_usercode}")
+            else:
+                print(f"[RSCM] Warning: Could not retrieve CPLD data")
+                results['firmware_versions']['CPLD Version'] = {
+                    'version': 'NOT_AVAILABLE',
+                    'status': 'not_found'
+                }
             
             print(f"[RSCM] Firmware check completed successfully")
             print(f"[RSCM] Manager Type: {manager_type}, Model: {model}, Firmware: {firmware_version}")
