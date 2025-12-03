@@ -1,0 +1,214 @@
+"""
+RSCM Firmware Checker Module
+Handles checking firmware versions for RSCM (Rack Secure Control Module) using Redfish API
+"""
+
+import logging
+import requests
+import json
+from datetime import datetime
+from requests.auth import HTTPBasicAuth
+from urllib3.exceptions import InsecureRequestWarning
+import urllib3
+
+# Disable SSL warnings for self-signed certificates
+urllib3.disable_warnings(InsecureRequestWarning)
+
+logger = logging.getLogger(__name__)
+
+class RSCMChecker:
+    """Checker for RSCM firmware using Redfish API"""
+    
+    def __init__(self, username='root', password='', timeout=30):
+        """Initialize RSCM checker
+        
+        Args:
+            username: RSCM username (default: root)
+            password: RSCM password
+            timeout: Request timeout in seconds
+        """
+        self.username = username
+        self.password = password
+        self.timeout = timeout
+        
+        # RSCM Redfish endpoint
+        self.manager_endpoint = '/redfish/v1/Managers/RackManager'
+    
+    def check_firmware(self, rscm_ip, rscm_port=8080):
+        """Check RSCM firmware version using Redfish API
+        
+        Args:
+            rscm_ip: RSCM IP address (e.g., 172.29.131.23)
+            rscm_port: RSCM HTTPS port (default: 8080)
+            
+        Returns:
+            dict: Results containing firmware version information
+        """
+        logger.info(f"Checking RSCM firmware for {rscm_ip}:{rscm_port}")
+        print(f"[RSCM] Starting RSCM firmware check for {rscm_ip}:{rscm_port}")
+        
+        results = {
+            'category': 'RSCM',
+            'timestamp': datetime.now().isoformat(),
+            'rscm_ip': rscm_ip,
+            'rscm_port': rscm_port,
+            'status': 'completed',
+            'firmware_versions': {},
+            'errors': []
+        }
+        
+        try:
+            # Test connection first
+            print(f"[RSCM] Testing Redfish connection...")
+            connection_test = self.test_connection(rscm_ip, rscm_port)
+            if connection_test['status'] != 'success':
+                print(f"[RSCM] Connection failed: {connection_test['message']}")
+                results['status'] = 'error'
+                results['errors'].append(connection_test['message'])
+                return results
+            
+            print(f"[RSCM] Connection successful")
+            
+            # Get RSCM manager information
+            print(f"[RSCM] Fetching RSCM manager information...")
+            manager_data = self._get_redfish_data(rscm_ip, rscm_port, self.manager_endpoint)
+            
+            if not manager_data:
+                error_msg = "Failed to retrieve RSCM manager data"
+                print(f"[RSCM] {error_msg}")
+                results['status'] = 'error'
+                results['errors'].append(error_msg)
+                return results
+            
+            print(f"[RSCM] Manager information retrieved successfully")
+            
+            # Extract firmware version information
+            manager_type = manager_data.get('ManagerType', 'Unknown')
+            model = manager_data.get('Model', 'Unknown')
+            firmware_version = manager_data.get('FirmwareVersion', 'Unknown')
+            
+            results['firmware_versions'] = {
+                'Manager Type': {
+                    'version': manager_type,
+                    'status': 'success' if manager_type != 'Unknown' else 'not_found'
+                },
+                'Model': {
+                    'version': model,
+                    'status': 'success' if model != 'Unknown' else 'not_found'
+                },
+                'Firmware Version': {
+                    'version': firmware_version,
+                    'status': 'success' if firmware_version != 'Unknown' else 'not_found'
+                }
+            }
+            
+            # Optional: Extract additional component versions if available
+            oem_data = manager_data.get('Oem', {}).get('Microsoft', {})
+            if 'Components' in oem_data:
+                for component in oem_data['Components']:
+                    comp_name = component.get('Name', 'Unknown')
+                    comp_version = component.get('Version', 'Unknown')
+                    results['firmware_versions'][f'Component: {comp_name}'] = {
+                        'version': comp_version,
+                        'status': 'success' if comp_version != 'Unknown' else 'not_found'
+                    }
+            
+            # Optional: Extract FW update list if available
+            if 'FWUpdateList' in oem_data:
+                for fw_update in oem_data['FWUpdateList']:
+                    fw_name = fw_update.get('Name', 'Unknown')
+                    fw_version = fw_update.get('Version', 'Unknown')
+                    results['firmware_versions'][f'FW Bank: {fw_name}'] = {
+                        'version': fw_version,
+                        'status': 'success' if fw_version != 'Unknown' else 'not_found'
+                    }
+            
+            print(f"[RSCM] Firmware check completed successfully")
+            print(f"[RSCM] Manager Type: {manager_type}, Model: {model}, Firmware: {firmware_version}")
+            
+        except Exception as e:
+            error_msg = f"Unexpected error during RSCM firmware check: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            print(f"[RSCM] {error_msg}")
+            results['status'] = 'error'
+            results['errors'].append(error_msg)
+        
+        return results
+    
+    def test_connection(self, rscm_ip, rscm_port=8080):
+        """Test RSCM Redfish connection
+        
+        Args:
+            rscm_ip: RSCM IP address
+            rscm_port: RSCM HTTPS port
+            
+        Returns:
+            dict: Connection test result
+        """
+        try:
+            url = f"https://{rscm_ip}:{rscm_port}{self.manager_endpoint}"
+            response = requests.get(
+                url,
+                auth=HTTPBasicAuth(self.username, self.password),
+                verify=False,
+                timeout=self.timeout
+            )
+            
+            if response.status_code == 200:
+                return {
+                    'status': 'success',
+                    'message': 'Successfully connected to RSCM Redfish API'
+                }
+            else:
+                return {
+                    'status': 'error',
+                    'message': f'HTTP {response.status_code}: {response.reason}'
+                }
+                
+        except requests.exceptions.Timeout:
+            return {
+                'status': 'error',
+                'message': f'Connection timeout after {self.timeout} seconds'
+            }
+        except requests.exceptions.ConnectionError as e:
+            return {
+                'status': 'error',
+                'message': f'Connection error: {str(e)}'
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Unexpected error: {str(e)}'
+            }
+    
+    def _get_redfish_data(self, rscm_ip, rscm_port, endpoint):
+        """Get data from RSCM Redfish API endpoint
+        
+        Args:
+            rscm_ip: RSCM IP address
+            rscm_port: RSCM HTTPS port
+            endpoint: Redfish API endpoint path
+            
+        Returns:
+            dict: JSON response data or None on error
+        """
+        try:
+            url = f"https://{rscm_ip}:{rscm_port}{endpoint}"
+            logger.debug(f"Fetching RSCM data from: {url}")
+            
+            response = requests.get(
+                url,
+                auth=HTTPBasicAuth(self.username, self.password),
+                verify=False,
+                timeout=self.timeout
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logger.warning(f"Failed to fetch {endpoint}: HTTP {response.status_code}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error fetching RSCM data from {endpoint}: {str(e)}")
+            return None

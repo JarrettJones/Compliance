@@ -27,6 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 from firmware_modules.dc_scm import DCScmChecker
 from firmware_modules.ovl2 import OVL2Checker  
 from firmware_modules.other_platform import OtherPlatformChecker
+from firmware_modules.rscm import RSCMChecker
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -738,6 +739,7 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
                                    os_username=os_username, os_password=os_password)
         other_platform_checker = OtherPlatformChecker(username=username, password=password, 
                                                     os_username=os_username, os_password=os_password)
+        rscm_checker = RSCMChecker(username=username, password=password)
         
         # Calculate total firmware types to check
         total_fw_types = 0
@@ -745,7 +747,14 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
         ovl2_types_to_check = selected_firmware.get('ovl2', ovl2_checker.firmware_types) if selected_firmware else ovl2_checker.firmware_types
         other_platform_types_to_check = selected_firmware.get('other_platform', other_platform_checker.firmware_types) if selected_firmware else other_platform_checker.firmware_types
         
+        # RSCM check is always performed if not explicitly excluded
+        rscm_check_enabled = True
+        if selected_firmware and 'rscm' in selected_firmware:
+            rscm_check_enabled = len(selected_firmware.get('rscm', [])) > 0
+        
         total_fw_types = len(dc_scm_types_to_check) + len(ovl2_types_to_check) + len(other_platform_types_to_check)
+        if rscm_check_enabled:
+            total_fw_types += 1  # RSCM is checked as a single unit
         
         # Initialize results structure
         results = {
@@ -768,6 +777,7 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
             'dc_scm': {'firmware_versions': {}},
             'ovl2': {'firmware_versions': {}},
             'other_platform': {'firmware_versions': {}},
+            'rscm': {'firmware_versions': {}},
             'progress': {
                 'total': total_fw_types,
                 'completed': 0,
@@ -972,6 +982,57 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
         results['other_platform']['status'] = 'success' 
         results['other_platform']['timestamp'] = datetime.now().isoformat()
         
+        # Check RSCM firmware if enabled
+        if rscm_check_enabled:
+            with active_checks_lock:
+                active_checks[check_id]['current_category'] = 'RSCM'
+            
+            print(f"[THREAD {threading.current_thread().ident}] Checking RSCM firmware...")
+            
+            # Update progress
+            results['progress']['current_category'] = 'RSCM'
+            results['progress']['current_firmware'] = 'RSCM Manager'
+            results['progress']['percentage'] = int((results['progress']['completed'] / total_fw_types) * 100)
+            
+            # Perform RSCM firmware check
+            rscm_results = rscm_checker.check_firmware(system_info['rscm_ip'], system_info['rscm_port'])
+            
+            if rscm_results and 'firmware_versions' in rscm_results:
+                results['rscm']['firmware_versions'] = rscm_results['firmware_versions']
+                results['rscm']['category'] = 'RSCM'
+                results['rscm']['status'] = rscm_results.get('status', 'success')
+                results['rscm']['timestamp'] = rscm_results.get('timestamp', datetime.now().isoformat())
+                
+                if rscm_results.get('errors'):
+                    results['rscm']['errors'] = rscm_results['errors']
+                
+                print(f"[THREAD {threading.current_thread().ident}] RSCM firmware check completed - {len(rscm_results['firmware_versions'])} items retrieved")
+            else:
+                # RSCM check failed
+                results['rscm']['firmware_versions'] = {}
+                results['rscm']['category'] = 'RSCM'
+                results['rscm']['status'] = 'error'
+                results['rscm']['timestamp'] = datetime.now().isoformat()
+                results['rscm']['errors'] = ['RSCM firmware check returned no results']
+                print(f"[THREAD {threading.current_thread().ident}] RSCM firmware check failed")
+            
+            results['progress']['completed'] += 1
+            results['progress']['percentage'] = int((results['progress']['completed'] / total_fw_types) * 100)
+            
+            # Update progress in database
+            with get_db_connection() as conn:
+                conn.execute('''
+                    UPDATE firmware_checks 
+                    SET firmware_data = ?
+                    WHERE id = ?
+                ''', (json.dumps(results), check_id))
+                conn.commit()
+        else:
+            print(f"[THREAD {threading.current_thread().ident}] RSCM firmware check skipped (not selected)")
+            results['rscm']['category'] = 'RSCM'
+            results['rscm']['status'] = 'skipped'
+            results['rscm']['timestamp'] = datetime.now().isoformat()
+        
         # Mark progress as complete
         results['progress']['completed'] = total_fw_types
         results['progress']['percentage'] = 100
@@ -1031,7 +1092,7 @@ def compare_firmware_with_recipe(firmware_data, recipe_versions):
     }
     
     # Iterate through each category in firmware data
-    for category_key in ['dc_scm', 'other_platform', 'ovl2']:
+    for category_key in ['dc_scm', 'other_platform', 'ovl2', 'rscm']:
         if category_key not in firmware_data:
             continue
             
