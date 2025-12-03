@@ -382,70 +382,140 @@
                         <small class="text-muted">Status indicates check completion, not firmware health</small>
                     </div>
                     <div class="card-body recent-checks d-flex flex-column">
-                        {% if stats.recent_checks %}
-                            <div class="list-group list-group-flush flex-grow-1">
-                                {% for check in stats.recent_checks %}
-                                    <a href="{% if check.check_type == 'rscm' %}{% if check.status == 'running' %}{{ url_for('rscm_check_progress', check_id=check.id) }}{% else %}{{ url_for('rscm_check_result', check_id=check.id) }}{% endif %}{% else %}{% if check.status == 'running' %}{{ url_for('check_firmware', system_id=check.system_id) }}{% else %}{{ url_for('check_result', check_id=check.id) }}{% endif %}{% endif %}" class="list-group-item list-group-item-action">
-                                        <div class="d-flex w-100 justify-content-between">
-                                            <div>
-                                                <h6 class="mb-1">
-                                                    {% if check.check_type == 'rscm' %}
-                                                        <i class="bi bi-hdd-network"></i>
+                        <!-- Nav tabs -->
+                        <ul class="nav nav-tabs mb-3" id="recentChecksTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="servers-tab" data-bs-toggle="tab" data-bs-target="#servers-checks" type="button" role="tab" aria-controls="servers-checks" aria-selected="true">
+                                    <i class="bi bi-server"></i> Servers
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="racks-tab" data-bs-toggle="tab" data-bs-target="#racks-checks" type="button" role="tab" aria-controls="racks-checks" aria-selected="false">
+                                    <i class="bi bi-hdd-network"></i> Racks
+                                </button>
+                            </li>
+                        </ul>
+
+                        <!-- Tab content -->
+                        <div class="tab-content flex-grow-1" id="recentChecksTabContent">
+                            <!-- Servers Tab -->
+                            <div class="tab-pane fade show active" id="servers-checks" role="tabpanel" aria-labelledby="servers-tab">
+                                {% set server_checks = stats.recent_checks | selectattr('check_type', 'equalto', 'system') | list %}
+                                {% if server_checks %}
+                                    <div class="list-group list-group-flush">
+                                        {% for check in server_checks[:5] %}
+                                            <a href="{% if check.status == 'running' %}{{ url_for('check_firmware', system_id=check.system_id) }}{% else %}{{ url_for('check_result', check_id=check.id) }}{% endif %}" class="list-group-item list-group-item-action">
+                                                <div class="d-flex w-100 justify-content-between">
+                                                    <div>
+                                                        <h6 class="mb-1">{{ check.system_name }}</h6>
+                                                        {% if check.system_description and 'Host:' in check.system_description %}
+                                                            {% set host_part = check.system_description.split('Host:')[1].split('|')[0].strip() %}
+                                                            <small class="text-muted">{{ host_part }}</small>
+                                                        {% endif %}
+                                                    </div>
+                                                    <small class="text-muted">{{ check.check_date[:19] }}</small>
+                                                </div>
+                                                {% if check.checked_by_username %}
+                                                <div class="mb-1">
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-person"></i> 
+                                                        {% if check.checked_by_first_name and check.checked_by_last_name %}
+                                                            {{ check.checked_by_first_name }} {{ check.checked_by_last_name }}
+                                                        {% else %}
+                                                            {{ check.checked_by_username }}
+                                                        {% endif %}
+                                                    </small>
+                                                </div>
+                                                {% endif %}
+                                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                                    <span class="badge bg-{{ 'warning' if check.status == 'running' else ('success' if check.status == 'success' else 'danger') }}">
+                                                        {% if check.status == 'running' %}
+                                                            <i class="bi bi-clock"></i> Running
+                                                        {% elif check.status == 'success' %}
+                                                            <i class="bi bi-check-circle"></i> Completed
+                                                        {% else %}
+                                                            <i class="bi bi-x-circle"></i> Failed
+                                                        {% endif %}
+                                                    </span>
+                                                    {% if check.error_message %}
+                                                        <small class="text-danger">{{ check.error_message[:50] }}...</small>
                                                     {% endif %}
-                                                    {{ check.system_name }}
-                                                </h6>
-                                                {% if check.check_type == 'rscm' and check.location %}
-                                                    <small class="text-muted">{{ check.location }}</small>
-                                                {% elif check.system_description and 'Host:' in check.system_description %}
-                                                    {% set host_part = check.system_description.split('Host:')[1].split('|')[0].strip() %}
-                                                    <small class="text-muted">{{ host_part }}</small>
-                                                {% endif %}
-                                            </div>
-                                            <small class="text-muted">{{ check.check_date[:19] }}</small>
-                                        </div>
-                                        {% if check.checked_by_username %}
-                                        <div class="mb-1">
-                                            <small class="text-muted">
-                                                <i class="bi bi-person"></i> 
-                                                {% if check.checked_by_first_name and check.checked_by_last_name %}
-                                                    {{ check.checked_by_first_name }} {{ check.checked_by_last_name }}
-                                                {% else %}
-                                                    {{ check.checked_by_username }}
-                                                {% endif %}
-                                            </small>
-                                        </div>
-                                        {% endif %}
-                                        <div class="d-flex justify-content-between align-items-center mt-2">
-                                            <span class="badge bg-{{ 'warning' if check.status == 'running' else ('success' if check.status == 'success' else 'danger') }}">
-                                                {% if check.status == 'running' %}
-                                                    <i class="bi bi-clock"></i> Running
-                                                {% elif check.status == 'success' %}
-                                                    <i class="bi bi-check-circle"></i> Completed
-                                                {% else %}
-                                                    <i class="bi bi-x-circle"></i> Failed
-                                                {% endif %}
-                                            </span>
-                                            {% if check.check_type == 'rscm' %}
-                                                <small class="text-info">RSCM Check</small>
-                                            {% endif %}
-                                            {% if check.error_message %}
-                                                <small class="text-danger">{{ check.error_message[:50] }}...</small>
-                                            {% endif %}
-                                        </div>
-                                    </a>
-                                {% endfor %}
+                                                </div>
+                                            </a>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="text-center mt-3 mt-auto">
+                                        <small class="text-muted">
+                                            <i class="bi bi-info-circle"></i> Click any check above to view detailed results
+                                        </small>
+                                    </div>
+                                {% else %}
+                                    <div class="text-center text-muted py-4">
+                                        <i class="bi bi-server fs-1"></i>
+                                        <p class="mt-2">No server checks yet</p>
+                                        <a href="{{ url_for('systems') }}" class="btn btn-primary btn-sm">Check a Server</a>
+                                    </div>
+                                {% endif %}
                             </div>
-                            <div class="text-center mt-3 mt-auto">
-                                <small class="text-muted">
-                                    <i class="bi bi-info-circle"></i> Click any check above to view detailed results
-                                </small>
+
+                            <!-- Racks Tab -->
+                            <div class="tab-pane fade" id="racks-checks" role="tabpanel" aria-labelledby="racks-tab">
+                                {% set rscm_checks = stats.recent_checks | selectattr('check_type', 'equalto', 'rscm') | list %}
+                                {% if rscm_checks %}
+                                    <div class="list-group list-group-flush">
+                                        {% for check in rscm_checks[:5] %}
+                                            <a href="{% if check.status == 'running' %}{{ url_for('rscm_check_progress', check_id=check.id) }}{% else %}{{ url_for('rscm_check_result', check_id=check.id) }}{% endif %}" class="list-group-item list-group-item-action">
+                                                <div class="d-flex w-100 justify-content-between">
+                                                    <div>
+                                                        <h6 class="mb-1">
+                                                            <i class="bi bi-hdd-network"></i> {{ check.system_name }}
+                                                        </h6>
+                                                        {% if check.location %}
+                                                            <small class="text-muted">{{ check.location }}</small>
+                                                        {% endif %}
+                                                    </div>
+                                                    <small class="text-muted">{{ check.check_date[:19] }}</small>
+                                                </div>
+                                                {% if check.checked_by_username %}
+                                                <div class="mb-1">
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-person"></i> 
+                                                        {% if check.checked_by_first_name and check.checked_by_last_name %}
+                                                            {{ check.checked_by_first_name }} {{ check.checked_by_last_name }}
+                                                        {% else %}
+                                                            {{ check.checked_by_username }}
+                                                        {% endif %}
+                                                    </small>
+                                                </div>
+                                                {% endif %}
+                                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                                    <span class="badge bg-{{ 'warning' if check.status == 'running' else ('success' if check.status == 'success' else 'danger') }}">
+                                                        {% if check.status == 'running' %}
+                                                            <i class="bi bi-clock"></i> Running
+                                                        {% elif check.status == 'success' %}
+                                                            <i class="bi bi-check-circle"></i> Completed
+                                                        {% else %}
+                                                            <i class="bi bi-x-circle"></i> Failed
+                                                        {% endif %}
+                                                    </span>
+                                                </div>
+                                            </a>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="text-center mt-3 mt-auto">
+                                        <small class="text-muted">
+                                            <i class="bi bi-info-circle"></i> Click any check above to view detailed results
+                                        </small>
+                                    </div>
+                                {% else %}
+                                    <div class="text-center text-muted py-4">
+                                        <i class="bi bi-hdd-network fs-1"></i>
+                                        <p class="mt-2">No RSCM checks yet</p>
+                                        <a href="{{ url_for('racks') }}" class="btn btn-primary btn-sm">Check a Rack</a>
+                                    </div>
+                                {% endif %}
                             </div>
-                        {% else %}
-                            <div class="text-center text-muted py-4">
-                                <i class="bi bi-clock-history fs-1"></i>
-                                <p class="mt-2">No firmware checks performed yet</p>
-                            </div>
-                        {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
