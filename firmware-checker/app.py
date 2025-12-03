@@ -3426,7 +3426,7 @@ def edit_rack(rack_id):
 @admin_required
 def delete_rack(rack_id):
     """Delete a rack and all its systems (Admin only)"""
-    confirmation_name = request.form.get('confirmation_name', '').strip()
+    confirmation_text = request.form.get('confirmation_text', '').strip().upper()
     
     with get_db_connection() as conn:
         rack = conn.execute('SELECT name FROM racks WHERE id = ?', (rack_id,)).fetchone()
@@ -3437,9 +3437,9 @@ def delete_rack(rack_id):
         
         rack_name = rack['name']
         
-        # Verify user typed the rack name correctly
-        if confirmation_name != rack_name:
-            flash('Rack name confirmation does not match. Deletion cancelled.', 'error')
+        # Verify user typed DELETE to confirm
+        if confirmation_text != 'DELETE':
+            flash('You must type DELETE to confirm. Deletion cancelled.', 'error')
             return redirect(url_for('racks'))
         
         # Get system count for the flash message
@@ -3683,6 +3683,67 @@ def api_racks_hierarchy():
             return jsonify(hierarchy)
     except Exception as e:
         logger.error(f"Error in api_racks_hierarchy: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/racks/location-options')
+@login_required
+def api_rack_location_options():
+    """API endpoint to get distinct location/building/room options from existing racks"""
+    try:
+        with get_db_connection() as conn:
+            # Check if room column exists
+            cursor = conn.execute("PRAGMA table_info(racks)")
+            columns = [col[1] for col in cursor.fetchall()]
+            has_room_column = 'room' in columns
+            
+            # Get distinct locations with rooms
+            if has_room_column:
+                racks = conn.execute('''
+                    SELECT DISTINCT location, room 
+                    FROM racks 
+                    WHERE location IS NOT NULL 
+                    ORDER BY location, room
+                ''').fetchall()
+            else:
+                racks = conn.execute('''
+                    SELECT DISTINCT location 
+                    FROM racks 
+                    WHERE location IS NOT NULL 
+                    ORDER BY location
+                ''').fetchall()
+            
+            # Build structured data: location -> building -> rooms
+            location_data = {}
+            
+            for rack in racks:
+                location_str = rack['location']
+                room_str = rack['room'] if has_room_column and rack['room'] else None
+                
+                # Parse location (e.g., "Redmond - Building 50")
+                parts = location_str.split(' - ')
+                city = parts[0].strip() if parts else 'Unknown'
+                building = parts[1].strip() if len(parts) > 1 else 'Unknown Building'
+                
+                # Initialize nested structure
+                if city not in location_data:
+                    location_data[city] = {}
+                if building not in location_data[city]:
+                    location_data[city][building] = set()
+                
+                # Add room if it exists
+                if room_str:
+                    location_data[city][building].add(room_str)
+            
+            # Convert sets to sorted lists
+            result = {}
+            for city in sorted(location_data.keys()):
+                result[city] = {}
+                for building in sorted(location_data[city].keys()):
+                    result[city][building] = sorted(list(location_data[city][building]))
+            
+            return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error in api_rack_location_options: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/racks/<int:rack_id>/systems')

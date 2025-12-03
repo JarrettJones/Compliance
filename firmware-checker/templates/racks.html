@@ -523,11 +523,198 @@ function toggleRSCMCredentials() {
 }
 
 // Open Add Rack Modal
-function openAddRackModal() {
+let locationOptionsData = {};
+
+async function openAddRackModal() {
     const modal = new bootstrap.Modal(document.getElementById('addRackModal'));
     document.getElementById('addRackForm').reset();
     toggleRSCMFields(); // Set initial state
+    
+    // Load location options from API
+    try {
+        const response = await fetch('/api/racks/location-options');
+        locationOptionsData = await response.json();
+        
+        // Populate city dropdown
+        const citySelect = document.getElementById('citySelect');
+        citySelect.innerHTML = '<option value="">Select existing city...</option>';
+        citySelect.innerHTML += '<option value="__NEW__">+ Add New City</option>';
+        
+        Object.keys(locationOptionsData).sort().forEach(city => {
+            const option = document.createElement('option');
+            option.value = city;
+            option.textContent = city;
+            citySelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading location options:', error);
+    }
+    
     modal.show();
+}
+
+// Toggle city input field
+function toggleCityInput() {
+    const citySelect = document.getElementById('citySelect');
+    const cityInput = document.getElementById('cityInput');
+    const buildingSelect = document.getElementById('buildingSelect');
+    const addBuildingBtn = document.getElementById('addBuildingBtn');
+    
+    if (cityInput.style.display === 'none') {
+        citySelect.value = '__NEW__';
+        cityInput.style.display = 'block';
+        cityInput.focus();
+        buildingSelect.disabled = false;
+        addBuildingBtn.disabled = false;
+        buildingSelect.innerHTML = '<option value="">Select or add building...</option><option value="__NEW__">+ Add New Building</option>';
+    } else {
+        cityInput.style.display = 'none';
+        cityInput.value = '';
+        citySelect.value = '';
+        buildingSelect.disabled = true;
+        buildingSelect.innerHTML = '<option value="">Select city first...</option>';
+    }
+}
+
+// Toggle building input field
+function toggleBuildingInput() {
+    const buildingSelect = document.getElementById('buildingSelect');
+    const buildingInput = document.getElementById('buildingInput');
+    const roomSelect = document.getElementById('roomSelect');
+    const addRoomBtn = document.getElementById('addRoomBtn');
+    
+    if (buildingInput.style.display === 'none') {
+        buildingSelect.value = '__NEW__';
+        buildingInput.style.display = 'block';
+        buildingInput.focus();
+        roomSelect.disabled = false;
+        addRoomBtn.disabled = false;
+        roomSelect.innerHTML = '<option value="">Select or add room...</option><option value="__NEW__">+ Add New Room</option>';
+    } else {
+        buildingInput.style.display = 'none';
+        buildingInput.value = '';
+        buildingSelect.value = '';
+        roomSelect.disabled = true;
+        roomSelect.innerHTML = '<option value="">Select building first...</option>';
+    }
+}
+
+// Toggle room input field
+function toggleRoomInput() {
+    const roomSelect = document.getElementById('roomSelect');
+    const roomInput = document.getElementById('roomInput');
+    
+    if (roomInput.style.display === 'none') {
+        roomSelect.value = '__NEW__';
+        roomInput.style.display = 'block';
+        roomInput.focus();
+    } else {
+        roomInput.style.display = 'none';
+        roomInput.value = '';
+        roomSelect.value = '';
+    }
+}
+
+// Update building options when city changes
+function updateBuildingOptions() {
+    const citySelect = document.getElementById('citySelect');
+    const cityInput = document.getElementById('cityInput');
+    const buildingSelect = document.getElementById('buildingSelect');
+    const buildingInput = document.getElementById('buildingInput');
+    const addBuildingBtn = document.getElementById('addBuildingBtn');
+    const roomSelect = document.getElementById('roomSelect');
+    const addRoomBtn = document.getElementById('addRoomBtn');
+    
+    const selectedCity = citySelect.value;
+    
+    // Hide custom input if switching away from new
+    if (selectedCity !== '__NEW__') {
+        cityInput.style.display = 'none';
+        cityInput.value = '';
+    }
+    
+    buildingInput.style.display = 'none';
+    buildingInput.value = '';
+    
+    if (selectedCity && selectedCity !== '__NEW__') {
+        buildingSelect.disabled = false;
+        addBuildingBtn.disabled = false;
+        buildingSelect.innerHTML = '<option value="">Select existing building...</option>';
+        buildingSelect.innerHTML += '<option value="__NEW__">+ Add New Building</option>';
+        
+        const buildings = locationOptionsData[selectedCity] || {};
+        Object.keys(buildings).sort().forEach(building => {
+            const option = document.createElement('option');
+            option.value = building;
+            option.textContent = building;
+            buildingSelect.appendChild(option);
+        });
+    } else if (selectedCity === '__NEW__') {
+        cityInput.style.display = 'block';
+        cityInput.focus();
+        buildingSelect.disabled = false;
+        addBuildingBtn.disabled = false;
+        buildingSelect.innerHTML = '<option value="">Select or add building...</option><option value="__NEW__">+ Add New Building</option>';
+    } else {
+        buildingSelect.disabled = true;
+        addBuildingBtn.disabled = true;
+        buildingSelect.innerHTML = '<option value="">Select city first...</option>';
+    }
+    
+    // Reset room
+    roomSelect.disabled = true;
+    addRoomBtn.disabled = true;
+    roomSelect.innerHTML = '<option value="">Select building first...</option>';
+}
+
+// Update room options when building changes
+function updateRoomOptions() {
+    const citySelect = document.getElementById('citySelect');
+    const cityInput = document.getElementById('cityInput');
+    const buildingSelect = document.getElementById('buildingSelect');
+    const buildingInput = document.getElementById('buildingInput');
+    const roomSelect = document.getElementById('roomSelect');
+    const roomInput = document.getElementById('roomInput');
+    const addRoomBtn = document.getElementById('addRoomBtn');
+    
+    const selectedCity = citySelect.value === '__NEW__' ? cityInput.value : citySelect.value;
+    const selectedBuilding = buildingSelect.value;
+    
+    // Hide custom input if switching away from new
+    if (selectedBuilding !== '__NEW__') {
+        buildingInput.style.display = 'none';
+        buildingInput.value = '';
+    }
+    
+    roomInput.style.display = 'none';
+    roomInput.value = '';
+    
+    if (selectedBuilding && selectedBuilding !== '__NEW__') {
+        roomSelect.disabled = false;
+        addRoomBtn.disabled = false;
+        roomSelect.innerHTML = '<option value="">Select existing room...</option>';
+        roomSelect.innerHTML += '<option value="__NEW__">+ Add New Room</option>';
+        
+        if (selectedCity && locationOptionsData[selectedCity] && locationOptionsData[selectedCity][selectedBuilding]) {
+            const rooms = locationOptionsData[selectedCity][selectedBuilding];
+            rooms.forEach(room => {
+                const option = document.createElement('option');
+                option.value = room;
+                option.textContent = room;
+                roomSelect.appendChild(option);
+            });
+        }
+    } else if (selectedBuilding === '__NEW__') {
+        buildingInput.style.display = 'block';
+        buildingInput.focus();
+        roomSelect.disabled = false;
+        addRoomBtn.disabled = false;
+        roomSelect.innerHTML = '<option value="">Select or add room...</option><option value="__NEW__">+ Add New Room</option>';
+    } else {
+        roomSelect.disabled = true;
+        addRoomBtn.disabled = true;
+        roomSelect.innerHTML = '<option value="">Select building first...</option>';
+    }
 }
 
 // Toggle RSCM fields based on rack type
@@ -554,16 +741,38 @@ function toggleRSCMFields() {
 async function submitAddRack() {
     const form = document.getElementById('addRackForm');
     
+    // Get values from selects or inputs
+    const citySelect = document.getElementById('citySelect');
+    const cityInput = document.getElementById('cityInput');
+    const buildingSelect = document.getElementById('buildingSelect');
+    const buildingInput = document.getElementById('buildingInput');
+    const roomSelect = document.getElementById('roomSelect');
+    const roomInput = document.getElementById('roomInput');
+    
+    const city = citySelect.value === '__NEW__' ? cityInput.value.trim() : citySelect.value;
+    const building = buildingSelect.value === '__NEW__' ? buildingInput.value.trim() : buildingSelect.value;
+    const room = roomSelect.value === '__NEW__' ? roomInput.value.trim() : roomSelect.value;
+    
+    // Validate required fields
+    if (!city || !building || !room) {
+        alert('Please fill in all location fields (City, Building, Room)');
+        return;
+    }
+    
     if (!form.checkValidity()) {
         form.reportValidity();
         return;
     }
     
     const formData = new FormData(form);
+    
+    // Build location string
+    const location = `${city} - ${building}`;
+    
     const rackData = {
         name: formData.get('name'),
-        location: formData.get('location'),
-        room: formData.get('room') || null,
+        location: location,
+        room: room,
         rack_type: formData.get('rack_type'),
         description: formData.get('description') || null,
         rscm_upper_ip: formData.get('rscm_upper_ip') || null,
@@ -712,7 +921,7 @@ async function submitAddRack() {
 
 <!-- Add Rack Modal -->
 <div class="modal fade" id="addRackModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Add New Rack</h5>
@@ -720,95 +929,136 @@ async function submitAddRack() {
             </div>
             <div class="modal-body">
                 <form id="addRackForm">
-                    <div class="mb-3">
-                        <label for="rackName" class="form-label">Rack Name <span class="text-danger">*</span></label>
-                        <input type="text" 
-                               class="form-control" 
-                               id="rackName" 
-                               name="name"
-                               placeholder="e.g., B02-Rack, Lab-Bench-1"
-                               required>
-                        <small class="text-muted">Enter a unique identifier for this rack</small>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="rackName" class="form-label">Rack Name <span class="text-danger">*</span></label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="rackName" 
+                                       name="name"
+                                       placeholder="e.g., B02-Rack, Lab-Bench-1"
+                                       required>
+                                <small class="text-muted">Unique identifier for this rack</small>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="rackType" class="form-label">Rack Type <span class="text-danger">*</span></label>
+                                <select class="form-select" id="rackType" name="rack_type" required onchange="toggleRSCMFields()">
+                                    <option value="rack" selected>Rack</option>
+                                    <option value="bench">Bench</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <label for="rackLocation" class="form-label">Location <span class="text-danger">*</span></label>
-                        <input type="text" 
-                               class="form-control" 
-                               id="rackLocation" 
-                               name="location"
-                               placeholder="e.g., Redmond - Building 50"
-                               value="Redmond - Building 50"
-                               required>
-                        <small class="text-muted">Format: City - Building Number</small>
+                    <hr>
+                    <h6 class="text-muted mb-3"><i class="bi bi-geo-alt"></i> Location Information</h6>
+                    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="citySelect" class="form-label">City <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <select class="form-select" id="citySelect" onchange="updateBuildingOptions()">
+                                        <option value="">Select or add new...</option>
+                                    </select>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="toggleCityInput()" title="Add new city">
+                                        <i class="bi bi-plus"></i>
+                                    </button>
+                                </div>
+                                <input type="text" 
+                                       class="form-control mt-2" 
+                                       id="cityInput" 
+                                       placeholder="Enter new city name"
+                                       style="display: none;">
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="buildingSelect" class="form-label">Building <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <select class="form-select" id="buildingSelect" onchange="updateRoomOptions()" disabled>
+                                        <option value="">Select city first...</option>
+                                    </select>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="toggleBuildingInput()" title="Add new building" disabled id="addBuildingBtn">
+                                        <i class="bi bi-plus"></i>
+                                    </button>
+                                </div>
+                                <input type="text" 
+                                       class="form-control mt-2" 
+                                       id="buildingInput" 
+                                       placeholder="Enter new building name"
+                                       style="display: none;">
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="roomSelect" class="form-label">Room <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <select class="form-select" id="roomSelect" disabled>
+                                        <option value="">Select building first...</option>
+                                    </select>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="toggleRoomInput()" title="Add new room" disabled id="addRoomBtn">
+                                        <i class="bi bi-plus"></i>
+                                    </button>
+                                </div>
+                                <input type="text" 
+                                       class="form-control mt-2" 
+                                       id="roomInput" 
+                                       placeholder="Enter new room number"
+                                       style="display: none;">
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <label for="rackRoom" class="form-label">Room <span class="text-danger">*</span></label>
-                        <input type="text" 
-                               class="form-control" 
-                               id="rackRoom" 
-                               name="room"
-                               placeholder="e.g., Room 1234"
-                               required>
-                        <small class="text-muted">Room number or name</small>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="rackType" class="form-label">Rack Type <span class="text-danger">*</span></label>
-                        <select class="form-select" id="rackType" name="rack_type" required onchange="toggleRSCMFields()">
-                            <option value="rack" selected>Rack</option>
-                            <option value="bench">Bench</option>
-                        </select>
-                        <small class="text-muted">Rack for server racks, Bench for lab benches</small>
-                    </div>
+                    <hr>
                     
                     <!-- RSCM IP fields for Racks -->
                     <div id="rackRSCMFields">
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle"></i> <strong>RSCM IP Addresses</strong><br>
-                            Enter the IP addresses for the Upper and Lower RSCMs in this rack.
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="rscmUpperIp" class="form-label">Upper RSCM IP</label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="rscmUpperIp" 
-                                   name="rscm_upper_ip"
-                                   placeholder="e.g., 172.29.131.23"
-                                   pattern="^(\d{1,3}\.){3}\d{1,3}$">
-                            <small class="text-muted">IPv4 address of upper RSCM</small>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="rscmLowerIp" class="form-label">Lower RSCM IP</label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="rscmLowerIp" 
-                                   name="rscm_lower_ip"
-                                   placeholder="e.g., 172.29.131.24"
-                                   pattern="^(\d{1,3}\.){3}\d{1,3}$">
-                            <small class="text-muted">IPv4 address of lower RSCM</small>
+                        <h6 class="text-muted mb-3"><i class="bi bi-hdd-network"></i> RSCM IP Addresses</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="rscmUpperIp" class="form-label">Upper RSCM IP</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="rscmUpperIp" 
+                                           name="rscm_upper_ip"
+                                           placeholder="172.29.131.23"
+                                           pattern="^(\d{1,3}\.){3}\d{1,3}$">
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="rscmLowerIp" class="form-label">Lower RSCM IP</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="rscmLowerIp" 
+                                           name="rscm_lower_ip"
+                                           placeholder="172.29.131.24"
+                                           pattern="^(\d{1,3}\.){3}\d{1,3}$">
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
                     <!-- RSCM IP field for Benches -->
                     <div id="benchRSCMFields" style="display: none;">
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle"></i> <strong>RSCM IP Address</strong><br>
-                            Enter the IP address for the RSCM in this bench.
-                        </div>
-                        
+                        <h6 class="text-muted mb-3"><i class="bi bi-hdd-network"></i> RSCM IP Address</h6>
                         <div class="mb-3">
                             <label for="rscmIp" class="form-label">RSCM IP</label>
                             <input type="text" 
                                    class="form-control" 
                                    id="rscmIp" 
                                    name="rscm_ip"
-                                   placeholder="e.g., 172.29.131.25"
+                                   placeholder="172.29.131.25"
                                    pattern="^(\d{1,3}\.){3}\d{1,3}$">
-                            <small class="text-muted">IPv4 address of bench RSCM</small>
                         </div>
                     </div>
                     
@@ -817,8 +1067,8 @@ async function submitAddRack() {
                         <textarea class="form-control" 
                                   id="rackDescription" 
                                   name="description"
-                                  rows="3"
-                                  placeholder="Optional description or notes about this rack"></textarea>
+                                  rows="2"
+                                  placeholder="Optional description or notes"></textarea>
                     </div>
                 </form>
             </div>
