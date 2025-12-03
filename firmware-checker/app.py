@@ -2033,7 +2033,7 @@ def index():
             LIMIT 5
         ''', program_params).fetchall()
         
-        # Get recent firmware checks for this program
+        # Get recent firmware checks for this program (fetch more to ensure we have enough after filtering)
         recent_checks_query = f'''
             SELECT fc.*, s.name as system_name, u.username as checked_by_username,
                    u.first_name as checked_by_first_name, u.last_name as checked_by_last_name,
@@ -2043,12 +2043,12 @@ def index():
             LEFT JOIN users u ON fc.user_id = u.id
             {program_filter}
             ORDER BY fc.check_date DESC
-            LIMIT 5
+            LIMIT 20
         '''
         
         recent_checks_systems = list(conn.execute(recent_checks_query, program_params).fetchall())
         
-        # Get recent RSCM firmware checks (no program filter for racks)
+        # Get recent RSCM firmware checks (no program filter for racks, fetch more for balance)
         recent_checks_rscm = list(conn.execute('''
             SELECT rc.id, rc.rack_id, rc.check_date, rc.status, rc.error_message, rc.user_id,
                    r.name as system_name, r.location,
@@ -2061,15 +2061,15 @@ def index():
             JOIN racks r ON rc.rack_id = r.id
             LEFT JOIN users u ON rc.user_id = u.id
             ORDER BY rc.check_date DESC
-            LIMIT 5
+            LIMIT 20
         ''').fetchall())
         
-        # Merge and sort by check_date
+        # Merge and sort by check_date (keep all, template will filter by tab)
         recent_checks = sorted(
             recent_checks_systems + recent_checks_rscm,
             key=lambda x: x['check_date'],
             reverse=True
-        )[:5]
+        )
         
         # Get stats for this program
         # Count firmware types assigned to this program
@@ -2103,7 +2103,7 @@ def index():
         # Convert to dict for easier template access
         firmware_by_category = {row['category']: row['count'] for row in firmware_types}
         
-        # Get current user's recent checks
+        # Get current user's recent checks (fetch more to ensure balance across tabs)
         user_id = session.get('user_id')
         my_recent_checks = []
         if user_id:
@@ -2115,7 +2115,7 @@ def index():
                 WHERE fc.user_id = ?
                 {' AND ' + program_filter.replace('WHERE ', '') if program_filter else ''}
                 ORDER BY fc.check_date DESC
-                LIMIT 5
+                LIMIT 20
             ''', [user_id] + program_params).fetchall())
             
             # Get user's RSCM checks
@@ -2128,15 +2128,15 @@ def index():
                 JOIN racks r ON rc.rack_id = r.id
                 WHERE rc.user_id = ?
                 ORDER BY rc.check_date DESC
-                LIMIT 5
+                LIMIT 20
             ''', (user_id,)).fetchall())
             
-            # Merge and sort by check_date
+            # Merge and sort by check_date (template will handle filtering by tab)
             my_recent_checks = sorted(
                 my_recent_checks_systems + my_recent_checks_rscm,
                 key=lambda x: x['check_date'],
                 reverse=True
-            )[:5]
+            )
         
         stats = {
             'total_systems': conn.execute(f'SELECT COUNT(*) as count FROM systems s {program_filter}', program_params).fetchone()['count'],
