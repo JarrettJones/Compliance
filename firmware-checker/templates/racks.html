@@ -244,7 +244,7 @@ function renderRacksTree() {
                                         data-bs-toggle="modal" 
                                         data-bs-target="#deleteModal"
                                         data-rack-id="${rack.id}"
-                                        data-rack-name="${rack.name}"
+                                        data-rack-name="${rack.name.replace(/"/g, '&quot;')}"
                                         data-rack-systems="${rack.system_count}"
                                         title="Delete">
                                     <i class="bi bi-trash"></i>
