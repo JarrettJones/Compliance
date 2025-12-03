@@ -3368,9 +3368,9 @@ def edit_rack(rack_id):
             return redirect(url_for('racks'))
         
         # Get RSCM IPs from rack columns
-        rscm_upper = rack.get('rscm_upper_ip')
-        rscm_lower = rack.get('rscm_lower_ip')
-        rscm_ip = rack.get('rscm_ip')  # For benches
+        rscm_upper = rack['rscm_upper_ip']
+        rscm_lower = rack['rscm_lower_ip']
+        rscm_ip = rack['rscm_ip']  # For benches
     
     if request.method == 'POST':
         name = request.form['name'].strip()
