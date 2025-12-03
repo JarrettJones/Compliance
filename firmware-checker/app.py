@@ -4388,9 +4388,16 @@ def rscm_check_progress(check_id):
                 print(f"[DEBUG] JSON decode error: {e}")
                 parsed_firmware_data = None
     
-    return render_template('rscm_check_progress.html',
+    response = make_response(render_template('rscm_check_progress.html',
                          check=check,
-                         firmware_data=parsed_firmware_data)
+                         firmware_data=parsed_firmware_data))
+    
+    # Add cache control headers to prevent caching
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    
+    return response
 
 @app.route('/rscm/result/<int:check_id>')
 @login_required

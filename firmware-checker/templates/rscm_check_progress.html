@@ -49,6 +49,16 @@
                         <strong>RSCM IPs:</strong> {{ check['rscm_ip'] }}
                     </div>
                 </div>
+                {% if check['status'] == 'running' %}
+                <div class="row mt-2">
+                    <div class="col-12">
+                        <small class="text-muted">
+                            <i class="bi bi-arrow-clockwise"></i> Auto-refreshing... 
+                            <span id="lastRefresh"></span>
+                        </small>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -160,6 +170,14 @@
 <!-- Auto-refresh for running checks -->
 {% if check['status'] == 'running' %}
 <script>
+    // Show last refresh time
+    document.addEventListener('DOMContentLoaded', function() {
+        const lastRefreshEl = document.getElementById('lastRefresh');
+        if (lastRefreshEl) {
+            lastRefreshEl.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+        }
+    });
+    
     // Auto-refresh every 3 seconds while check is running
     setTimeout(function() {
         location.reload();
