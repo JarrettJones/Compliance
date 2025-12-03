@@ -3367,23 +3367,10 @@ def edit_rack(rack_id):
             flash('Rack not found!', 'error')
             return redirect(url_for('racks'))
         
-        # Get RSCM components
-        rscm_components = conn.execute('''
-            SELECT * FROM rscm_components WHERE rack_id = ? ORDER BY name
-        ''', (rack_id,)).fetchall()
-        
-        rscm_upper = None
-        rscm_lower = None
-        rscm_upper_id = None
-        rscm_lower_id = None
-        
-        for rscm in rscm_components:
-            if 'upper' in rscm['name'].lower():
-                rscm_upper = rscm['ip_address']
-                rscm_upper_id = rscm['id']
-            elif 'lower' in rscm['name'].lower():
-                rscm_lower = rscm['ip_address']
-                rscm_lower_id = rscm['id']
+        # Get RSCM IPs from rack columns
+        rscm_upper = rack.get('rscm_upper_ip')
+        rscm_lower = rack.get('rscm_lower_ip')
+        rscm_ip = rack.get('rscm_ip')  # For benches
     
     if request.method == 'POST':
         name = request.form['name'].strip()
@@ -3391,65 +3378,31 @@ def edit_rack(rack_id):
         rack_type = request.form['rack_type']
         room = request.form.get('room', '').strip()
         description = request.form.get('description', '').strip()
-        rscm_upper_ip = request.form.get('rscm_upper', '').strip()
-        rscm_lower_ip = request.form.get('rscm_lower', '').strip()
+        
+        # Get RSCM IPs based on rack type
+        if rack_type == 'bench':
+            rscm_upper_ip = None
+            rscm_lower_ip = None
+            rscm_bench_ip = request.form.get('rscm_ip', '').strip() or None
+        else:  # rack
+            rscm_upper_ip = request.form.get('rscm_upper', '').strip() or None
+            rscm_lower_ip = request.form.get('rscm_lower', '').strip() or None
+            rscm_bench_ip = None
         
         if not name or not location:
             flash('Name and location are required!', 'error')
-            return render_template('edit_rack.html', rack=rack, rscm_upper=rscm_upper, rscm_lower=rscm_lower)
+            return render_template('edit_rack.html', rack=rack, rscm_upper=rscm_upper, rscm_lower=rscm_lower, rscm_ip=rscm_ip)
         
         try:
             with get_db_connection() as conn:
-                # Update rack info
+                # Update rack info including RSCM IPs
                 conn.execute('''
                     UPDATE racks 
-                    SET name = ?, location = ?, rack_type = ?, room = ?, description = ?
+                    SET name = ?, location = ?, rack_type = ?, room = ?, description = ?,
+                        rscm_upper_ip = ?, rscm_lower_ip = ?, rscm_ip = ?
                     WHERE id = ?
-                ''', (name, location, rack_type, room, description, rack_id))
-                
-                # Update or insert RSCM Upper
-                if rscm_upper_ip:
-                    if rscm_upper_id:
-                        conn.execute('''
-                            UPDATE rscm_components
-                            SET ip_address = ?, name = 'RSCM-Upper'
-                            WHERE id = ?
-                        ''', (rscm_upper_ip, rscm_upper_id))
-                    else:
-                        conn.execute('''
-                            INSERT INTO rscm_components (rack_id, name, ip_address, port)
-                            VALUES (?, 'RSCM-Upper', ?, 22)
-                        ''', (rack_id, rscm_upper_ip))
-                        rscm_upper_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
-                elif rscm_upper_id:
-                    # Remove if IP was cleared
-                    conn.execute('DELETE FROM rscm_components WHERE id = ?', (rscm_upper_id,))
-                    rscm_upper_id = None
-                
-                # Update or insert RSCM Lower
-                if rscm_lower_ip:
-                    if rscm_lower_id:
-                        conn.execute('''
-                            UPDATE rscm_components
-                            SET ip_address = ?, name = 'RSCM-Lower'
-                            WHERE id = ?
-                        ''', (rscm_lower_ip, rscm_lower_id))
-                    else:
-                        conn.execute('''
-                            INSERT INTO rscm_components (rack_id, name, ip_address, port)
-                            VALUES (?, 'RSCM-Lower', ?, 22)
-                        ''', (rack_id, rscm_lower_ip))
-                elif rscm_lower_id:
-                    # Remove if IP was cleared
-                    conn.execute('DELETE FROM rscm_components WHERE id = ?', (rscm_lower_id,))
-                
-                # Associate upper RSCM with all systems in this rack
-                if rscm_upper_id:
-                    conn.execute('''
-                        UPDATE systems
-                        SET rscm_component_id = ?
-                        WHERE rack_id = ?
-                    ''', (rscm_upper_id, rack_id))
+                ''', (name, location, rack_type, room, description, 
+                      rscm_upper_ip, rscm_lower_ip, rscm_bench_ip, rack_id))
                 
                 conn.commit()
             
@@ -3461,7 +3414,7 @@ def edit_rack(rack_id):
         except Exception as e:
             flash(f'Error updating rack: {str(e)}', 'error')
     
-    return render_template('edit_rack.html', rack=rack, rscm_upper=rscm_upper, rscm_lower=rscm_lower)
+    return render_template('edit_rack.html', rack=rack, rscm_upper=rscm_upper, rscm_lower=rscm_lower, rscm_ip=rscm_ip)
 
 @app.route('/racks/<int:rack_id>/delete', methods=['POST'])
 @admin_required
