@@ -3196,20 +3196,17 @@ def racks():
                 is_admin = user['role'] == 'admin'
     
     with get_db_connection() as conn:
-        # Build query with program filter if a program is selected
+        # Show all racks, but filter system counts by program if selected
         if program_id:
             racks_raw = conn.execute('''
-                SELECT r.*, COUNT(s.id) as system_count
+                SELECT r.*, COUNT(CASE WHEN s.program_id = ? THEN 1 END) as system_count
                 FROM racks r
-                LEFT JOIN systems s ON r.id = s.rack_id AND s.program_id = ?
+                LEFT JOIN systems s ON r.id = s.rack_id
                 GROUP BY r.id
-                HAVING system_count > 0 OR r.id IN (
-                    SELECT DISTINCT rack_id FROM systems WHERE program_id = ?
-                )
                 ORDER BY r.name
-            ''', (program_id, program_id)).fetchall()
+            ''', (program_id,)).fetchall()
         else:
-            # Show all racks if no program selected
+            # Show all racks with total system counts
             racks_raw = conn.execute('''
                 SELECT r.*, COUNT(s.id) as system_count
                 FROM racks r
