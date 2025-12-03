@@ -232,9 +232,9 @@ function renderRacksTree() {
                                    title="Edit">
                                     <i class="bi bi-pencil"></i>
                                 </a>
-                                ${rack.rscm_upper || rack.rscm_lower 
+                                ${rack.rscm_upper || rack.rscm_lower || rack.rscm_ip
                                     ? `<button class="btn btn-sm btn-outline-success" 
-                                              onclick="checkRSCMFirmware(${rack.id}, '${rack.name}', '${rack.rscm_upper || ''}', '${rack.rscm_lower || ''}')"
+                                              onclick="checkRSCMFirmware(${rack.id}, '${rack.name}', '${rack.rscm_upper || ''}', '${rack.rscm_lower || ''}', '${rack.rscm_ip || ''}')"
                                               title="Check RSCM Firmware">
                                         <i class="bi bi-hdd-network-fill"></i> RSCM
                                        </button>`
@@ -399,7 +399,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // RSCM Firmware Check Function
-function checkRSCMFirmware(rackId, rackName, rscmUpper, rscmLower) {
+function checkRSCMFirmware(rackId, rackName, rscmUpper, rscmLower, rscmIp) {
     // Set rack information in modal
     document.getElementById('rscmRackName').textContent = rackName;
     document.getElementById('rscmRackId').value = rackId;
@@ -430,9 +430,21 @@ function checkRSCMFirmware(rackId, rackName, rscmUpper, rscmLower) {
         `;
     }
     
+    if (rscmIp) {
+        rscmList.innerHTML += `
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="bench" id="checkBench" checked>
+                <label class="form-check-label" for="checkBench">
+                    <strong>Bench RSCM:</strong> ${rscmIp}
+                </label>
+            </div>
+        `;
+    }
+    
     // Store RSCM IPs for later use
-    document.getElementById('rscmUpperIp').value = rscmUpper || '';
-    document.getElementById('rscmLowerIp').value = rscmLower || '';
+    document.getElementById('rscmCheckUpperIp').value = rscmUpper || '';
+    document.getElementById('rscmCheckLowerIp').value = rscmLower || '';
+    document.getElementById('rscmCheckBenchIp').value = rscmIp || '';
     
     // Reset form and show modal
     document.getElementById('rscmCredentialsSection').style.display = 'none';
@@ -452,15 +464,17 @@ function startRSCMCheck() {
     const password = document.getElementById('rscmPassword').value;
     const upperChecked = document.getElementById('checkUpper')?.checked || false;
     const lowerChecked = document.getElementById('checkLower')?.checked || false;
-    const upperIp = document.getElementById('rscmUpperIp').value;
-    const lowerIp = document.getElementById('rscmLowerIp').value;
+    const benchChecked = document.getElementById('checkBench')?.checked || false;
+    const upperIp = document.getElementById('rscmCheckUpperIp').value;
+    const lowerIp = document.getElementById('rscmCheckLowerIp').value;
+    const benchIp = document.getElementById('rscmCheckBenchIp').value;
     
     if (!username || !password) {
         alert('Please enter RSCM credentials');
         return;
     }
     
-    if (!upperChecked && !lowerChecked) {
+    if (!upperChecked && !lowerChecked && !benchChecked) {
         alert('Please select at least one RSCM to check');
         return;
     }
@@ -472,6 +486,9 @@ function startRSCMCheck() {
     }
     if (lowerChecked && lowerIp) {
         rscmPositions.push({ position: 'lower', ip: lowerIp });
+    }
+    if (benchChecked && benchIp) {
+        rscmPositions.push({ position: 'bench', ip: benchIp });
     }
     
     // Show loading state
@@ -863,8 +880,9 @@ async function submitAddRack() {
                 
                 <!-- Hidden fields -->
                 <input type="hidden" id="rscmRackId">
-                <input type="hidden" id="rscmUpperIp">
-                <input type="hidden" id="rscmLowerIp">
+                <input type="hidden" id="rscmCheckUpperIp">
+                <input type="hidden" id="rscmCheckLowerIp">
+                <input type="hidden" id="rscmCheckBenchIp">
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
