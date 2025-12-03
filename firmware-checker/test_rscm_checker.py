@@ -3,13 +3,13 @@ Test script for RSCM firmware checker
 """
 
 import sys
+import getpass
 from firmware_modules.rscm import RSCMChecker
 
 # Test RSCM IP and port
 RSCM_IP = '172.29.131.23'
 RSCM_PORT = 8080
 USERNAME = 'root'
-PASSWORD = 'P@ssw0rd'  # Update with actual password
 
 def test_rscm_checker():
     """Test RSCM firmware checker"""
@@ -17,11 +17,19 @@ def test_rscm_checker():
     print("RSCM Firmware Checker Test")
     print("="*80)
     print(f"Target: {RSCM_IP}:{RSCM_PORT}")
+    print(f"Username: {USERNAME}")
+    print()
+    
+    # Prompt for password securely
+    password = getpass.getpass(f"Enter password for {USERNAME}: ")
+    if not password:
+        print("✗ Password is required. Exiting.")
+        return False
     print()
     
     # Initialize checker
     print("Initializing RSCM checker...")
-    checker = RSCMChecker(username=USERNAME, password=PASSWORD, timeout=30)
+    checker = RSCMChecker(username=USERNAME, password=password, timeout=30)
     print("✓ RSCM checker initialized\n")
     
     # Test connection
