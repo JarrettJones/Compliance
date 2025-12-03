@@ -35,6 +35,7 @@ class RSCMChecker:
         self.manager_endpoint = '/redfish/v1/Managers/RackManager'
         self.cpld_endpoint = '/redfish/v1/Chassis/RackManager/CPLD'
         self.cerberus_endpoint = '/redfish/v1/Chassis/RackManager/Cerberus'
+        self.power_supplies_endpoint = '/redfish/v1/PowerEquipment/PowerShelves/1/PowerSupplies'
     
     def check_firmware(self, rscm_ip, rscm_port=8080):
         """Check RSCM firmware version using Redfish API
@@ -187,6 +188,72 @@ class RSCMChecker:
                     'version': 'NOT_AVAILABLE',
                     'status': 'not_found'
                 }
+            
+            # Get Power Supply firmware versions
+            print(f"[RSCM] Fetching Power Supply information...")
+            ps_collection = self._get_redfish_data(rscm_ip, rscm_port, self.power_supplies_endpoint)
+            
+            if ps_collection and 'Members' in ps_collection:
+                ps_members = ps_collection.get('Members', [])
+                ps_count = len(ps_members)
+                print(f"[RSCM] Found {ps_count} power supply(ies)")
+                
+                for ps_member in ps_members:
+                    ps_uri = ps_member.get('@odata.id', '')
+                    if not ps_uri:
+                        continue
+                    
+                    # Extract power supply number from URI (e.g., "/redfish/v1/PowerEquipment/PowerShelves/1/PowerSupplies/1")
+                    ps_number = ps_uri.split('/')[-1]
+                    
+                    # Get power supply details (Manufacturer, Model)
+                    ps_data = self._get_redfish_data(rscm_ip, rscm_port, ps_uri)
+                    
+                    if ps_data:
+                        manufacturer = ps_data.get('Manufacturer', 'Unknown')
+                        model = ps_data.get('Model', 'Unknown')
+                        
+                        # Get power supply version information
+                        ps_version_uri = f"{ps_uri}/Oem/Microsoft/Version"
+                        ps_version_data = self._get_redfish_data(rscm_ip, rscm_port, ps_version_uri)
+                        
+                        if ps_version_data:
+                            oem_ms = ps_version_data.get('Oem', {}).get('Microsoft', {})
+                            active_image = oem_ms.get('ActiveImage', 'Unknown')
+                            bootloader_version = oem_ms.get('BootloaderVersion', 'Unknown')
+                            image_a_version = oem_ms.get('ImageAVersion', 'Unknown')
+                            image_b_version = oem_ms.get('ImageBVersion', 'Unknown')
+                            
+                            # Add power supply info with manufacturer and model
+                            ps_label = f"PSU {ps_number} ({manufacturer} {model})"
+                            
+                            results['firmware_versions'][f'{ps_label} - Active Image'] = {
+                                'version': f"{active_image}",
+                                'status': 'success' if active_image != 'Unknown' else 'not_found'
+                            }
+                            
+                            results['firmware_versions'][f'{ps_label} - Bootloader'] = {
+                                'version': bootloader_version,
+                                'status': 'success' if bootloader_version != 'Unknown' else 'not_found'
+                            }
+                            
+                            results['firmware_versions'][f'{ps_label} - Image A'] = {
+                                'version': image_a_version,
+                                'status': 'success' if image_a_version != 'Unknown' else 'not_found'
+                            }
+                            
+                            results['firmware_versions'][f'{ps_label} - Image B'] = {
+                                'version': image_b_version,
+                                'status': 'success' if image_b_version != 'Unknown' else 'not_found'
+                            }
+                            
+                            print(f"[RSCM] PSU {ps_number}: {manufacturer} {model}, Active: {active_image}, Bootloader: {bootloader_version}, ImageA: {image_a_version}, ImageB: {image_b_version}")
+                        else:
+                            print(f"[RSCM] Warning: Could not retrieve version data for PSU {ps_number}")
+                    else:
+                        print(f"[RSCM] Warning: Could not retrieve details for PSU {ps_number}")
+            else:
+                print(f"[RSCM] Warning: Could not retrieve power supply collection")
             
             print(f"[RSCM] Firmware check completed successfully")
             print(f"[RSCM] Manager Type: {manager_type}, Model: {model}, Firmware: {firmware_version}")
