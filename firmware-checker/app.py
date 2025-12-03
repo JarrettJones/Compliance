@@ -3179,6 +3179,54 @@ def racks():
     
     return render_template('racks.html', racks=racks, is_admin=is_admin)
 
+@app.route('/rack/<int:rack_id>')
+@login_required
+def rack_detail(rack_id):
+    """Show rack details and RSCM firmware check history"""
+    with get_db_connection() as conn:
+        # Get rack information
+        rack = conn.execute('SELECT * FROM racks WHERE id = ?', (rack_id,)).fetchone()
+        if not rack:
+            flash('Rack not found!', 'error')
+            return redirect(url_for('racks'))
+        
+        # Get RSCM components for this rack
+        rscm_components = conn.execute('''
+            SELECT name, ip_address, port, position
+            FROM rscm_components
+            WHERE rack_id = ?
+            ORDER BY name
+        ''', (rack_id,)).fetchall()
+        
+        # Get RSCM firmware check history
+        checks = conn.execute('''
+            SELECT c.*, u.username, u.first_name, u.last_name
+            FROM rscm_firmware_checks c
+            LEFT JOIN users u ON c.user_id = u.id
+            WHERE c.rack_id = ?
+            ORDER BY c.check_date DESC
+        ''', (rack_id,)).fetchall()
+        
+        # Check for active/running RSCM firmware check
+        active_check = conn.execute('''
+            SELECT * FROM rscm_firmware_checks
+            WHERE rack_id = ? AND status = 'running'
+            ORDER BY check_date DESC
+            LIMIT 1
+        ''', (rack_id,)).fetchone()
+        
+        # Get system count for this rack
+        system_count = conn.execute('''
+            SELECT COUNT(*) as count FROM systems WHERE rack_id = ?
+        ''', (rack_id,)).fetchone()['count']
+    
+    return render_template('rack_detail.html',
+                         rack=rack,
+                         rscm_components=rscm_components,
+                         checks=checks,
+                         active_check=active_check,
+                         system_count=system_count)
+
 @app.route('/racks/<int:rack_id>/edit', methods=['GET', 'POST'])
 @editor_required
 def edit_rack(rack_id):
@@ -4446,6 +4494,26 @@ def api_check_rscm_firmware():
         except:
             pass
         
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/rscm-check/<int:check_id>', methods=['DELETE'])
+@login_required
+def api_delete_rscm_check(check_id):
+    """API endpoint to delete an RSCM firmware check"""
+    try:
+        with get_db_connection() as conn:
+            # Check if check exists
+            check = conn.execute('SELECT id FROM rscm_firmware_checks WHERE id = ?', (check_id,)).fetchone()
+            if not check:
+                return jsonify({'error': 'Check not found'}), 404
+            
+            # Delete the check
+            conn.execute('DELETE FROM rscm_firmware_checks WHERE id = ?', (check_id,))
+            conn.commit()
+        
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logger.error(f"Error deleting RSCM check: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/restart-application', methods=['POST'])
