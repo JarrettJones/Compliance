@@ -34,6 +34,7 @@ class RSCMChecker:
         # RSCM Redfish endpoint
         self.manager_endpoint = '/redfish/v1/Managers/RackManager'
         self.cpld_endpoint = '/redfish/v1/Chassis/RackManager/CPLD'
+        self.cerberus_endpoint = '/redfish/v1/Chassis/RackManager/Cerberus'
     
     def check_firmware(self, rscm_ip, rscm_port=8080):
         """Check RSCM firmware version using Redfish API
@@ -148,6 +149,41 @@ class RSCMChecker:
             else:
                 print(f"[RSCM] Warning: Could not retrieve CPLD data")
                 results['firmware_versions']['CPLD Version'] = {
+                    'version': 'NOT_AVAILABLE',
+                    'status': 'not_found'
+                }
+            
+            # Get Cerberus firmware version
+            print(f"[RSCM] Fetching Cerberus information...")
+            cerberus_data = self._get_redfish_data(rscm_ip, rscm_port, self.cerberus_endpoint)
+            
+            if cerberus_data:
+                cerberus_fw_version = cerberus_data.get('FirmwareVersion', 'Unknown')
+                pcd_data = cerberus_data.get('PCD', {})
+                pcd_version_id = pcd_data.get('VersionID', 'Unknown')
+                pcd_platform_id = pcd_data.get('PlatformID', 'Unknown')
+                
+                results['firmware_versions']['Cerberus FW Version'] = {
+                    'version': cerberus_fw_version,
+                    'status': 'success' if cerberus_fw_version != 'Unknown' else 'not_found'
+                }
+                
+                results['firmware_versions']['Cerberus PCD Version'] = {
+                    'version': pcd_version_id,
+                    'status': 'success' if pcd_version_id != 'Unknown' else 'not_found'
+                }
+                
+                # Optionally include PCD Platform ID
+                if pcd_platform_id != 'Unknown':
+                    results['firmware_versions']['Cerberus PCD Platform'] = {
+                        'version': pcd_platform_id,
+                        'status': 'success'
+                    }
+                
+                print(f"[RSCM] Cerberus FW: {cerberus_fw_version}, PCD Version: {pcd_version_id}, Platform: {pcd_platform_id}")
+            else:
+                print(f"[RSCM] Warning: Could not retrieve Cerberus data")
+                results['firmware_versions']['Cerberus FW Version'] = {
                     'version': 'NOT_AVAILABLE',
                     'status': 'not_found'
                 }
