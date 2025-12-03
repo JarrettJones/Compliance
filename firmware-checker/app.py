@@ -402,6 +402,27 @@ def init_db():
         except Exception as e:
             logger.warning(f"Recipe migration warning (may be safe to ignore): {e}")
         
+        # Add RSCM IP columns to racks table
+        try:
+            cursor = conn.execute("PRAGMA table_info(racks)")
+            rack_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'rscm_upper_ip' not in rack_columns:
+                conn.execute("ALTER TABLE racks ADD COLUMN rscm_upper_ip TEXT")
+                logger.info("Added rscm_upper_ip column to racks table")
+            
+            if 'rscm_lower_ip' not in rack_columns:
+                conn.execute("ALTER TABLE racks ADD COLUMN rscm_lower_ip TEXT")
+                logger.info("Added rscm_lower_ip column to racks table")
+            
+            if 'rscm_ip' not in rack_columns:
+                conn.execute("ALTER TABLE racks ADD COLUMN rscm_ip TEXT")
+                logger.info("Added rscm_ip column to racks table (for benches)")
+            
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"Racks RSCM IP migration warning (may be safe to ignore): {e}")
+        
         conn.commit()
         
         # Insert firmware types if they don't exist
@@ -3543,6 +3564,9 @@ def api_add_rack():
         # Optional fields
         room = data.get('room', '').strip() or None
         description = data.get('description', '').strip() or None
+        rscm_upper_ip = data.get('rscm_upper_ip', '').strip() or None
+        rscm_lower_ip = data.get('rscm_lower_ip', '').strip() or None
+        rscm_ip = data.get('rscm_ip', '').strip() or None
         
         with get_db_connection() as conn:
             # Check if rack with this name already exists
@@ -3550,11 +3574,11 @@ def api_add_rack():
             if existing:
                 return jsonify({'error': f'Rack with name "{name}" already exists'}), 400
             
-            # Insert new rack
+            # Insert new rack with RSCM IPs
             cursor = conn.execute('''
-                INSERT INTO racks (name, location, room, rack_type, description)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (name, location, room, rack_type, description))
+                INSERT INTO racks (name, location, room, rack_type, description, rscm_upper_ip, rscm_lower_ip, rscm_ip)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (name, location, room, rack_type, description, rscm_upper_ip, rscm_lower_ip, rscm_ip))
             
             rack_id = cursor.lastrowid
             conn.commit()

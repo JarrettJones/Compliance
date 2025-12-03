@@ -525,7 +525,28 @@ function toggleRSCMCredentials() {
 function openAddRackModal() {
     const modal = new bootstrap.Modal(document.getElementById('addRackModal'));
     document.getElementById('addRackForm').reset();
+    toggleRSCMFields(); // Set initial state
     modal.show();
+}
+
+// Toggle RSCM fields based on rack type
+function toggleRSCMFields() {
+    const rackType = document.getElementById('rackType').value;
+    const rackFields = document.getElementById('rackRSCMFields');
+    const benchFields = document.getElementById('benchRSCMFields');
+    
+    if (rackType === 'rack') {
+        rackFields.style.display = 'block';
+        benchFields.style.display = 'none';
+        // Clear bench field
+        document.getElementById('rscmIp').value = '';
+    } else {
+        rackFields.style.display = 'none';
+        benchFields.style.display = 'block';
+        // Clear rack fields
+        document.getElementById('rscmUpperIp').value = '';
+        document.getElementById('rscmLowerIp').value = '';
+    }
 }
 
 // Submit Add Rack Form
@@ -543,7 +564,10 @@ async function submitAddRack() {
         location: formData.get('location'),
         room: formData.get('room') || null,
         rack_type: formData.get('rack_type'),
-        description: formData.get('description') || null
+        description: formData.get('description') || null,
+        rscm_upper_ip: formData.get('rscm_upper_ip') || null,
+        rscm_lower_ip: formData.get('rscm_lower_ip') || null,
+        rscm_ip: formData.get('rscm_ip') || null
     };
     
     try {
@@ -731,11 +755,60 @@ async function submitAddRack() {
                     
                     <div class="mb-3">
                         <label for="rackType" class="form-label">Rack Type <span class="text-danger">*</span></label>
-                        <select class="form-select" id="rackType" name="rack_type" required>
+                        <select class="form-select" id="rackType" name="rack_type" required onchange="toggleRSCMFields()">
                             <option value="rack" selected>Rack</option>
                             <option value="bench">Bench</option>
                         </select>
                         <small class="text-muted">Rack for server racks, Bench for lab benches</small>
+                    </div>
+                    
+                    <!-- RSCM IP fields for Racks -->
+                    <div id="rackRSCMFields">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> <strong>RSCM IP Addresses</strong><br>
+                            Enter the IP addresses for the Upper and Lower RSCMs in this rack.
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="rscmUpperIp" class="form-label">Upper RSCM IP</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="rscmUpperIp" 
+                                   name="rscm_upper_ip"
+                                   placeholder="e.g., 172.29.131.23"
+                                   pattern="^(\d{1,3}\.){3}\d{1,3}$">
+                            <small class="text-muted">IPv4 address of upper RSCM</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="rscmLowerIp" class="form-label">Lower RSCM IP</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="rscmLowerIp" 
+                                   name="rscm_lower_ip"
+                                   placeholder="e.g., 172.29.131.24"
+                                   pattern="^(\d{1,3}\.){3}\d{1,3}$">
+                            <small class="text-muted">IPv4 address of lower RSCM</small>
+                        </div>
+                    </div>
+                    
+                    <!-- RSCM IP field for Benches -->
+                    <div id="benchRSCMFields" style="display: none;">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> <strong>RSCM IP Address</strong><br>
+                            Enter the IP address for the RSCM in this bench.
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="rscmIp" class="form-label">RSCM IP</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="rscmIp" 
+                                   name="rscm_ip"
+                                   placeholder="e.g., 172.29.131.25"
+                                   pattern="^(\d{1,3}\.){3}\d{1,3}$">
+                            <small class="text-muted">IPv4 address of bench RSCM</small>
+                        </div>
                     </div>
                     
                     <div class="mb-3">
