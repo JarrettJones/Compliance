@@ -1081,6 +1081,146 @@ def perform_firmware_check_threaded(check_id, system_id, system_info, username, 
                 active_checks[check_id]['status'] = 'error'
                 active_checks[check_id]['error'] = str(e)
 
+def perform_rscm_check_threaded(check_id, rack_id, rack_name, rscm_positions, username, password):
+    """
+    Perform RSCM firmware check in a background thread
+    
+    Args:
+        check_id: Database ID of the RSCM firmware check
+        rack_id: Rack ID
+        rack_name: Rack name
+        rscm_positions: List of dicts with 'position' and 'ip' keys
+        username: RSCM username
+        password: RSCM password
+    """
+    start_time = time.time()
+    
+    try:
+        with active_checks_lock:
+            active_checks[check_id] = {
+                'thread_id': threading.current_thread().ident,
+                'start_time': start_time,
+                'status': 'running',
+                'current_category': 'RSCM',
+                'type': 'rscm'
+            }
+        
+        print(f"[THREAD {threading.current_thread().ident}] Starting RSCM firmware check for Rack: {rack_name} [Check ID: {check_id}]")
+        
+        # Initialize RSCM checker
+        rscm_checker = RSCMChecker(username=username, password=password, timeout=30)
+        
+        # Initialize results structure
+        results = {
+            'check_id': check_id,
+            'check_date': datetime.now().isoformat(),
+            'rack_id': rack_id,
+            'rack_name': rack_name,
+            'rscm_checks': {},
+            'progress': {
+                'total': len(rscm_positions),
+                'completed': 0,
+                'percentage': 0,
+                'current_rscm': 'Starting...',
+                'status': 'running'
+            }
+        }
+        
+        # Update progress in database with initial structure
+        with get_db_connection() as conn:
+            conn.execute('''
+                UPDATE rscm_firmware_checks 
+                SET firmware_data = ?
+                WHERE id = ?
+            ''', (json.dumps(results), check_id))
+            conn.commit()
+        
+        # Check each RSCM position
+        for i, rscm_pos in enumerate(rscm_positions, 1):
+            position = rscm_pos['position']
+            rscm_ip = rscm_pos['ip']
+            rscm_port = 8080
+            
+            # Update progress
+            results['progress']['current_rscm'] = f"{position.upper()} RSCM ({rscm_ip})"
+            results['progress']['percentage'] = int(((i - 1) / len(rscm_positions)) * 100)
+            
+            print(f"[THREAD {threading.current_thread().ident}] Checking {position.upper()} RSCM at {rscm_ip}:{rscm_port}...")
+            
+            # Perform firmware check
+            rscm_results = rscm_checker.check_firmware(rscm_ip, rscm_port)
+            
+            # Store results for this RSCM
+            results['rscm_checks'][position] = {
+                'ip': rscm_ip,
+                'port': rscm_port,
+                'status': rscm_results.get('status', 'error'),
+                'firmware_versions': rscm_results.get('firmware_versions', {}),
+                'errors': rscm_results.get('errors', []),
+                'timestamp': rscm_results.get('timestamp', datetime.now().isoformat())
+            }
+            
+            results['progress']['completed'] += 1
+            results['progress']['percentage'] = int((i / len(rscm_positions)) * 100)
+            
+            print(f"[THREAD {threading.current_thread().ident}] {position.upper()} RSCM check completed - {rscm_results.get('status', 'unknown')} [Progress: {results['progress']['percentage']}%]")
+            
+            # Update progress in database
+            with get_db_connection() as conn:
+                conn.execute('''
+                    UPDATE rscm_firmware_checks 
+                    SET firmware_data = ?
+                    WHERE id = ?
+                ''', (json.dumps(results), check_id))
+                conn.commit()
+        
+        # Mark progress as complete
+        results['progress']['completed'] = len(rscm_positions)
+        results['progress']['percentage'] = 100
+        results['progress']['current_rscm'] = 'All RSCM checks completed'
+        results['progress']['status'] = 'completed'
+        
+        end_time = time.time()
+        duration = end_time - start_time
+        print(f"[THREAD {threading.current_thread().ident}] All RSCM checks completed for Rack: {rack_name} (Duration: {duration:.1f}s)")
+        
+        # Update the running check with final results
+        with get_db_connection() as conn:
+            conn.execute('''
+                UPDATE rscm_firmware_checks 
+                SET firmware_data = ?, status = ?
+                WHERE id = ?
+            ''', (json.dumps(results), 'success', check_id))
+            conn.commit()
+        
+        # Remove from active checks
+        with active_checks_lock:
+            if check_id in active_checks:
+                del active_checks[check_id]
+        
+        print(f"[THREAD {threading.current_thread().ident}] RSCM firmware check completed successfully for Check ID: {check_id}")
+        
+    except Exception as e:
+        logger.error(f"[THREAD {threading.current_thread().ident}] Error in threaded RSCM firmware check: {str(e)}")
+        
+        # Update the running check with error status
+        try:
+            with get_db_connection() as conn:
+                conn.execute('''
+                    UPDATE rscm_firmware_checks 
+                    SET firmware_data = ?, status = ?, error_message = ?
+                    WHERE id = ?
+                ''', ('{}', 'error', str(e), check_id))
+                conn.commit()
+        except Exception as db_error:
+            logger.error(f"[THREAD {threading.current_thread().ident}] Error updating database: {str(db_error)}")
+        
+        # Remove from active checks
+        with active_checks_lock:
+            if check_id in active_checks:
+                active_checks[check_id]['status'] = 'error'
+                active_checks[check_id]['error'] = str(e)
+
 def compare_firmware_with_recipe(firmware_data, recipe_versions):
     """Compare actual firmware versions against recipe expectations"""
     comparison = {
@@ -4150,6 +4290,36 @@ def api_cleanup_orphaned_checks():
             'error': str(e)
         }), 500
 
+@app.route('/rscm/check/<int:check_id>/progress')
+@login_required
+def rscm_check_progress(check_id):
+    """View progress of an ongoing RSCM firmware check"""
+    with get_db_connection() as conn:
+        # Get the RSCM check
+        check = conn.execute('''
+            SELECT rc.*, r.name as rack_name, r.location
+            FROM rscm_firmware_checks rc
+            JOIN racks r ON rc.rack_id = r.id
+            WHERE rc.id = ?
+        ''', (check_id,)).fetchone()
+        
+        if not check:
+            flash('RSCM firmware check not found!', 'error')
+            return redirect(url_for('racks'))
+        
+        # Parse firmware data if it exists
+        parsed_firmware_data = None
+        if check and check['firmware_data'] and check['firmware_data'] != '{}':
+            try:
+                parsed_firmware_data = json.loads(check['firmware_data'])
+            except json.JSONDecodeError as e:
+                print(f"[DEBUG] JSON decode error: {e}")
+                parsed_firmware_data = None
+    
+    return render_template('rscm_check_progress.html',
+                         check=check,
+                         firmware_data=parsed_firmware_data)
+
 @app.route('/rscm/result/<int:check_id>')
 @login_required
 def rscm_check_result(check_id):
@@ -4186,41 +4356,39 @@ def rscm_check_result(check_id):
 @app.route('/api/check-rscm-firmware', methods=['POST'])
 @login_required
 def api_check_rscm_firmware():
-    """API endpoint to check RSCM firmware for a rack"""
+    """API endpoint to start RSCM firmware check in background thread"""
     try:
         data = request.get_json()
         rack_id = data.get('rack_id')
-        rscm_ip = data.get('rscm_ip')
-        rscm_port = data.get('rscm_port', 8080)
-        position = data.get('position', 'unknown')  # 'upper' or 'lower'
+        rscm_positions = data.get('rscm_positions', [])  # List of {'position': 'upper', 'ip': '...'}
         username = data.get('username', 'root')
         password = data.get('password')
         
-        if not rack_id or not rscm_ip or not password:
-            return jsonify({'error': 'rack_id, rscm_ip, and password are required'}), 400
+        if not rack_id or not rscm_positions or not password:
+            return jsonify({'error': 'rack_id, rscm_positions, and password are required'}), 400
         
-        # Get rack information
+        # Validate rack exists
         with get_db_connection() as conn:
             rack = conn.execute('SELECT * FROM racks WHERE id = ?', (rack_id,)).fetchone()
             if not rack:
                 return jsonify({'error': 'Rack not found'}), 404
         
-        print(f"[API] Starting RSCM firmware check for Rack: {rack['name']}, Position: {position}, IP: {rscm_ip}")
+        # Check if there's already a running check for this rack
+        with get_db_connection() as conn:
+            existing_check = conn.execute('''
+                SELECT id FROM rscm_firmware_checks 
+                WHERE rack_id = ? AND status = 'running'
+                ORDER BY check_date DESC 
+                LIMIT 1
+            ''', (rack_id,)).fetchone()
+            
+            if existing_check:
+                return jsonify({
+                    'error': 'An RSCM firmware check is already running for this rack',
+                    'running_check_id': existing_check['id']
+                }), 409
         
-        # Initialize RSCM checker
-        rscm_checker = RSCMChecker(username=username, password=password, timeout=30)
-        
-        # Perform firmware check
-        results = rscm_checker.check_firmware(rscm_ip, rscm_port)
-        
-        if results['status'] == 'error':
-            print(f"[API] RSCM firmware check failed: {results.get('errors', ['Unknown error'])}")
-            return jsonify({
-                'status': 'error',
-                'error': ', '.join(results.get('errors', ['Unknown error']))
-            }), 500
-        
-        # Save results to database
+        # Create initial "running" entry in database
         with get_db_connection() as conn:
             cursor = conn.execute('''
                 INSERT INTO rscm_firmware_checks 
@@ -4228,28 +4396,57 @@ def api_check_rscm_firmware():
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
                 rack_id,
-                rscm_ip,
-                rscm_port,
-                position,
-                json.dumps(results),
-                'success',
+                ', '.join([p['ip'] for p in rscm_positions]),  # Store all IPs
+                8080,
+                ', '.join([p['position'] for p in rscm_positions]),  # Store all positions
+                json.dumps({'status': 'initializing', 'message': 'Preparing RSCM firmware check...'}),
+                'running',
                 session.get('user_id')
             ))
             check_id = cursor.lastrowid
             conn.commit()
         
-        print(f"[API] RSCM firmware check completed successfully [Check ID: {check_id}]")
+        print(f"[API] Starting threaded RSCM firmware check for Rack: {rack['name']} [Check ID: {check_id}]")
         
+        # Submit RSCM firmware check to thread pool
+        future = thread_pool.submit(
+            perform_rscm_check_threaded,
+            check_id,
+            rack_id,
+            rack['name'],
+            rscm_positions,
+            username,
+            password
+        )
+        
+        # Return immediately with check information
         return jsonify({
-            'status': 'success',
+            'status': 'started',
             'check_id': check_id,
-            'message': f'RSCM firmware check completed for {position} RSCM',
-            'firmware_versions_count': len(results.get('firmware_versions', {}))
-        }), 200
+            'message': 'RSCM firmware check started in background thread',
+            'rack_name': rack['name'],
+            'started_at': datetime.now().isoformat(),
+            'progress_url': f'/rscm/check/{check_id}/progress',
+            'check_url': f'/rscm/result/{check_id}'
+        }), 202  # HTTP 202 Accepted
         
     except Exception as e:
-        logger.error(f"Error checking RSCM firmware: {str(e)}")
-        return jsonify({'error': str(e), 'status': 'error'}), 500
+        logger.error(f"Error starting RSCM firmware check: {str(e)}")
+        
+        # Update the running check with error status if check_id exists
+        try:
+            if 'check_id' in locals():
+                with get_db_connection() as conn:
+                    conn.execute('''
+                        UPDATE rscm_firmware_checks 
+                        SET firmware_data = ?, status = ?, error_message = ?
+                        WHERE id = ?
+                    ''', ('{}', 'error', f'Failed to start: {str(e)}', check_id))
+                    conn.commit()
+        except:
+            pass
+        
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/restart-application', methods=['POST'])
 @admin_required

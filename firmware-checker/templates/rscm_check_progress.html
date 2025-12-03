@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}RSCM Firmware Check Progress{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-hdd-network-fill"></i> RSCM Firmware Check</h1>
+                <p class="text-muted">Rack: {{ check['rack_name'] }} - {{ check['location'] }}</p>
+            </div>
+            <div>
+                <a href="{{ url_for('racks') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Racks
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Check Status Card -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header {% if check['status'] == 'running' %}bg-primary{% elif check['status'] == 'success' %}bg-success{% else %}bg-danger{% endif %} text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-{% if check['status'] == 'running' %}hourglass-split{% elif check['status'] == 'success' %}check-circle{% else %}x-circle{% endif %}"></i>
+                    Check Status: 
+                    {% if check['status'] == 'running' %}
+                        <span class="spinner-border spinner-border-sm ms-2" role="status"></span>
+                        In Progress
+                    {% elif check['status'] == 'success' %}
+                        Completed
+                    {% else %}
+                        {{ check['status']|upper }}
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <strong>Check ID:</strong> {{ check['id'] }}
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Started:</strong> {{ check['check_date'] }}
+                    </div>
+                    <div class="col-md-4">
+                        <strong>RSCM IPs:</strong> {{ check['rscm_ip'] }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if firmware_data %}
+<!-- Progress Bar -->
+{% if firmware_data.progress %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Progress</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span><strong>Current Task:</strong> {{ firmware_data.progress.current_rscm }}</span>
+                        <span><strong>{{ firmware_data.progress.completed }} / {{ firmware_data.progress.total }}</strong> RSCMs checked</span>
+                    </div>
+                    <div class="progress" style="height: 30px;">
+                        <div class="progress-bar progress-bar-striped {% if check['status'] == 'running' %}progress-bar-animated{% endif %}" 
+                             role="progressbar" 
+                             style="width: {{ firmware_data.progress.percentage }}%"
+                             aria-valuenow="{{ firmware_data.progress.percentage }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                            {{ firmware_data.progress.percentage }}%
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- RSCM Check Results -->
+{% if firmware_data.rscm_checks %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-hdd-network-fill"></i> RSCM Firmware Results</h5>
+            </div>
+            <div class="card-body">
+                {% for position, rscm_data in firmware_data.rscm_checks.items() %}
+                <div class="card mb-3 {% if rscm_data.status == 'completed' %}border-success{% elif rscm_data.status == 'error' %}border-danger{% endif %}">
+                    <div class="card-header {% if rscm_data.status == 'completed' %}bg-success{% elif rscm_data.status == 'error' %}bg-danger{% else %}bg-secondary{% endif %} text-white">
+                        <h6 class="mb-0">
+                            <i class="bi bi-hdd-network"></i> 
+                            {{ position|upper }} RSCM ({{ rscm_data.ip }}:{{ rscm_data.port }})
+                            {% if rscm_data.status == 'completed' %}
+                                <i class="bi bi-check-circle float-end"></i>
+                            {% elif rscm_data.status == 'error' %}
+                                <i class="bi bi-x-circle float-end"></i>
+                            {% endif %}
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        {% if rscm_data.firmware_versions %}
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Component</th>
+                                            <th>Version</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for fw_name, fw_info in rscm_data.firmware_versions.items() %}
+                                        <tr>
+                                            <td><strong>{{ fw_name }}</strong></td>
+                                            <td><code>{{ fw_info.version }}</code></td>
+                                            <td>
+                                                {% if fw_info.status == 'success' %}
+                                                    <span class="badge bg-success"><i class="bi bi-check"></i> Success</span>
+                                                {% else %}
+                                                    <span class="badge bg-warning text-dark"><i class="bi bi-exclamation"></i> {{ fw_info.status }}</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endif %}
+                        
+                        {% if rscm_data.errors %}
+                            <div class="alert alert-danger mb-0">
+                                <strong>Errors:</strong>
+                                <ul class="mb-0">
+                                    {% for error in rscm_data.errors %}
+                                    <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Auto-refresh for running checks -->
+{% if check['status'] == 'running' %}
+<script>
+    // Auto-refresh every 3 seconds while check is running
+    setTimeout(function() {
+        location.reload();
+    }, 3000);
+</script>
+{% else %}
+<!-- View Results Button when complete -->
+<div class="row">
+    <div class="col-md-12 text-center">
+        <a href="{{ url_for('rscm_check_result', check_id=check['id']) }}" class="btn btn-primary btn-lg">
+            <i class="bi bi-file-text"></i> View Full Results
+        </a>
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+<!-- No firmware data yet -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="alert alert-info">
+            <i class="bi bi-hourglass-split"></i> Initializing RSCM firmware check...
+            <div class="spinner-border spinner-border-sm ms-2" role="status"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-refresh every 2 seconds
+    setTimeout(function() {
+        location.reload();
+    }, 2000);
+</script>
+{% endif %}
+
+{% endblock %}
