@@ -3561,12 +3561,21 @@ def api_add_rack():
         if not location:
             return jsonify({'error': 'Location is required'}), 400
         
-        # Optional fields
-        room = data.get('room', '').strip() or None
-        description = data.get('description', '').strip() or None
-        rscm_upper_ip = data.get('rscm_upper_ip', '').strip() or None
-        rscm_lower_ip = data.get('rscm_lower_ip', '').strip() or None
-        rscm_ip = data.get('rscm_ip', '').strip() or None
+        # Optional fields - handle None values safely
+        room = data.get('room') or ''
+        room = room.strip() if room else None
+        
+        description = data.get('description') or ''
+        description = description.strip() if description else None
+        
+        rscm_upper_ip = data.get('rscm_upper_ip') or ''
+        rscm_upper_ip = rscm_upper_ip.strip() if rscm_upper_ip else None
+        
+        rscm_lower_ip = data.get('rscm_lower_ip') or ''
+        rscm_lower_ip = rscm_lower_ip.strip() if rscm_lower_ip else None
+        
+        rscm_ip = data.get('rscm_ip') or ''
+        rscm_ip = rscm_ip.strip() if rscm_ip else None
         
         with get_db_connection() as conn:
             # Check if rack with this name already exists
