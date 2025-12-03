@@ -5,7 +5,7 @@ A Flask-based web application for checking and recording firmware versions
 from various systems including DC-SCM, OVL2, and other platform firmwares.
 """
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, make_response
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.wrappers import Response
