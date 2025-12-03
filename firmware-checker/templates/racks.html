@@ -200,6 +200,7 @@ function renderRacksTree() {
             
                 
                 racks.forEach(rack => {
+                    console.log('Rendering rack:', rack);
                     html += `
                         <tr>
                             <td><strong>${rack.name}</strong></td>
@@ -358,8 +359,11 @@ if (deleteModal) {
         const rackName = button.getAttribute('data-rack-name');
         const systemCount = parseInt(button.getAttribute('data-rack-systems') || '0');
         
-        document.getElementById('deleteRackName').textContent = rackName;
-        document.getElementById('expectedRackName').value = rackName;
+        console.log('Delete modal opening:', { rackId, rackName, systemCount });
+        console.log('Button attributes:', button.dataset);
+        
+        document.getElementById('deleteRackName').textContent = rackName || 'UNKNOWN';
+        document.getElementById('expectedRackName').value = rackName || '';
         document.getElementById('deleteForm').action = `/racks/${rackId}/delete`;
         
         // Show system count warning
