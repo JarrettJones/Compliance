@@ -632,6 +632,20 @@ function toggleRoomInput() {
     }
 }
 
+// Handle room select change (show input when "Add New Room" is selected)
+function handleRoomSelectChange() {
+    const roomSelect = document.getElementById('roomSelect');
+    const roomInput = document.getElementById('roomInput');
+    
+    if (roomSelect.value === '__NEW__') {
+        roomInput.style.display = 'block';
+        roomInput.focus();
+    } else {
+        roomInput.style.display = 'none';
+        roomInput.value = '';
+    }
+}
+
 // Update building options when city changes
 function updateBuildingOptions() {
     const citySelect = document.getElementById('citySelect');
@@ -783,12 +797,11 @@ async function submitAddRack() {
     
     const formData = new FormData(form);
     
-    // Build location string
-    const location = `${city} - ${building}`;
-    
+    // Send city, building, room separately (not combined location string)
     const rackData = {
         name: formData.get('name'),
-        location: location,
+        city: city,
+        building: building,
         room: room,
         rack_type: formData.get('rack_type'),
         description: formData.get('description') || null,
@@ -1018,7 +1031,7 @@ async function submitAddRack() {
                             <div class="mb-3">
                                 <label for="roomSelect" class="form-label">Room <span class="text-danger">*</span></label>
                                 <div class="input-group">
-                                    <select class="form-select" id="roomSelect" disabled>
+                                    <select class="form-select" id="roomSelect" disabled onchange="handleRoomSelectChange()">
                                         <option value="">Select building first...</option>
                                     </select>
                                     <button class="btn btn-outline-secondary" type="button" onclick="toggleRoomInput()" title="Add new room" disabled id="addRoomBtn">

@@ -118,6 +118,60 @@ def init_db():
             )
         ''')
         
+        # Locations table (Cities)
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS locations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Buildings table
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS buildings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                location_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(location_id, name),
+                FOREIGN KEY (location_id) REFERENCES locations (id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Rooms table
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS rooms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                building_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(building_id, name),
+                FOREIGN KEY (building_id) REFERENCES buildings (id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Racks table
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS racks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                room_id INTEGER,
+                rack_type TEXT DEFAULT 'rack',
+                description TEXT,
+                rscm_upper_ip TEXT,
+                rscm_lower_ip TEXT,
+                rscm_ip TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (room_id) REFERENCES rooms (id) ON DELETE SET NULL,
+                CONSTRAINT valid_rack_type CHECK (rack_type IN ('rack', 'bench'))
+            )
+        ''')
+        
         # Systems table
         conn.execute('''
             CREATE TABLE IF NOT EXISTS systems (
@@ -469,6 +523,106 @@ def init_db():
                     logger.info(f"Migrated RSCM IP data for {migrated_count} rack(s) from rscm_components table")
         except Exception as e:
             logger.warning(f"RSCM components migration warning: {e}")
+        
+        # Migrate location/building/room data to normalized tables
+        try:
+            # Check if old location column exists in racks table
+            cursor = conn.execute("PRAGMA table_info(racks)")
+            rack_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'location' in rack_columns and 'room' in rack_columns:
+                # Check if we need to migrate (room_id column doesn't exist yet)
+                if 'room_id' not in rack_columns:
+                    logger.info("Starting location/building/room normalization migration...")
+                    
+                    # Get all racks with location data
+                    racks_to_migrate = conn.execute('''
+                        SELECT id, location, room 
+                        FROM racks 
+                        WHERE location IS NOT NULL
+                    ''').fetchall()
+                    
+                    migrated_racks = 0
+                    location_cache = {}  # Cache to avoid duplicate inserts
+                    building_cache = {}
+                    room_cache = {}
+                    rack_room_mappings = {}  # Store rack->room mappings to apply after column is added
+                    
+                    for rack in racks_to_migrate:
+                        rack_id = rack['id']
+                        location_str = rack['location']
+                        room_str = rack['room']
+                        
+                        # Parse location (e.g., "Redmond - Building 50")
+                        parts = location_str.split(' - ')
+                        city = parts[0].strip() if parts else 'Unknown'
+                        building_name = parts[1].strip() if len(parts) > 1 else 'Unknown Building'
+                        
+                        # Get or create location
+                        if city not in location_cache:
+                            existing = conn.execute('SELECT id FROM locations WHERE name = ?', (city,)).fetchone()
+                            if existing:
+                                location_cache[city] = existing['id']
+                            else:
+                                cursor = conn.execute('INSERT INTO locations (name) VALUES (?)', (city,))
+                                location_cache[city] = cursor.lastrowid
+                        location_id = location_cache[city]
+                        
+                        # Get or create building
+                        building_key = f"{location_id}:{building_name}"
+                        if building_key not in building_cache:
+                            existing = conn.execute(
+                                'SELECT id FROM buildings WHERE location_id = ? AND name = ?',
+                                (location_id, building_name)
+                            ).fetchone()
+                            if existing:
+                                building_cache[building_key] = existing['id']
+                            else:
+                                cursor = conn.execute(
+                                    'INSERT INTO buildings (location_id, name) VALUES (?, ?)',
+                                    (location_id, building_name)
+                                )
+                                building_cache[building_key] = cursor.lastrowid
+                        building_id = building_cache[building_key]
+                        
+                        # Get or create room (if room name exists)
+                        room_id = None
+                        if room_str:
+                            room_key = f"{building_id}:{room_str}"
+                            if room_key not in room_cache:
+                                existing = conn.execute(
+                                    'SELECT id FROM rooms WHERE building_id = ? AND name = ?',
+                                    (building_id, room_str)
+                                ).fetchone()
+                                if existing:
+                                    room_cache[room_key] = existing['id']
+                                else:
+                                    cursor = conn.execute(
+                                        'INSERT INTO rooms (building_id, name) VALUES (?, ?)',
+                                        (building_id, room_str)
+                                    )
+                                    room_cache[room_key] = cursor.lastrowid
+                            room_id = room_cache[room_key]
+                        
+                        # Store rack->room mapping to apply after column is added
+                        rack_room_mappings[rack_id] = room_id
+                        migrated_racks += 1
+                    
+                    # Add room_id column to racks table
+                    conn.execute("ALTER TABLE racks ADD COLUMN room_id INTEGER REFERENCES rooms(id)")
+                    logger.info("Added room_id column to racks table")
+                    
+                    # Apply the rack->room mappings
+                    for rack_id, room_id in rack_room_mappings.items():
+                        conn.execute('UPDATE racks SET room_id = ? WHERE id = ?', (room_id, rack_id))
+                    
+                    conn.commit()
+                    logger.info(f"Migrated {migrated_racks} rack(s) to normalized location structure")
+                    logger.info(f"Created {len(location_cache)} location(s), {len(building_cache)} building(s), {len(room_cache)} room(s)")
+        except Exception as e:
+            logger.warning(f"Location normalization migration warning: {e}")
+            import traceback
+            logger.warning(traceback.format_exc())
         
         conn.commit()
         
@@ -2243,10 +2397,12 @@ def admin():
         
         # Get running checks details
         running_checks = conn.execute('''
-            SELECT fc.id, fc.check_date, s.name as system_name, s.rscm_ip,
+            SELECT fc.id, fc.check_date, s.name as system_name, 
+                   COALESCE(r.rscm_upper_ip, r.rscm_lower_ip, s.rscm_ip) as rscm_ip,
                    (julianday('now') - julianday(fc.check_date)) * 24 * 60 as minutes_running
             FROM firmware_checks fc
             JOIN systems s ON fc.system_id = s.id
+            LEFT JOIN racks r ON s.rack_id = r.id
             WHERE fc.status = 'running'
             ORDER BY fc.check_date DESC
         ''').fetchall()
@@ -3228,7 +3384,7 @@ def edit_system(system_id):
 @app.route('/racks')
 @login_required
 def racks():
-    """List all racks"""
+    """List all racks with normalized location structure"""
     # Get current program from session
     program_id = session.get('program_id')
     
@@ -3243,29 +3399,49 @@ def racks():
                 is_admin = user['role'] == 'admin'
     
     with get_db_connection() as conn:
-        # Show all racks, but filter system counts by program if selected
+        # Show all racks with location info from normalized tables
         if program_id:
             racks_raw = conn.execute('''
-                SELECT r.*, COUNT(CASE WHEN s.program_id = ? THEN 1 END) as system_count
+                SELECT r.*, 
+                       rm.name as room_name,
+                       b.name as building_name,
+                       l.name as location_name,
+                       COUNT(CASE WHEN s.program_id = ? THEN 1 END) as system_count
                 FROM racks r
+                LEFT JOIN rooms rm ON r.room_id = rm.id
+                LEFT JOIN buildings b ON rm.building_id = b.id
+                LEFT JOIN locations l ON b.location_id = l.id
                 LEFT JOIN systems s ON r.id = s.rack_id
                 GROUP BY r.id
-                ORDER BY r.name
+                ORDER BY l.name, b.name, rm.name, r.name
             ''', (program_id,)).fetchall()
         else:
             # Show all racks with total system counts
             racks_raw = conn.execute('''
-                SELECT r.*, COUNT(s.id) as system_count
+                SELECT r.*, 
+                       rm.name as room_name,
+                       b.name as building_name,
+                       l.name as location_name,
+                       COUNT(s.id) as system_count
                 FROM racks r
+                LEFT JOIN rooms rm ON r.room_id = rm.id
+                LEFT JOIN buildings b ON rm.building_id = b.id
+                LEFT JOIN locations l ON b.location_id = l.id
                 LEFT JOIN systems s ON r.id = s.rack_id
                 GROUP BY r.id
-                ORDER BY r.name
+                ORDER BY l.name, b.name, rm.name, r.name
             ''').fetchall()
         
         # Convert Row objects to dictionaries
         racks = []
         for row in racks_raw:
             rack_dict = dict(row)
+            
+            # Build location string for backward compatibility
+            location_str = rack_dict.get('location_name') or 'Unknown'
+            building_str = rack_dict.get('building_name') or 'Unknown Building'
+            rack_dict['location'] = f"{location_str} - {building_str}"
+            rack_dict['room'] = rack_dict.get('room_name')
             
             # Rename RSCM IP columns for consistency with JavaScript
             rack_dict['rscm_upper'] = rack_dict.get('rscm_upper_ip')
@@ -3290,13 +3466,31 @@ def racks():
 def rack_detail(rack_id):
     """Show rack details and RSCM firmware check history"""
     with get_db_connection() as conn:
-        # Get rack information
-        rack = conn.execute('SELECT * FROM racks WHERE id = ?', (rack_id,)).fetchone()
+        # Get rack information with normalized location data
+        rack = conn.execute('''
+            SELECT r.*, 
+                   rm.name as room_name,
+                   b.name as building_name,
+                   l.name as location_name
+            FROM racks r
+            LEFT JOIN rooms rm ON r.room_id = rm.id
+            LEFT JOIN buildings b ON rm.building_id = b.id
+            LEFT JOIN locations l ON b.location_id = l.id
+            WHERE r.id = ?
+        ''', (rack_id,)).fetchone()
+        
         if not rack:
             flash('Rack not found!', 'error')
             return redirect(url_for('racks'))
         
-        # Get RSCM components for this rack
+        # Build location string for display
+        rack_dict = dict(rack)
+        location_str = rack_dict.get('location_name') or 'Unknown'
+        building_str = rack_dict.get('building_name') or 'Unknown Building'
+        rack_dict['location'] = f"{location_str} - {building_str}"
+        rack_dict['room'] = rack_dict.get('room_name')
+        
+        # Get RSCM components for this rack (for backward compatibility)
         rscm_components = conn.execute('''
             SELECT name, ip_address, port, position
             FROM rscm_components
@@ -3304,14 +3498,9 @@ def rack_detail(rack_id):
             ORDER BY name
         ''', (rack_id,)).fetchall()
         
-        # Extract upper and lower RSCM IPs for easy access
-        rscm_upper_ip = None
-        rscm_lower_ip = None
-        for rscm in rscm_components:
-            if 'upper' in rscm['name'].lower():
-                rscm_upper_ip = rscm['ip_address']
-            elif 'lower' in rscm['name'].lower():
-                rscm_lower_ip = rscm['ip_address']
+        # Use RSCM IPs from rack columns directly
+        rscm_upper_ip = rack['rscm_upper_ip']
+        rscm_lower_ip = rack['rscm_lower_ip']
         
         # Get RSCM firmware check history
         checks_raw = conn.execute('''
@@ -3349,7 +3538,7 @@ def rack_detail(rack_id):
         ''', (rack_id,)).fetchone()['count']
     
     return render_template('rack_detail.html',
-                         rack=rack,
+                         rack=rack_dict,
                          rscm_components=rscm_components,
                          rscm_upper_ip=rscm_upper_ip,
                          rscm_lower_ip=rscm_lower_ip,
@@ -3360,23 +3549,42 @@ def rack_detail(rack_id):
 @app.route('/racks/<int:rack_id>/edit', methods=['GET', 'POST'])
 @editor_required
 def edit_rack(rack_id):
-    """Edit rack information"""
+    """Edit rack information with normalized location structure"""
     with get_db_connection() as conn:
-        rack = conn.execute('SELECT * FROM racks WHERE id = ?', (rack_id,)).fetchone()
+        # Get rack with location data
+        rack = conn.execute('''
+            SELECT r.*, 
+                   rm.name as room_name, rm.id as room_id,
+                   b.name as building_name, b.id as building_id,
+                   l.name as location_name, l.id as location_id
+            FROM racks r
+            LEFT JOIN rooms rm ON r.room_id = rm.id
+            LEFT JOIN buildings b ON rm.building_id = b.id
+            LEFT JOIN locations l ON b.location_id = l.id
+            WHERE r.id = ?
+        ''', (rack_id,)).fetchone()
+        
         if not rack:
             flash('Rack not found!', 'error')
             return redirect(url_for('racks'))
         
+        # Convert to dict and build location string for display
+        rack_dict = dict(rack)
+        rack_dict['city'] = rack_dict.get('location_name') or ''
+        rack_dict['building'] = rack_dict.get('building_name') or ''
+        rack_dict['room'] = rack_dict.get('room_name') or ''
+        
         # Get RSCM IPs from rack columns
-        rscm_upper = rack['rscm_upper_ip']
-        rscm_lower = rack['rscm_lower_ip']
-        rscm_ip = rack['rscm_ip']  # For benches
+        rscm_upper = rack_dict['rscm_upper_ip']
+        rscm_lower = rack_dict['rscm_lower_ip']
+        rscm_ip = rack_dict['rscm_ip']  # For benches
     
     if request.method == 'POST':
         name = request.form['name'].strip()
-        location = request.form['location'].strip()
+        city = request.form.get('city', '').strip()
+        building_name = request.form.get('building', '').strip()
+        room_name = request.form.get('room', '').strip()
         rack_type = request.form['rack_type']
-        room = request.form.get('room', '').strip()
         description = request.form.get('description', '').strip()
         
         # Get RSCM IPs based on rack type
@@ -3389,19 +3597,57 @@ def edit_rack(rack_id):
             rscm_lower_ip = request.form.get('rscm_lower', '').strip() or None
             rscm_bench_ip = None
         
-        if not name or not location:
-            flash('Name and location are required!', 'error')
-            return render_template('edit_rack.html', rack=rack, rscm_upper=rscm_upper, rscm_lower=rscm_lower, rscm_ip=rscm_ip)
+        if not name or not city or not building_name:
+            flash('Name, city, and building are required!', 'error')
+            return render_template('edit_rack.html', rack=rack_dict, rscm_upper=rscm_upper, rscm_lower=rscm_lower, rscm_ip=rscm_ip)
         
         try:
             with get_db_connection() as conn:
-                # Update rack info including RSCM IPs
+                # Get or create location
+                location = conn.execute('SELECT id FROM locations WHERE name = ?', (city,)).fetchone()
+                if location:
+                    location_id = location['id']
+                else:
+                    cursor = conn.execute('INSERT INTO locations (name) VALUES (?)', (city,))
+                    location_id = cursor.lastrowid
+                
+                # Get or create building
+                building = conn.execute(
+                    'SELECT id FROM buildings WHERE location_id = ? AND name = ?',
+                    (location_id, building_name)
+                ).fetchone()
+                if building:
+                    building_id = building['id']
+                else:
+                    cursor = conn.execute(
+                        'INSERT INTO buildings (location_id, name) VALUES (?, ?)',
+                        (location_id, building_name)
+                    )
+                    building_id = cursor.lastrowid
+                
+                # Get or create room (if provided)
+                room_id = None
+                if room_name and room_name.strip():
+                    room = conn.execute(
+                        'SELECT id FROM rooms WHERE building_id = ? AND name = ?',
+                        (building_id, room_name)
+                    ).fetchone()
+                    if room:
+                        room_id = room['id']
+                    else:
+                        cursor = conn.execute(
+                            'INSERT INTO rooms (building_id, name) VALUES (?, ?)',
+                            (building_id, room_name)
+                        )
+                        room_id = cursor.lastrowid
+                
+                # Update rack info including RSCM IPs and room_id
                 conn.execute('''
                     UPDATE racks 
-                    SET name = ?, location = ?, rack_type = ?, room = ?, description = ?,
+                    SET name = ?, room_id = ?, rack_type = ?, description = ?,
                         rscm_upper_ip = ?, rscm_lower_ip = ?, rscm_ip = ?
                     WHERE id = ?
-                ''', (name, location, rack_type, room, description, 
+                ''', (name, room_id, rack_type, description, 
                       rscm_upper_ip, rscm_lower_ip, rscm_bench_ip, rack_id))
                 
                 conn.commit()
@@ -3414,7 +3660,7 @@ def edit_rack(rack_id):
         except Exception as e:
             flash(f'Error updating rack: {str(e)}', 'error')
     
-    return render_template('edit_rack.html', rack=rack, rscm_upper=rscm_upper, rscm_lower=rscm_lower, rscm_ip=rscm_ip)
+    return render_template('edit_rack.html', rack=rack_dict, rscm_upper=rscm_upper, rscm_lower=rscm_lower, rscm_ip=rscm_ip)
 
 @app.route('/racks/<int:rack_id>/delete', methods=['POST'])
 @admin_required
@@ -3537,25 +3783,27 @@ def quick_check():
 @app.route('/api/racks', methods=['POST'])
 @login_required
 def api_add_rack():
-    """API endpoint to add a new rack"""
+    """API endpoint to add a new rack with normalized location structure"""
     try:
         data = request.get_json()
         
         # Validate required fields
         name = data.get('name', '').strip()
-        location = data.get('location', '').strip()
+        city = data.get('city', '').strip()
+        building_name = data.get('building', '').strip()
+        room_name = data.get('room', '').strip()
         rack_type = data.get('rack_type', 'rack').strip()
         
         if not name:
             return jsonify({'error': 'Rack name is required'}), 400
         
-        if not location:
-            return jsonify({'error': 'Location is required'}), 400
+        if not city:
+            return jsonify({'error': 'City/Location is required'}), 400
+            
+        if not building_name:
+            return jsonify({'error': 'Building is required'}), 400
         
-        # Optional fields - handle None values safely
-        room = data.get('room') or ''
-        room = room.strip() if room else None
-        
+        # Optional fields
         description = data.get('description') or ''
         description = description.strip() if description else None
         
@@ -3574,11 +3822,49 @@ def api_add_rack():
             if existing:
                 return jsonify({'error': f'Rack with name "{name}" already exists'}), 400
             
-            # Insert new rack with RSCM IPs
+            # Get or create location
+            location = conn.execute('SELECT id FROM locations WHERE name = ?', (city,)).fetchone()
+            if location:
+                location_id = location['id']
+            else:
+                cursor = conn.execute('INSERT INTO locations (name) VALUES (?)', (city,))
+                location_id = cursor.lastrowid
+            
+            # Get or create building
+            building = conn.execute(
+                'SELECT id FROM buildings WHERE location_id = ? AND name = ?',
+                (location_id, building_name)
+            ).fetchone()
+            if building:
+                building_id = building['id']
+            else:
+                cursor = conn.execute(
+                    'INSERT INTO buildings (location_id, name) VALUES (?, ?)',
+                    (location_id, building_name)
+                )
+                building_id = cursor.lastrowid
+            
+            # Get or create room (if provided)
+            room_id = None
+            if room_name and room_name.strip():
+                room = conn.execute(
+                    'SELECT id FROM rooms WHERE building_id = ? AND name = ?',
+                    (building_id, room_name)
+                ).fetchone()
+                if room:
+                    room_id = room['id']
+                else:
+                    cursor = conn.execute(
+                        'INSERT INTO rooms (building_id, name) VALUES (?, ?)',
+                        (building_id, room_name)
+                    )
+                    room_id = cursor.lastrowid
+            
+            # Insert new rack with room_id reference
             cursor = conn.execute('''
-                INSERT INTO racks (name, location, room, rack_type, description, rscm_upper_ip, rscm_lower_ip, rscm_ip)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (name, location, room, rack_type, description, rscm_upper_ip, rscm_lower_ip, rscm_ip))
+                INSERT INTO racks (name, room_id, rack_type, description, rscm_upper_ip, rscm_lower_ip, rscm_ip)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (name, room_id, rack_type, description, rscm_upper_ip, rscm_lower_ip, rscm_ip))
             
             rack_id = cursor.lastrowid
             conn.commit()
@@ -3598,62 +3884,33 @@ def api_add_rack():
 @app.route('/api/racks/hierarchy')
 @login_required
 def api_racks_hierarchy():
-    """API endpoint to get rack hierarchy organized by location/building/room"""
+    """API endpoint to get rack hierarchy from normalized location structure"""
     try:
         with get_db_connection() as conn:
-            # Check if room column exists
-            cursor = conn.execute("PRAGMA table_info(racks)")
-            columns = [col[1] for col in cursor.fetchall()]
-            has_room_column = 'room' in columns
-            
-            # Get racks with system counts - conditionally include room column and RSCM IPs
-            if has_room_column:
-                racks = conn.execute('''
-                    SELECT r.id, r.name, r.location, r.room, r.rack_type, r.description,
-                           r.rscm_upper_ip, r.rscm_lower_ip, r.rscm_ip,
-                           COUNT(s.id) as system_count
-                    FROM racks r
-                    LEFT JOIN systems s ON r.id = s.rack_id
-                    GROUP BY r.id
-                    ORDER BY r.location, r.room, r.name
-                ''').fetchall()
-            else:
-                racks = conn.execute('''
-                    SELECT r.id, r.name, r.location, r.rack_type, r.description,
-                           r.rscm_upper_ip, r.rscm_lower_ip, r.rscm_ip,
-                           COUNT(s.id) as system_count
-                    FROM racks r
-                    LEFT JOIN systems s ON r.id = s.rack_id
-                    GROUP BY r.id
-                    ORDER BY r.location, r.name
-                ''').fetchall()
+            # Get racks with system counts using JOIN through normalized tables
+            racks = conn.execute('''
+                SELECT r.id, r.name, r.rack_type, r.description,
+                       r.rscm_upper_ip, r.rscm_lower_ip, r.rscm_ip,
+                       r.created_at,
+                       rm.name as room_name, rm.id as room_id,
+                       b.name as building_name, b.id as building_id,
+                       l.name as location_name, l.id as location_id,
+                       COUNT(s.id) as system_count
+                FROM racks r
+                LEFT JOIN rooms rm ON r.room_id = rm.id
+                LEFT JOIN buildings b ON rm.building_id = b.id
+                LEFT JOIN locations l ON b.location_id = l.id
+                LEFT JOIN systems s ON r.id = s.rack_id
+                GROUP BY r.id
+                ORDER BY l.name, b.name, rm.name, r.name
+            ''').fetchall()
             
             # Build hierarchy: location -> building -> room -> racks
             hierarchy = {}
             for rack in racks:
-                # Parse location (e.g., "Redmond - Building 50")
-                location_str = rack['location'] or 'Unknown Location'
-                parts = location_str.split(' - ')
-                location = parts[0] if parts else 'Unknown Location'
-                building = parts[1] if len(parts) > 1 else 'Unknown Building'
-                
-                # Use room column if available, otherwise default
-                room_value = rack['room'] if has_room_column and rack['room'] else 'Unknown Room'
-                
-                # Normalize room format - ensure it starts with "Room "
-                if room_value and room_value != 'Unknown Room':
-                    # If it's just a number, add "Room " prefix
-                    if room_value.strip().isdigit():
-                        room = f"Room {room_value.strip()}"
-                    # If it already starts with "Room ", keep it as is
-                    elif room_value.strip().lower().startswith('room '):
-                        # Normalize capitalization
-                        room_parts = room_value.strip().split(None, 1)
-                        room = f"Room {room_parts[1]}" if len(room_parts) > 1 else room_value
-                    else:
-                        room = room_value
-                else:
-                    room = 'Unknown Room'
+                location = rack['location_name'] or 'Unknown Location'
+                building = rack['building_name'] or 'Unknown Building'
+                room = rack['room_name'] or 'No Room Assigned'
                 
                 if location not in hierarchy:
                     hierarchy[location] = {}
@@ -3668,8 +3925,9 @@ def api_racks_hierarchy():
                     'rack_type': rack.get('rack_type', 'rack'),
                     'description': rack.get('description'),
                     'system_count': rack['system_count'],
-                    'location': rack['location'],
-                    'room': rack['room'] if has_room_column else None,
+                    'location': location,
+                    'building': building,
+                    'room': room,
                     'created_at': rack.get('created_at'),
                     'rscm_upper': rack['rscm_upper_ip'],
                     'rscm_lower': rack['rscm_lower_ip'],
@@ -3685,58 +3943,38 @@ def api_racks_hierarchy():
 @app.route('/api/racks/location-options')
 @login_required
 def api_rack_location_options():
-    """API endpoint to get distinct location/building/room options from existing racks"""
+    """API endpoint to get distinct location/building/room options from normalized tables"""
     try:
         with get_db_connection() as conn:
-            # Check if room column exists
-            cursor = conn.execute("PRAGMA table_info(racks)")
-            columns = [col[1] for col in cursor.fetchall()]
-            has_room_column = 'room' in columns
+            # Get all locations with their buildings and rooms
+            locations = conn.execute('SELECT id, name FROM locations ORDER BY name').fetchall()
             
-            # Get distinct locations with rooms
-            if has_room_column:
-                racks = conn.execute('''
-                    SELECT DISTINCT location, room 
-                    FROM racks 
-                    WHERE location IS NOT NULL 
-                    ORDER BY location, room
-                ''').fetchall()
-            else:
-                racks = conn.execute('''
-                    SELECT DISTINCT location 
-                    FROM racks 
-                    WHERE location IS NOT NULL 
-                    ORDER BY location
-                ''').fetchall()
-            
-            # Build structured data: location -> building -> rooms
-            location_data = {}
-            
-            for rack in racks:
-                location_str = rack['location']
-                room_str = rack['room'] if has_room_column and rack['room'] else None
-                
-                # Parse location (e.g., "Redmond - Building 50")
-                parts = location_str.split(' - ')
-                city = parts[0].strip() if parts else 'Unknown'
-                building = parts[1].strip() if len(parts) > 1 else 'Unknown Building'
-                
-                # Initialize nested structure
-                if city not in location_data:
-                    location_data[city] = {}
-                if building not in location_data[city]:
-                    location_data[city][building] = set()
-                
-                # Add room if it exists
-                if room_str:
-                    location_data[city][building].add(room_str)
-            
-            # Convert sets to sorted lists
             result = {}
-            for city in sorted(location_data.keys()):
-                result[city] = {}
-                for building in sorted(location_data[city].keys()):
-                    result[city][building] = sorted(list(location_data[city][building]))
+            
+            for location in locations:
+                location_id = location['id']
+                location_name = location['name']
+                result[location_name] = {}
+                
+                # Get buildings for this location
+                buildings = conn.execute('''
+                    SELECT id, name FROM buildings 
+                    WHERE location_id = ? 
+                    ORDER BY name
+                ''', (location_id,)).fetchall()
+                
+                for building in buildings:
+                    building_id = building['id']
+                    building_name = building['name']
+                    
+                    # Get rooms for this building
+                    rooms = conn.execute('''
+                        SELECT name FROM rooms 
+                        WHERE building_id = ? 
+                        ORDER BY name
+                    ''', (building_id,)).fetchall()
+                    
+                    result[location_name][building_name] = [room['name'] for room in rooms]
             
             return jsonify(result)
     except Exception as e:
@@ -3875,12 +4113,14 @@ def check_result(check_id):
     with get_db_connection() as conn:
         # Get the specific check
         check = conn.execute('''
-            SELECT fc.*, s.name as system_name, s.rscm_ip, s.rscm_port, s.program_id,
+            SELECT fc.*, s.name as system_name, s.rscm_port, s.program_id, s.rack_id,
+                   COALESCE(r.rscm_upper_ip, r.rscm_lower_ip, s.rscm_ip) as rscm_ip,
                    u.username as checked_by_username,
                    u.first_name as checked_by_first_name, 
                    u.last_name as checked_by_last_name
             FROM firmware_checks fc
             JOIN systems s ON fc.system_id = s.id
+            LEFT JOIN racks r ON s.rack_id = r.id
             LEFT JOIN users u ON fc.user_id = u.id
             WHERE fc.id = ?
         ''', (check_id,)).fetchone()
@@ -4169,14 +4409,33 @@ def api_check_firmware():
         
         # Prepare system info for thread
         computer_name = data.get('computer_name')
+        
+        # Get RSCM IP from the system's rack (defaults to upper RSCM)
+        with get_db_connection() as conn:
+            rack = conn.execute('''
+                SELECT rscm_upper_ip, rscm_lower_ip 
+                FROM racks 
+                WHERE id = ?
+            ''', (system['rack_id'],)).fetchone()
+            
+            # Use rack's upper RSCM IP by default, fall back to lower if upper not available
+            rscm_ip = None
+            if rack:
+                rscm_ip = rack['rscm_upper_ip'] or rack['rscm_lower_ip']
+            
+            # If no rack RSCM IP found, fall back to system's own RSCM IP (backward compatibility)
+            if not rscm_ip:
+                rscm_ip = system['rscm_ip']
+                print(f"[WARNING] No RSCM IP found in rack for system {system['name']}, using system's RSCM IP: {rscm_ip}")
+        
         system_info = {
             'name': system['name'],
-            'rscm_ip': system['rscm_ip'],
+            'rscm_ip': rscm_ip,
             'rscm_port': system['rscm_port'],
             'computer_name': computer_name
         }
         
-        print(f"[API] Starting threaded firmware check for system: {system['name']} ({system['rscm_ip']}:{system['rscm_port']}) [Check ID: {check_id}]")
+        print(f"[API] Starting threaded firmware check for system: {system['name']} ({rscm_ip}:{system['rscm_port']}) [Check ID: {check_id}]")
         
         # Submit firmware check to thread pool
         future = thread_pool.submit(
@@ -4257,14 +4516,22 @@ def api_check_firmware_individual():
         # Get the existing check record to get system info
         with get_db_connection() as conn:
             check = conn.execute('''
-                SELECT fc.*, s.name as system_name, s.rscm_ip, s.rscm_port
+                SELECT fc.*, s.name as system_name, s.rscm_port, s.rack_id,
+                       r.rscm_upper_ip, r.rscm_lower_ip
                 FROM firmware_checks fc
                 JOIN systems s ON fc.system_id = s.id
+                LEFT JOIN racks r ON s.rack_id = r.id
                 WHERE fc.id = ?
             ''', (check_id,)).fetchone()
             
             if not check:
                 return jsonify({'error': 'Check not found'}), 404
+            
+            # Get RSCM IP from rack (default to upper, fall back to lower)
+            rscm_ip = check['rscm_upper_ip'] or check['rscm_lower_ip']
+            if not rscm_ip:
+                # If no rack RSCM found, this is an issue - we need an IP to check
+                return jsonify({'error': 'No RSCM IP found for this system\'s rack'}), 400
         
         # Get credentials from request data
         username = data.get('username', 'admin')
@@ -4282,10 +4549,10 @@ def api_check_firmware_individual():
             dc_scm_checker = DCScmChecker(username=username, password=password)
             # DC-SCM uses check_individual_firmware method if it exists, otherwise use check_all
             if hasattr(dc_scm_checker, 'check_individual_firmware'):
-                result = dc_scm_checker.check_individual_firmware(firmware_type, check['rscm_ip'], check['rscm_port'])
+                result = dc_scm_checker.check_individual_firmware(firmware_type, rscm_ip, check['rscm_port'])
             else:
                 # Fallback: run full check and extract the specific type
-                full_results = dc_scm_checker.check_all(check['rscm_ip'], check['rscm_port'])
+                full_results = dc_scm_checker.check_all(rscm_ip, check['rscm_port'])
                 if full_results and 'firmware_versions' in full_results:
                     result = full_results['firmware_versions'].get(firmware_type)
         
@@ -4298,7 +4565,7 @@ def api_check_firmware_individual():
             )
             result = ovl2_checker.check_individual_firmware(
                 firmware_type, 
-                check['rscm_ip'], 
+                rscm_ip, 
                 check['rscm_port'],
                 computer_name=computer_name
             )
@@ -4314,16 +4581,16 @@ def api_check_firmware_individual():
             if hasattr(other_platform_checker, 'check_individual_firmware'):
                 result = other_platform_checker.check_individual_firmware(
                     firmware_type, 
-                    check['rscm_ip'], 
+                    rscm_ip, 
                     check['rscm_port'],
-                    computer_name=computer_name or check['rscm_ip']
+                    computer_name=computer_name or rscm_ip
                 )
             else:
                 # Fallback: run full check and extract the specific type
                 full_results = other_platform_checker.check_all(
-                    check['rscm_ip'], 
+                    rscm_ip, 
                     check['rscm_port'],
-                    computer_name=computer_name or check['rscm_ip']
+                    computer_name=computer_name or rscm_ip
                 )
                 if full_results and 'firmware_versions' in full_results:
                     result = full_results['firmware_versions'].get(firmware_type)
@@ -4751,9 +5018,11 @@ def api_restart_application():
                 for check_id, info in active_checks.items():
                     with get_db_connection() as conn:
                         check = conn.execute('''
-                            SELECT fc.id, s.name as system_name, s.rscm_ip
+                            SELECT fc.id, s.name as system_name,
+                                   COALESCE(r.rscm_upper_ip, r.rscm_lower_ip, s.rscm_ip) as rscm_ip
                             FROM firmware_checks fc
                             JOIN systems s ON fc.system_id = s.id
+                            LEFT JOIN racks r ON s.rack_id = r.id
                             WHERE fc.id = ?
                         ''', (check_id,)).fetchone()
                         
