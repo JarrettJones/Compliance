@@ -3215,27 +3215,21 @@ def racks():
                 ORDER BY r.name
             ''').fetchall()
         
-        # Convert Row objects to dictionaries and add RSCM info
+        # Convert Row objects to dictionaries
         racks = []
         for row in racks_raw:
             rack_dict = dict(row)
             
-            # Get RSCM components for this rack
-            rscm_components = conn.execute('''
-                SELECT name, ip_address, position
-                FROM rscm_components
-                WHERE rack_id = ?
-                ORDER BY name
-            ''', (rack_dict['id'],)).fetchall()
+            # Rename RSCM IP columns for consistency with JavaScript
+            rack_dict['rscm_upper'] = rack_dict.get('rscm_upper_ip')
+            rack_dict['rscm_lower'] = rack_dict.get('rscm_lower_ip')
+            # rscm_ip stays as-is for benches
             
-            rack_dict['rscm_upper'] = None
-            rack_dict['rscm_lower'] = None
-            
-            for rscm in rscm_components:
-                if 'upper' in rscm['name'].lower():
-                    rack_dict['rscm_upper'] = rscm['ip_address']
-                elif 'lower' in rscm['name'].lower():
-                    rack_dict['rscm_lower'] = rscm['ip_address']
+            # Remove the _ip versions to avoid confusion
+            if 'rscm_upper_ip' in rack_dict:
+                del rack_dict['rscm_upper_ip']
+            if 'rscm_lower_ip' in rack_dict:
+                del rack_dict['rscm_lower_ip']
             
             # Add edit URL
             rack_dict['edit_url'] = url_for('edit_rack', rack_id=rack_dict['id'])
@@ -3674,10 +3668,13 @@ def api_racks_hierarchy():
                     'rack_type': rack.get('rack_type', 'rack'),
                     'description': rack.get('description'),
                     'system_count': rack['system_count'],
+                    'location': rack['location'],
+                    'room': rack['room'] if has_room_column else None,
+                    'created_at': rack.get('created_at'),
                     'rscm_upper': rack['rscm_upper_ip'],
                     'rscm_lower': rack['rscm_lower_ip'],
                     'rscm_ip': rack['rscm_ip'],
-                    'edit_url': f'/edit-rack/{rack["id"]}'
+                    'edit_url': f'/racks/{rack["id"]}/edit'
                 })
             
             return jsonify(hierarchy)
