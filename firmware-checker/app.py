@@ -4982,8 +4982,8 @@ def api_check_rscm_firmware():
             'message': 'RSCM firmware check started in background thread',
             'rack_name': rack['name'],
             'started_at': datetime.now().isoformat(),
-            'progress_url': f'/rscm/check/{check_id}/progress',
-            'check_url': f'/rscm/result/{check_id}'
+            'progress_url': url_for('rscm_check_progress', check_id=check_id),
+            'check_url': url_for('rscm_check_result', check_id=check_id)
         }), 202  # HTTP 202 Accepted
         
     except Exception as e:
