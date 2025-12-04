@@ -136,8 +136,8 @@ let systemsData = {};
 
 // Use Flask url_for to generate correct URLs with prefix
 const API_RACKS_HIERARCHY = "{{ url_for('api_racks_hierarchy') }}";
-const API_RACK_SYSTEMS = "{{ url_for('api_rack_systems', rack_id=0) }}".replace('/0', ''); // Remove placeholder
-const CHECK_FIRMWARE_URL = "{{ url_for('check_firmware', system_id=0) }}".replace('/0', ''); // Remove placeholder
+const API_RACK_SYSTEMS = "{{ url_for('api_rack_systems', rack_id=0) }}".replace('/0/', '/{rackId}/'); // Replace placeholder
+const CHECK_FIRMWARE_URL = "{{ url_for('check_firmware', system_id=0) }}".replace('/0', '/{systemId}'); // Replace placeholder
 
 document.addEventListener('DOMContentLoaded', function() {
     loadLocations();
@@ -279,7 +279,7 @@ async function handleRackChange() {
     
     if (rackId) {
         try {
-            const response = await fetch(`${API_RACK_SYSTEMS}/${rackId}`);
+            const response = await fetch(API_RACK_SYSTEMS.replace('{rackId}', rackId));
             const systems = await response.json();
             systemsData = {};
             
@@ -343,7 +343,7 @@ function handleFormSubmit(e) {
     const systemId = document.getElementById('system').value;
     
     if (systemId) {
-        window.location.href = `${CHECK_FIRMWARE_URL}/${systemId}`;
+        window.location.href = CHECK_FIRMWARE_URL.replace('{systemId}', systemId);
     } else {
         alert('Please select a system');
     }
