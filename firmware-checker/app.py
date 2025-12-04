@@ -210,6 +210,9 @@ def init_db():
             CREATE TABLE IF NOT EXISTS rscm_firmware_checks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 rack_id INTEGER NOT NULL,
+                rscm_ip TEXT,
+                rscm_port INTEGER DEFAULT 8080,
+                position TEXT,
                 check_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 firmware_data TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'success',
