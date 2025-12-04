@@ -205,6 +205,21 @@ def init_db():
             )
         ''')
         
+        # RSCM firmware checks table (for rack-level firmware checks)
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS rscm_firmware_checks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                rack_id INTEGER NOT NULL,
+                check_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                firmware_data TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'success',
+                error_message TEXT,
+                user_id INTEGER,
+                FOREIGN KEY (rack_id) REFERENCES racks (id),
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+        
         # Firmware types table for reference
         conn.execute('''
             CREATE TABLE IF NOT EXISTS firmware_types (
