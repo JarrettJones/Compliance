@@ -69,6 +69,7 @@ $hostname = $env:COMPUTERNAME.ToLower()
 $nginxConfig = @"
 # nginx configuration for Firmware Checker
 # Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+# DO NOT MODIFY THIS FILE MANUALLY - Use setup_nginx_proxy.ps1 or fix_ssl_certificate_chain.ps1
 
 worker_processes auto;
 
@@ -102,9 +103,10 @@ http {
         server_name $hostname localhost;
         
         # SSL Certificate Configuration
-        # Using Microsoft-signed certificate from C:\nginx\ssl
-        ssl_certificate      C:/nginx/ssl/server.crt;
-        ssl_certificate_key  C:/nginx/ssl/server.key;
+        # IMPORTANT: Use server-fullchain.crt (includes intermediate CA) for proper SSL validation
+        # These paths will be updated by fix_ssl_certificate_chain.ps1
+        ssl_certificate      C:/nginx/ssl/server-fullchain.crt;
+        ssl_certificate_key  C:/nginx/ssl/server-new.key;
         
         # SSL Settings
         ssl_protocols TLSv1.2 TLSv1.3;
@@ -124,14 +126,14 @@ http {
             # Rewrite to strip /firmware-checker before passing to Flask
             rewrite ^/firmware-checker(.*)$ `$1 break;
             
-            # Proxy to Waitress at root (use IPv4 explicitly to avoid IPv6 issues)
+            # Proxy to Flask on port 5000 (use IPv4 explicitly to avoid IPv6 issues)
             proxy_pass http://127.0.0.1:5000;
             
             # Preserve original request information
             proxy_set_header Host `$host;
             proxy_set_header X-Real-IP `$remote_addr;
             proxy_set_header X-Forwarded-For `$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header X-Forwarded-Proto `$scheme;
             proxy_set_header X-Forwarded-Host `$host;
             proxy_set_header X-Forwarded-Port `$server_port;
             
@@ -188,6 +190,23 @@ if ($testExitCode -eq 0) {
         Write-Host "[OK] Backup restored" -ForegroundColor Green
     }
     exit 1
+}
+
+# Validate that the config is our firmware-checker config
+Write-Host "[INFO] Validating configuration content..." -ForegroundColor Cyan
+$configContent = Get-Content $nginxConf -Raw
+if ($configContent -like "*firmware-checker*" -and $configContent -like "*proxy_pass http://127.0.0.1:5000*") {
+    Write-Host "[OK] Configuration verified - Firmware Checker config is active" -ForegroundColor Green
+} else {
+    Write-Host "[WARNING] Configuration may not be correct!" -ForegroundColor Yellow
+    Write-Host "Expected: Firmware Checker configuration with Flask proxy" -ForegroundColor Yellow
+    
+    if ($configContent -like "*JollyGrid*" -or $configContent -like "*sureshvakati*") {
+        Write-Host "[ERROR] Detected wrong configuration (JollyGrid/other application)" -ForegroundColor Red
+        Write-Host "Re-applying correct configuration..." -ForegroundColor Yellow
+        [System.IO.File]::WriteAllText($nginxConf, $nginxConfig, $utf8NoBom)
+        Write-Host "[OK] Correct configuration re-applied" -ForegroundColor Green
+    }
 }
 Write-Host ""
 
