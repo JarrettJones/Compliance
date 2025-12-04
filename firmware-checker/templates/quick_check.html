@@ -279,7 +279,7 @@ async function handleRackChange() {
     
     if (rackId) {
         try {
-            const response = await fetch(`${API_RACK_SYSTEMS}/${rackId}/systems`);
+            const response = await fetch(`${API_RACK_SYSTEMS}/${rackId}`);
             const systems = await response.json();
             systemsData = {};
             
