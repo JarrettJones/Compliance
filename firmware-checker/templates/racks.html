@@ -549,7 +549,7 @@ async function openAddRackModal() {
     
     // Load location options from API
     try {
-        const response = await fetch('/api/racks/location-options');
+        const response = await fetch('{{ url_for("api_rack_location_options") }}');
         locationOptionsData = await response.json();
         
         // Populate city dropdown
@@ -811,7 +811,7 @@ async function submitAddRack() {
     };
     
     try {
-        const response = await fetch('/api/racks', {
+        const response = await fetch('{{ url_for("api_add_rack") }}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
