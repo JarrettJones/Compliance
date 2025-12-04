@@ -38,6 +38,7 @@ $cert = Get-ChildItem -Path Cert:\LocalMachine\My |
     } |
     Where-Object { $_.HasPrivateKey -eq $true } |
     Where-Object { $_.NotAfter -gt (Get-Date) } |
+    Where-Object { $_.Subject -ne $_.Issuer } |  # Exclude self-signed certificates
     Sort-Object -Property NotAfter -Descending |
     Select-Object -First 1
 
