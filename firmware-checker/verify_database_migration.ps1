@@ -80,13 +80,17 @@ if (-not $sqlite3) {
     # Use Python to verify database
     Write-Host "Checking database using Python..." -ForegroundColor Cyan
     
+    # Create Python script content
+    $requiredTablesJson = $requiredTables | ConvertTo-Json -Compress
+    $dbPathEscaped = $dbPath.Replace('\', '/')
+    
     $pythonScript = @"
 import sqlite3
 import json
 import sys
 
-db_path = '$($dbPath.Replace('\', '\\'))'
-required_tables = $($requiredTables | ConvertTo-Json -Compress | ForEach-Object { $_.Replace('\', '\\') })
+db_path = '$dbPathEscaped'
+required_tables = json.loads('$requiredTablesJson')
 
 try:
     conn = sqlite3.connect(db_path)
@@ -103,16 +107,14 @@ try:
         'missing_columns': {}
     }
     
-    required = json.loads(required_tables)
-    
-    for table, columns in required.items():
+    for table, columns in required_tables.items():
         if table not in tables:
             results['missing_tables'].append(table)
             results['success'] = False
             continue
             
         # Get table columns
-        cursor.execute(f"PRAGMA table_info({table})")
+        cursor.execute("PRAGMA table_info({})".format(table))
         existing_columns = [row[1] for row in cursor.fetchall()]
         results['tables'][table] = existing_columns
         
@@ -126,7 +128,8 @@ try:
     conn.close()
     
 except Exception as e:
-    print(json.dumps({'success': False, 'error': str(e)}), file=sys.stderr)
+    result = {'success': False, 'error': str(e)}
+    print(json.dumps(result), file=sys.stderr)
     sys.exit(1)
 "@
     
@@ -134,7 +137,18 @@ except Exception as e:
     $pythonScript | Out-File -FilePath $tempScript -Encoding UTF8
     
     try {
-        $result = python $tempScript 2>&1 | ConvertFrom-Json
+        $output = python $tempScript 2>&1
+        
+        # Check if output is valid JSON
+        if ($output -match '^\s*\{') {
+            $result = $output | ConvertFrom-Json
+        } else {
+            Write-Host "[ERROR] Python script failed:" -ForegroundColor Red
+            Write-Host $output -ForegroundColor Yellow
+            Remove-Item $tempScript -Force -ErrorAction SilentlyContinue
+            exit 1
+        }
+        
         Remove-Item $tempScript -Force
         
         if ($result.success) {
@@ -142,9 +156,12 @@ except Exception as e:
             Write-Host ""
             
             Write-Host "Database Schema Summary:" -ForegroundColor Yellow
-            Write-Host "-" * 80
-            foreach ($table in $result.tables.Keys | Sort-Object) {
-                $columnCount = $result.tables[$table].Count
+            Write-Host ("-" * 80)
+            
+            # Convert tables to PSCustomObject for proper iteration
+            $tableNames = $result.tables.PSObject.Properties.Name | Sort-Object
+            foreach ($table in $tableNames) {
+                $columnCount = $result.tables.$table.Count
                 Write-Host "  $table" -ForegroundColor White -NoNewline
                 Write-Host " ($columnCount columns)" -ForegroundColor Gray
             }
@@ -164,9 +181,10 @@ except Exception as e:
             
             if ($result.missing_columns.Count -gt 0) {
                 Write-Host "Missing Columns:" -ForegroundColor Red
-                foreach ($table in $result.missing_columns.Keys) {
+                $missingTableNames = $result.missing_columns.PSObject.Properties.Name
+                foreach ($table in $missingTableNames) {
                     Write-Host "  Table: $table" -ForegroundColor Yellow
-                    foreach ($col in $result.missing_columns[$table]) {
+                    foreach ($col in $result.missing_columns.$table) {
                         Write-Host "    - $col" -ForegroundColor Gray
                     }
                 }
