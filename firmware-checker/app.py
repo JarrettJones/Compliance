@@ -3937,16 +3937,19 @@ def api_racks_hierarchy():
                 if room not in hierarchy[location][building]:
                     hierarchy[location][building][room] = []
                 
+                # Get keys from sqlite3.Row object
+                rack_keys = rack.keys()
+                
                 hierarchy[location][building][room].append({
                     'id': rack['id'],
                     'name': rack['name'],
-                    'rack_type': rack['rack_type'] if 'rack_type' in rack.keys() else 'rack',
-                    'description': rack['description'] if 'description' in rack.keys() else None,
+                    'rack_type': rack['rack_type'] if 'rack_type' in rack_keys else 'rack',
+                    'description': rack['description'] if 'description' in rack_keys else None,
                     'system_count': rack['system_count'],
                     'location': location,
                     'building': building,
                     'room': room,
-                    'created_at': rack['created_at'] if 'created_at' in rack.keys() else None,
+                    'created_at': rack['created_at'] if 'created_at' in rack_keys else None,
                     'rscm_upper': rack['rscm_upper_ip'],
                     'rscm_lower': rack['rscm_lower_ip'],
                     'rscm_ip': rack['rscm_ip'],
