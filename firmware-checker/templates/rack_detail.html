@@ -333,7 +333,7 @@ function startRSCMCheck() {
     `;
     
     // Start check
-    fetch('/api/check-rscm-firmware', {
+    fetch('{{ url_for("api_check_rscm_firmware") }}', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
