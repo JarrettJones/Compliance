@@ -3,7 +3,7 @@
 
 $serviceName = "FirmwareCheckerApp"
 $appPath = "C:\Users\jarrettjones\Compliance\firmware-checker"
-$pythonExe = "python.exe"  # Adjust if you have a specific Python path
+$pythonExe = "C:\Users\jarrettjones\AppData\Local\Programs\Python\Python313\python.exe"
 $appScript = "wsgi.py"  # Using production WSGI server
 $nssmPath = "C:\nssm\nssm-2.24\win64\nssm.exe"
 
@@ -45,7 +45,29 @@ Write-Host "Configuring service..." -ForegroundColor Green
 & $nssmPath set $serviceName AppRotateBytes 10485760  # 10MB
 
 # Set environment variables if needed
-& $nssmPath set $serviceName AppEnvironmentExtra "FLASK_ENV=production"
+# Check if .env file exists and read SECRET_KEY
+$envFile = Join-Path $appPath ".env"
+$secretKey = $null
+
+if (Test-Path $envFile) {
+    Write-Host "Reading SECRET_KEY from .env file..." -ForegroundColor Green
+    $envContent = Get-Content $envFile
+    foreach ($line in $envContent) {
+        if ($line -match '^SECRET_KEY=(.+)$') {
+            $secretKey = $Matches[1]
+            break
+        }
+    }
+}
+
+if ($secretKey) {
+    Write-Host "Setting SECRET_KEY environment variable for service..." -ForegroundColor Green
+    & $nssmPath set $serviceName AppEnvironmentExtra "SECRET_KEY=$secretKey"
+} else {
+    Write-Host "WARNING: No SECRET_KEY found in .env file!" -ForegroundColor Yellow
+    Write-Host "Run: python generate_secret_key.py" -ForegroundColor Yellow
+    Write-Host "Then restart the service after creating .env file" -ForegroundColor Yellow
+}
 
 # Start the service
 Write-Host "Starting service..." -ForegroundColor Green
