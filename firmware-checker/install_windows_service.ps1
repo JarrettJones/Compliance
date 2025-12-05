@@ -4,8 +4,8 @@
 $serviceName = "FirmwareCheckerApp"
 $appPath = "C:\Users\jarrettjones\Compliance\firmware-checker"
 $pythonExe = "python.exe"  # Adjust if you have a specific Python path
-$appScript = "app.py"
-$nssmPath = "C:\nssm\nssm.exe"  # Adjust to where you download NSSM
+$appScript = "wsgi.py"  # Using production WSGI server
+$nssmPath = "C:\nssm\nssm-2.24\win64\nssm.exe"
 
 # Check if NSSM is installed
 if (-not (Test-Path $nssmPath)) {

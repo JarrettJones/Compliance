@@ -2,7 +2,7 @@
 # Run this script as Administrator
 
 $serviceName = "FirmwareCheckerApp"
-$nssmPath = "C:\nssm\nssm.exe"
+$nssmPath = "C:\nssm\nssm-2.24\win64\nssm.exe"
 
 # Check if NSSM is installed
 if (-not (Test-Path $nssmPath)) {
