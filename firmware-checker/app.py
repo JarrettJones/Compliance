@@ -4537,7 +4537,7 @@ def api_check_firmware_individual():
         # Get the existing check record to get system info
         with get_db_connection() as conn:
             check = conn.execute('''
-                SELECT fc.*, s.name as system_name, s.rscm_port, s.rack_id,
+                SELECT fc.*, s.name as system_name, s.rscm_ip, s.rscm_port, s.rack_id,
                        r.rscm_upper_ip, r.rscm_lower_ip
                 FROM firmware_checks fc
                 JOIN systems s ON fc.system_id = s.id
@@ -4548,11 +4548,11 @@ def api_check_firmware_individual():
             if not check:
                 return jsonify({'error': 'Check not found'}), 404
             
-            # Get RSCM IP from rack (default to upper, fall back to lower)
-            rscm_ip = check['rscm_upper_ip'] or check['rscm_lower_ip']
+            # Get RSCM IP - prioritize system's own RSCM IP, then rack's RSCM IPs
+            rscm_ip = check['rscm_ip'] or check['rscm_upper_ip'] or check['rscm_lower_ip']
             if not rscm_ip:
-                # If no rack RSCM found, this is an issue - we need an IP to check
-                return jsonify({'error': 'No RSCM IP found for this system\'s rack'}), 400
+                # If no RSCM IP found anywhere, this is an issue
+                return jsonify({'error': 'No RSCM IP found for this system or its rack'}), 400
         
         # Get credentials from request data
         username = data.get('username', 'admin')
