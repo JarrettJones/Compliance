@@ -99,6 +99,27 @@
                 </dl>
             </div>
         </div>
+        
+        <!-- System Reservations -->
+        {% if session.get('role') in ['admin', 'editor', 'scheduler'] %}
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-calendar-check"></i> Reservations</h5>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#reservationModal">
+                    <i class="bi bi-plus"></i> New Reservation
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="reservationsList">
+                    <div class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
     
     <!-- Quick Stats -->
@@ -245,6 +266,55 @@
         </div>
     </div>
 </div>
+
+<!-- Reservation Modal -->
+{% if session.get('role') in ['admin', 'editor', 'scheduler'] %}
+<div class="modal fade" id="reservationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-calendar-plus"></i> New Reservation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="reservationForm">
+                    <div class="mb-3">
+                        <label for="startTime" class="form-label">Start Time <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="startTime" placeholder="MM/DD/YY HH:MM" required>
+                        <small class="text-muted">Format: MM/DD/YY HH:MM (e.g., 12/09/25 14:30)</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="endTime" class="form-label">End Time <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="endTime" placeholder="MM/DD/YY HH:MM" required>
+                        <small class="text-muted">Format: MM/DD/YY HH:MM (e.g., 12/09/25 18:00)</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="purpose" class="form-label">Purpose</label>
+                        <textarea class="form-control" id="purpose" rows="3" placeholder="Brief description of reservation purpose"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-info w-100" onclick="checkAvailability()">
+                            <i class="bi bi-search"></i> Check Availability
+                        </button>
+                    </div>
+                    <div id="availabilityMessage"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="createReservationBtn" onclick="createReservation()" disabled>
+                    <i class="bi bi-check-circle"></i> Create Reservation
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Flatpickr CSS (for date/time picker) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -293,6 +363,251 @@ function deleteCheck(button) {
         alert('Check deletion not implemented yet');
     }
 }
+
+// ==================== RESERVATION MANAGEMENT ====================
+
+{% if session.get('role') in ['admin', 'editor', 'scheduler'] %}
+const systemId = {{ system.id }};
+
+// Load reservations when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadSystemReservations();
+    
+    // Initialize datetime pickers
+    flatpickr("#startTime", {
+        enableTime: true,
+        dateFormat: "m/d/y H:i",
+        minDate: "today",
+        time_24hr: false,
+        onChange: function(selectedDates, dateStr, instance) {
+            // Update end time picker min date to match start time
+            const endTimePicker = document.getElementById('endTime')._flatpickr;
+            if (selectedDates[0]) {
+                endTimePicker.set('minDate', selectedDates[0]);
+            }
+        }
+    });
+    
+    flatpickr("#endTime", {
+        enableTime: true,
+        dateFormat: "m/d/y H:i",
+        minDate: "today",
+        time_24hr: false
+    });
+});
+
+async function loadSystemReservations() {
+    const container = document.getElementById('reservationsList');
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/systems/${systemId}/reservations?status=active`);
+        const reservations = await response.json();
+        
+        if (reservations.length === 0) {
+            container.innerHTML = '<p class="text-muted mb-0"><i class="bi bi-info-circle"></i> No active reservations for this system.</p>';
+            return;
+        }
+        
+        const now = new Date();
+        let html = '<div class="list-group">';
+        
+        reservations.forEach(reservation => {
+            const startTime = new Date(reservation.start_time);
+            const endTime = new Date(reservation.end_time);
+            const isOngoing = startTime <= now && endTime >= now;
+            const isUpcoming = startTime > now;
+            
+            let statusBadge = '';
+            let statusClass = '';
+            if (isOngoing) {
+                statusBadge = '<span class="badge bg-success">Ongoing</span>';
+                statusClass = 'border-success';
+            } else if (isUpcoming) {
+                statusBadge = '<span class="badge bg-primary">Upcoming</span>';
+            }
+            
+            const canCancel = reservation.user_id === {{ session.get('user_id') }} || {{ 'true' if session.get('role') in ['admin', 'editor'] else 'false' }};
+            
+            html += `
+                <div class="list-group-item ${statusClass}">
+                    <div class="d-flex w-100 justify-content-between align-items-start">
+                        <div>
+                            <h6 class="mb-1">${statusBadge} ${escapeHtml(reservation.user_name)}</h6>
+                            <p class="mb-1">
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar-event"></i> ${formatDateTime(startTime)} - ${formatDateTime(endTime)}
+                                </small>
+                            </p>
+                            ${reservation.purpose ? `<p class="mb-0"><small>${escapeHtml(reservation.purpose)}</small></p>` : ''}
+                        </div>
+                        ${canCancel && isUpcoming ? `
+                            <button class="btn btn-sm btn-outline-danger" onclick="cancelReservation(${reservation.id})">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        container.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Error loading reservations:', error);
+        container.innerHTML = '<div class="alert alert-danger">Error loading reservations</div>';
+    }
+}
+
+async function checkAvailability() {
+    const startTime = document.getElementById('startTime').value;
+    const endTime = document.getElementById('endTime').value;
+    const messageDiv = document.getElementById('availabilityMessage');
+    
+    if (!startTime || !endTime) {
+        messageDiv.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> Please select both start and end times</div>';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/check-availability`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                system_id: systemId,
+                start_time: startTime,
+                end_time: endTime
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.available) {
+            messageDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle"></i> System is available during this time!</div>';
+            document.getElementById('createReservationBtn').disabled = false;
+        } else {
+            let html = '<div class="alert alert-danger">';
+            html += '<h6><i class="bi bi-exclamation-circle"></i> System is not available</h6>';
+            html += '<p class="mb-2">Conflicts with existing reservations:</p>';
+            html += '<ul class="mb-0">';
+            result.conflicts.forEach(conflict => {
+                const start = new Date(conflict.start_time);
+                const end = new Date(conflict.end_time);
+                html += `<li>${conflict.user}: ${formatDateTime(start)} - ${formatDateTime(end)}</li>`;
+            });
+            html += '</ul>';
+            
+            if (result.next_available) {
+                html += `<hr><p class="mb-0"><strong>Next available:</strong> ${result.next_available.start_time} - ${result.next_available.end_time}</p>`;
+                html += `<button class="btn btn-sm btn-primary mt-2" onclick="useNextAvailable('${result.next_available.start_time}', '${result.next_available.end_time}')">Use This Time</button>`;
+            }
+            html += '</div>';
+            messageDiv.innerHTML = html;
+            document.getElementById('createReservationBtn').disabled = true;
+        }
+    } catch (error) {
+        console.error('Error checking availability:', error);
+        messageDiv.innerHTML = '<div class="alert alert-danger">Error checking availability</div>';
+    }
+}
+
+function useNextAvailable(startTime, endTime) {
+    document.getElementById('startTime').value = startTime;
+    document.getElementById('endTime').value = endTime;
+    document.getElementById('startTime')._flatpickr.setDate(startTime, true);
+    document.getElementById('endTime')._flatpickr.setDate(endTime, true);
+    checkAvailability();
+}
+
+async function createReservation() {
+    const startTime = document.getElementById('startTime').value;
+    const endTime = document.getElementById('endTime').value;
+    const purpose = document.getElementById('purpose').value;
+    const messageDiv = document.getElementById('availabilityMessage');
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/create`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                system_id: systemId,
+                start_time: startTime,
+                end_time: endTime,
+                purpose: purpose
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            messageDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle"></i> Reservation created successfully!</div>';
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('reservationModal')).hide();
+                loadSystemReservations();
+                resetReservationForm();
+            }, 1500);
+        } else {
+            messageDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-circle"></i> ${result.error}</div>`;
+        }
+    } catch (error) {
+        console.error('Error creating reservation:', error);
+        messageDiv.innerHTML = '<div class="alert alert-danger">Error creating reservation</div>';
+    }
+}
+
+async function cancelReservation(reservationId) {
+    if (!confirm('Are you sure you want to cancel this reservation?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/${reservationId}/cancel`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            loadSystemReservations();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error cancelling reservation:', error);
+        alert('Error cancelling reservation');
+    }
+}
+
+function resetReservationForm() {
+    document.getElementById('startTime').value = '';
+    document.getElementById('endTime').value = '';
+    document.getElementById('purpose').value = '';
+    document.getElementById('availabilityMessage').innerHTML = '';
+    document.getElementById('createReservationBtn').disabled = true;
+}
+
+function formatDateTime(date) {
+    return date.toLocaleString('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Close modal reset
+document.getElementById('reservationModal')?.addEventListener('hidden.bs.modal', resetReservationForm);
+{% endif %}
+
 </script>
 
 <style>

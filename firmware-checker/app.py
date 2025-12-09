@@ -3485,6 +3485,12 @@ def edit_system(system_id):
 
 # ==================== RESERVATION MANAGEMENT ====================
 
+@app.route('/reservations')
+@login_required
+def reservations():
+    """View user's reservations"""
+    return render_template('reservations.html')
+
 @app.route('/api/reservations/check-availability', methods=['POST'])
 @scheduler_required
 def api_check_reservation_availability():

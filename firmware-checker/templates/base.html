@@ -53,6 +53,14 @@
                             <i class="bi bi-file-earmark-check"></i> Recipes
                         </a>
                     </li>
+                    {% if session.get('role') in ['admin', 'editor', 'scheduler'] %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'reservations' %}active{% endif %}" 
+                           href="{{ url_for('reservations') }}">
+                            <i class="bi bi-calendar-check"></i> Reservations
+                        </a>
+                    </li>
+                    {% endif %}
                     {% endif %}
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'help' %}active{% endif %}" 

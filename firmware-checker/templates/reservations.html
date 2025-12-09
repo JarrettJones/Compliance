@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block title %}My Reservations{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>My Reservations</h2>
+            <p class="text-muted">View and manage your system reservations</p>
+        </div>
+    </div>
+
+    <!-- Filter Tabs -->
+    <ul class="nav nav-tabs mb-3" id="reservationTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="active-tab" data-bs-toggle="tab" data-bs-target="#active" type="button" role="tab">
+                Active <span class="badge bg-primary" id="activeCount">0</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="completed-tab" data-bs-toggle="tab" data-bs-target="#completed" type="button" role="tab">
+                Completed <span class="badge bg-secondary" id="completedCount">0</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="cancelled-tab" data-bs-toggle="tab" data-bs-target="#cancelled" type="button" role="tab">
+                Cancelled <span class="badge bg-secondary" id="cancelledCount">0</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="all-tab" data-bs-toggle="tab" data-bs-target="#all" type="button" role="tab">
+                All
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="reservationTabContent">
+        <!-- Active Reservations -->
+        <div class="tab-pane fade show active" id="active" role="tabpanel">
+            <div id="activeReservations">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Completed Reservations -->
+        <div class="tab-pane fade" id="completed" role="tabpanel">
+            <div id="completedReservations">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cancelled Reservations -->
+        <div class="tab-pane fade" id="cancelled" role="tabpanel">
+            <div id="cancelledReservations">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- All Reservations -->
+        <div class="tab-pane fade" id="all" role="tabpanel">
+            <div id="allReservations">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const SCRIPT_ROOT = "{{ url_for('index') }}".replace('/index', '');
+
+// Load reservations when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadReservations('active');
+    
+    // Add event listeners for tab changes
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', function(event) {
+            const status = event.target.id.replace('-tab', '');
+            loadReservations(status);
+        });
+    });
+});
+
+async function loadReservations(status) {
+    const container = document.getElementById(`${status}Reservations`);
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/my-reservations?status=${status}`);
+        const reservations = await response.json();
+        
+        if (status === 'active') {
+            document.getElementById('activeCount').textContent = reservations.length;
+        } else if (status === 'completed') {
+            document.getElementById('completedCount').textContent = reservations.length;
+        } else if (status === 'cancelled') {
+            document.getElementById('cancelledCount').textContent = reservations.length;
+        }
+        
+        if (reservations.length === 0) {
+            container.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> No ${status} reservations found.
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<div class="row g-3">';
+        reservations.forEach(reservation => {
+            html += renderReservationCard(reservation);
+        });
+        html += '</div>';
+        
+        container.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Error loading reservations:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle"></i> Error loading reservations: ${error.message}
+            </div>
+        `;
+    }
+}
+
+function renderReservationCard(reservation) {
+    const startTime = new Date(reservation.start_time);
+    const endTime = new Date(reservation.end_time);
+    const now = new Date();
+    
+    const isActive = reservation.status === 'active';
+    const isUpcoming = isActive && startTime > now;
+    const isOngoing = isActive && startTime <= now && endTime >= now;
+    const isPast = endTime < now;
+    
+    let statusBadge = '';
+    if (reservation.status === 'active') {
+        if (isOngoing) {
+            statusBadge = '<span class="badge bg-success">Ongoing</span>';
+        } else if (isUpcoming) {
+            statusBadge = '<span class="badge bg-primary">Upcoming</span>';
+        } else {
+            statusBadge = '<span class="badge bg-warning">Past Due</span>';
+        }
+    } else if (reservation.status === 'completed') {
+        statusBadge = '<span class="badge bg-secondary">Completed</span>';
+    } else if (reservation.status === 'cancelled') {
+        statusBadge = '<span class="badge bg-danger">Cancelled</span>';
+    }
+    
+    const canCancel = reservation.status === 'active' && endTime > now;
+    
+    return `
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 ${isOngoing ? 'border-success' : ''}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h5 class="card-title mb-0">
+                            <a href="${SCRIPT_ROOT}/systems/${reservation.system_id}">${reservation.system_name}</a>
+                        </h5>
+                        ${statusBadge}
+                    </div>
+                    
+                    <div class="mb-2">
+                        <small class="text-muted">
+                            <i class="bi bi-calendar-event"></i> 
+                            ${formatDateTime(startTime)}
+                        </small>
+                    </div>
+                    <div class="mb-2">
+                        <small class="text-muted">
+                            <i class="bi bi-calendar-event-fill"></i> 
+                            ${formatDateTime(endTime)}
+                        </small>
+                    </div>
+                    
+                    ${reservation.purpose ? `
+                        <div class="mb-2">
+                            <strong>Purpose:</strong> ${escapeHtml(reservation.purpose)}
+                        </div>
+                    ` : ''}
+                    
+                    <div class="mb-2">
+                        <small class="text-muted">
+                            Duration: ${calculateDuration(startTime, endTime)}
+                        </small>
+                    </div>
+                    
+                    ${canCancel ? `
+                        <button class="btn btn-sm btn-outline-danger mt-2" onclick="cancelReservation(${reservation.id})">
+                            <i class="bi bi-x-circle"></i> Cancel Reservation
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function formatDateTime(date) {
+    return date.toLocaleString('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    });
+}
+
+function calculateDuration(start, end) {
+    const diffMs = end - start;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (diffHours > 24) {
+        const days = Math.floor(diffHours / 24);
+        const hours = diffHours % 24;
+        return `${days}d ${hours}h`;
+    }
+    
+    return `${diffHours}h ${diffMinutes}m`;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function cancelReservation(reservationId) {
+    if (!confirm('Are you sure you want to cancel this reservation?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/${reservationId}/cancel`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Reservation cancelled successfully');
+            // Reload the current tab
+            const activeTab = document.querySelector('.nav-link.active').id.replace('-tab', '');
+            loadReservations(activeTab);
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error cancelling reservation:', error);
+        alert('Error cancelling reservation: ' + error.message);
+    }
+}
+</script>
+
+<style>
+.card {
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.border-success {
+    border-width: 2px !important;
+}
+</style>
+{% endblock %}
