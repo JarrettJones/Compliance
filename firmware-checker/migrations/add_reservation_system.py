@@ -30,6 +30,9 @@ def run_migration(db_path='firmware_checker.db'):
             # SQLite doesn't support ALTER CONSTRAINT, so we need to recreate the table
             print("  - Creating temporary users table with new role constraint...")
             
+            # Clean up any existing users_new table from failed migrations
+            cursor.execute("DROP TABLE IF EXISTS users_new")
+            
             cursor.execute('''
                 CREATE TABLE users_new (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,6 +46,7 @@ def run_migration(db_path='firmware_checker.db'):
                     team TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_login TIMESTAMP,
+                    must_change_password INTEGER DEFAULT 0,
                     CONSTRAINT valid_role CHECK (role IN ('admin', 'editor', 'viewer', 'scheduler'))
                 )
             ''')
@@ -50,7 +54,9 @@ def run_migration(db_path='firmware_checker.db'):
             print("  - Copying data from old users table...")
             cursor.execute('''
                 INSERT INTO users_new 
-                SELECT * FROM users
+                SELECT id, username, password_hash, role, is_active, email, 
+                       first_name, last_name, team, created_at, last_login, must_change_password
+                FROM users
             ''')
             
             print("  - Dropping old users table...")
