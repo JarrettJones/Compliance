@@ -84,7 +84,7 @@
 </div>
 
 <script>
-const SCRIPT_ROOT = "{{ url_for('index') }}".replace('/index', '');
+const SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
 
 // Load reservations when page loads
 document.addEventListener('DOMContentLoaded', function() {
