@@ -306,7 +306,7 @@ def init_db():
                 team TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_login TIMESTAMP,
-                CONSTRAINT valid_role CHECK (role IN ('admin', 'editor', 'viewer'))
+                CONSTRAINT valid_role CHECK (role IN ('admin', 'editor', 'viewer', 'scheduler'))
             )
         ''')
         
@@ -644,6 +644,64 @@ def init_db():
         
         conn.commit()
         
+        # Reservations table for system booking
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS reservations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                system_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                start_time TIMESTAMP NOT NULL,
+                end_time TIMESTAMP NOT NULL,
+                purpose TEXT,
+                status TEXT DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                cancelled_at TIMESTAMP,
+                cancelled_by INTEGER,
+                notes TEXT,
+                FOREIGN KEY (system_id) REFERENCES systems (id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+                FOREIGN KEY (cancelled_by) REFERENCES users (id),
+                CONSTRAINT valid_status CHECK (status IN ('active', 'completed', 'cancelled')),
+                CONSTRAINT valid_time_range CHECK (end_time > start_time)
+            )
+        ''')
+        
+        # Reservation history for audit trail
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS reservation_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                performed_by INTEGER NOT NULL,
+                performed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                old_start_time TIMESTAMP,
+                old_end_time TIMESTAMP,
+                new_start_time TIMESTAMP,
+                new_end_time TIMESTAMP,
+                notes TEXT,
+                FOREIGN KEY (reservation_id) REFERENCES reservations (id) ON DELETE CASCADE,
+                FOREIGN KEY (performed_by) REFERENCES users (id),
+                CONSTRAINT valid_action CHECK (action IN ('created', 'modified', 'cancelled', 'completed'))
+            )
+        ''')
+        
+        # Create indexes for reservation queries
+        conn.execute('''
+            CREATE INDEX IF NOT EXISTS idx_reservations_system_time 
+            ON reservations(system_id, start_time, end_time, status)
+        ''')
+        
+        conn.execute('''
+            CREATE INDEX IF NOT EXISTS idx_reservations_user 
+            ON reservations(user_id, status)
+        ''')
+        
+        conn.execute('''
+            CREATE INDEX IF NOT EXISTS idx_reservations_time_range 
+            ON reservations(start_time, end_time, status)
+        ''')
+        
         # Insert firmware types if they don't exist
         firmware_types = [
             # DC-SCM firmware types
@@ -797,6 +855,34 @@ def editor_required(f):
         
         if session.get('role') not in ['admin', 'editor']:
             flash('You need editor privileges to perform this action.', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def scheduler_required(f):
+    """Decorator to require scheduler, editor, or admin role"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('login', next=request.url))
+        
+        # Validate session integrity - ensure user_id and username match database
+        user_id = session.get('user_id')
+        session_username = session.get('username')
+        
+        with get_db_connection() as conn:
+            user = conn.execute('SELECT username, role FROM users WHERE id = ?', (user_id,)).fetchone()
+            
+            # If user doesn't exist or username doesn't match, clear session and redirect
+            if not user or user['username'] != session_username:
+                logger.warning(f"Session validation failed! user_id={user_id}, session_username={session_username}, db_username={user['username'] if user else 'NOT_FOUND'}")
+                session.clear()
+                flash('Session validation failed. Please log in again.', 'error')
+                return redirect(url_for('login', next=request.url))
+        
+        if session.get('role') not in ['admin', 'editor', 'scheduler']:
+            flash('You need scheduler privileges to perform this action.', 'error')
             return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated_function
@@ -3396,6 +3482,343 @@ def edit_system(system_id):
                          rack=rack,
                          u_height=u_height,
                          additional_notes=additional_notes)
+
+# ==================== RESERVATION MANAGEMENT ====================
+
+@app.route('/api/reservations/check-availability', methods=['POST'])
+@scheduler_required
+def api_check_reservation_availability():
+    """Check if a system is available for reservation during specified time"""
+    try:
+        data = request.get_json()
+        system_id = data.get('system_id')
+        start_time = data.get('start_time')  # Format: "MM/DD/YY HH:MM"
+        end_time = data.get('end_time')      # Format: "MM/DD/YY HH:MM"
+        reservation_id = data.get('reservation_id')  # Optional: for checking when editing
+        
+        if not all([system_id, start_time, end_time]):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        # Parse datetime strings
+        from datetime import datetime
+        try:
+            start_dt = datetime.strptime(start_time, '%m/%d/%y %H:%M')
+            end_dt = datetime.strptime(end_time, '%m/%d/%y %H:%M')
+        except ValueError:
+            return jsonify({'error': 'Invalid date format. Use MM/DD/YY HH:MM'}), 400
+        
+        # Validate time range
+        if end_dt <= start_dt:
+            return jsonify({'available': False, 'error': 'End time must be after start time'}), 200
+        
+        if start_dt < datetime.now():
+            return jsonify({'available': False, 'error': 'Start time cannot be in the past'}), 200
+        
+        with get_db_connection() as conn:
+            # Check for overlapping reservations (excluding cancelled ones and optionally current reservation)
+            query = '''
+                SELECT r.*, u.username, u.first_name, u.last_name
+                FROM reservations r
+                JOIN users u ON r.user_id = u.id
+                WHERE r.system_id = ? 
+                AND r.status = 'active'
+                AND (
+                    (r.start_time <= ? AND r.end_time > ?)
+                    OR (r.start_time < ? AND r.end_time >= ?)
+                    OR (r.start_time >= ? AND r.end_time <= ?)
+                )
+            '''
+            params = [system_id, start_dt, start_dt, end_dt, end_dt, start_dt, end_dt]
+            
+            if reservation_id:
+                query += ' AND r.id != ?'
+                params.append(reservation_id)
+            
+            conflicts = conn.execute(query, params).fetchall()
+            
+            if conflicts:
+                # Find next available time slot
+                next_available = find_next_available_slot(conn, system_id, start_dt, end_dt)
+                
+                conflict_info = []
+                for conflict in conflicts:
+                    user_name = f"{conflict['first_name']} {conflict['last_name']}" if conflict['first_name'] else conflict['username']
+                    conflict_info.append({
+                        'start_time': conflict['start_time'],
+                        'end_time': conflict['end_time'],
+                        'user': user_name,
+                        'purpose': conflict['purpose']
+                    })
+                
+                return jsonify({
+                    'available': False,
+                    'conflicts': conflict_info,
+                    'next_available': next_available
+                }), 200
+            
+            return jsonify({'available': True}), 200
+            
+    except Exception as e:
+        logger.error(f"Error checking reservation availability: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+def find_next_available_slot(conn, system_id, desired_start, desired_end):
+    """Find the next available time slot for a system"""
+    from datetime import datetime, timedelta
+    
+    # Get all future active reservations for this system
+    reservations = conn.execute('''
+        SELECT start_time, end_time
+        FROM reservations
+        WHERE system_id = ? AND status = 'active' AND end_time > ?
+        ORDER BY start_time
+    ''', (system_id, datetime.now())).fetchall()
+    
+    if not reservations:
+        # No future reservations, suggest original time or now if in past
+        suggested_start = max(desired_start, datetime.now())
+        return {
+            'start_time': suggested_start.strftime('%m/%d/%y %H:%M'),
+            'end_time': (suggested_start + (desired_end - desired_start)).strftime('%m/%d/%y %H:%M')
+        }
+    
+    # Calculate duration of desired reservation
+    duration = desired_end - desired_start
+    
+    # Check if we can fit before the first reservation
+    first_reservation_start = datetime.strptime(reservations[0]['start_time'], '%Y-%m-%d %H:%M:%S')
+    earliest_possible = max(datetime.now(), desired_start)
+    
+    if earliest_possible + duration <= first_reservation_start:
+        return {
+            'start_time': earliest_possible.strftime('%m/%d/%y %H:%M'),
+            'end_time': (earliest_possible + duration).strftime('%m/%d/%y %H:%M')
+        }
+    
+    # Check gaps between reservations
+    for i in range(len(reservations) - 1):
+        current_end = datetime.strptime(reservations[i]['end_time'], '%Y-%m-%d %H:%M:%S')
+        next_start = datetime.strptime(reservations[i + 1]['start_time'], '%Y-%m-%d %H:%M:%S')
+        
+        if current_end + duration <= next_start:
+            return {
+                'start_time': current_end.strftime('%m/%d/%y %H:%M'),
+                'end_time': (current_end + duration).strftime('%m/%d/%y %H:%M')
+            }
+    
+    # Suggest after the last reservation
+    last_end = datetime.strptime(reservations[-1]['end_time'], '%Y-%m-%d %H:%M:%S')
+    return {
+        'start_time': last_end.strftime('%m/%d/%y %H:%M'),
+        'end_time': (last_end + duration).strftime('%m/%d/%y %H:%M')
+    }
+
+@app.route('/api/reservations/create', methods=['POST'])
+@scheduler_required
+def api_create_reservation():
+    """Create a new system reservation"""
+    try:
+        data = request.get_json()
+        system_id = data.get('system_id')
+        start_time = data.get('start_time')
+        end_time = data.get('end_time')
+        purpose = data.get('purpose', '')
+        
+        if not all([system_id, start_time, end_time]):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        # Parse datetime strings
+        from datetime import datetime
+        try:
+            start_dt = datetime.strptime(start_time, '%m/%d/%y %H:%M')
+            end_dt = datetime.strptime(end_time, '%m/%d/%y %H:%M')
+        except ValueError:
+            return jsonify({'error': 'Invalid date format. Use MM/DD/YY HH:MM'}), 400
+        
+        user_id = session.get('user_id')
+        
+        with get_db_connection() as conn:
+            # Double-check availability before creating
+            conflicts = conn.execute('''
+                SELECT COUNT(*) as count FROM reservations
+                WHERE system_id = ? AND status = 'active'
+                AND (
+                    (start_time <= ? AND end_time > ?)
+                    OR (start_time < ? AND end_time >= ?)
+                    OR (start_time >= ? AND end_time <= ?)
+                )
+            ''', (system_id, start_dt, start_dt, end_dt, end_dt, start_dt, end_dt)).fetchone()
+            
+            if conflicts['count'] > 0:
+                return jsonify({'error': 'System is not available during this time'}), 409
+            
+            # Create reservation
+            cursor = conn.execute('''
+                INSERT INTO reservations (system_id, user_id, start_time, end_time, purpose, status)
+                VALUES (?, ?, ?, ?, ?, 'active')
+            ''', (system_id, user_id, start_dt, end_dt, purpose))
+            
+            reservation_id = cursor.lastrowid
+            
+            # Log to history
+            conn.execute('''
+                INSERT INTO reservation_history (reservation_id, action, performed_by, new_start_time, new_end_time, notes)
+                VALUES (?, 'created', ?, ?, ?, ?)
+            ''', (reservation_id, user_id, start_dt, end_dt, purpose))
+            
+            conn.commit()
+            
+            # Get system name for response
+            system = conn.execute('SELECT name FROM systems WHERE id = ?', (system_id,)).fetchone()
+            
+            return jsonify({
+                'success': True,
+                'reservation_id': reservation_id,
+                'message': f'Reservation created for {system["name"]}'
+            }), 201
+            
+    except Exception as e:
+        logger.error(f"Error creating reservation: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/reservations/<int:reservation_id>/cancel', methods=['POST'])
+@scheduler_required
+def api_cancel_reservation(reservation_id):
+    """Cancel a reservation"""
+    try:
+        user_id = session.get('user_id')
+        user_role = session.get('role')
+        
+        with get_db_connection() as conn:
+            reservation = conn.execute('''
+                SELECT * FROM reservations WHERE id = ?
+            ''', (reservation_id,)).fetchone()
+            
+            if not reservation:
+                return jsonify({'error': 'Reservation not found'}), 404
+            
+            # Only allow cancellation by the user who made it, or by admin/editor
+            if reservation['user_id'] != user_id and user_role not in ['admin', 'editor']:
+                return jsonify({'error': 'You can only cancel your own reservations'}), 403
+            
+            if reservation['status'] != 'active':
+                return jsonify({'error': 'Reservation is not active'}), 400
+            
+            from datetime import datetime
+            now = datetime.now()
+            
+            # Update reservation status
+            conn.execute('''
+                UPDATE reservations
+                SET status = 'cancelled', cancelled_at = ?, cancelled_by = ?, updated_at = ?
+                WHERE id = ?
+            ''', (now, user_id, now, reservation_id))
+            
+            # Log to history
+            conn.execute('''
+                INSERT INTO reservation_history (reservation_id, action, performed_by, notes)
+                VALUES (?, 'cancelled', ?, 'Reservation cancelled')
+            ''', (reservation_id, user_id))
+            
+            conn.commit()
+            
+            return jsonify({'success': True, 'message': 'Reservation cancelled'}), 200
+            
+    except Exception as e:
+        logger.error(f"Error cancelling reservation: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/systems/<int:system_id>/reservations', methods=['GET'])
+@login_required
+def api_get_system_reservations(system_id):
+    """Get all reservations for a system"""
+    try:
+        status_filter = request.args.get('status', 'active')  # active, completed, cancelled, all
+        
+        with get_db_connection() as conn:
+            query = '''
+                SELECT r.*, u.username, u.first_name, u.last_name,
+                       cb.username as cancelled_by_username
+                FROM reservations r
+                JOIN users u ON r.user_id = u.id
+                LEFT JOIN users cb ON r.cancelled_by = cb.id
+                WHERE r.system_id = ?
+            '''
+            params = [system_id]
+            
+            if status_filter != 'all':
+                query += ' AND r.status = ?'
+                params.append(status_filter)
+            
+            query += ' ORDER BY r.start_time DESC'
+            
+            reservations = conn.execute(query, params).fetchall()
+            
+            result = []
+            for r in reservations:
+                user_name = f"{r['first_name']} {r['last_name']}" if r['first_name'] else r['username']
+                result.append({
+                    'id': r['id'],
+                    'start_time': r['start_time'],
+                    'end_time': r['end_time'],
+                    'purpose': r['purpose'],
+                    'status': r['status'],
+                    'user_name': user_name,
+                    'user_id': r['user_id'],
+                    'created_at': r['created_at'],
+                    'cancelled_at': r['cancelled_at'],
+                    'cancelled_by': r['cancelled_by_username']
+                })
+            
+            return jsonify(result), 200
+            
+    except Exception as e:
+        logger.error(f"Error getting system reservations: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/reservations/my-reservations', methods=['GET'])
+@login_required
+def api_get_my_reservations():
+    """Get current user's reservations"""
+    try:
+        user_id = session.get('user_id')
+        status_filter = request.args.get('status', 'active')
+        
+        with get_db_connection() as conn:
+            query = '''
+                SELECT r.*, s.name as system_name
+                FROM reservations r
+                JOIN systems s ON r.system_id = s.id
+                WHERE r.user_id = ?
+            '''
+            params = [user_id]
+            
+            if status_filter != 'all':
+                query += ' AND r.status = ?'
+                params.append(status_filter)
+            
+            query += ' ORDER BY r.start_time DESC'
+            
+            reservations = conn.execute(query, params).fetchall()
+            
+            result = []
+            for r in reservations:
+                result.append({
+                    'id': r['id'],
+                    'system_id': r['system_id'],
+                    'system_name': r['system_name'],
+                    'start_time': r['start_time'],
+                    'end_time': r['end_time'],
+                    'purpose': r['purpose'],
+                    'status': r['status'],
+                    'created_at': r['created_at']
+                })
+            
+            return jsonify(result), 200
+            
+    except Exception as e:
+        logger.error(f"Error getting user reservations: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 # ==================== RACK MANAGEMENT ====================
 
