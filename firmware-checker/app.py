@@ -2623,7 +2623,7 @@ def admin_edit_user(user_id):
             team = request.form.get('team', '')
             new_password = request.form.get('new_password', '')
             
-            if role not in ['admin', 'editor', 'viewer']:
+            if role not in ['admin', 'editor', 'viewer', 'scheduler']:
                 flash('Invalid role', 'error')
                 return redirect(url_for('admin_edit_user', user_id=user_id))
             

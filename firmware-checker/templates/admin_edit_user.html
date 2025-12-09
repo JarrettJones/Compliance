@@ -25,6 +25,9 @@
                             <option value="viewer" {% if user.role == 'viewer' %}selected{% endif %}>
                                 Viewer - Read-only access, can run checks
                             </option>
+                            <option value="scheduler" {% if user.role == 'scheduler' %}selected{% endif %}>
+                                Scheduler - Can manage system reservations
+                            </option>
                             <option value="editor" {% if user.role == 'editor' %}selected{% endif %}>
                                 Editor - Can add/modify systems and recipes, run checks
                             </option>
@@ -34,6 +37,7 @@
                         </select>
                         <small class="form-text text-muted">
                             <strong>Viewer:</strong> Can view and run firmware checks only<br>
+                            <strong>Scheduler:</strong> Can create and manage system reservations<br>
                             <strong>Editor:</strong> Can create/edit systems, recipes, and run checks<br>
                             <strong>Admin:</strong> Full access including user management
                         </small>
