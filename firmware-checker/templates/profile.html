@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - Firmware Version Checker{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="bi bi-person-circle"></i> User Profile
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- User Information -->
+                    <div class="mb-4">
+                        <h5 class="border-bottom pb-2">Account Information</h5>
+                        <dl class="row">
+                            <dt class="col-sm-3">Username:</dt>
+                            <dd class="col-sm-9">{{ user.username }}</dd>
+                            
+                            <dt class="col-sm-3">Name:</dt>
+                            <dd class="col-sm-9">{{ user.first_name or '' }} {{ user.last_name or '' }}</dd>
+                            
+                            <dt class="col-sm-3">Email:</dt>
+                            <dd class="col-sm-9">{{ user.email or 'Not set' }}</dd>
+                            
+                            <dt class="col-sm-3">Team:</dt>
+                            <dd class="col-sm-9">{{ user.team or 'Not set' }}</dd>
+                            
+                            <dt class="col-sm-3">Role:</dt>
+                            <dd class="col-sm-9">
+                                <span class="badge 
+                                    {% if user.role == 'admin' %}bg-danger
+                                    {% elif user.role == 'editor' %}bg-primary
+                                    {% elif user.role == 'scheduler' %}bg-info
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ user.role|capitalize }}
+                                </span>
+                            </dd>
+                            
+                            <dt class="col-sm-3">Member Since:</dt>
+                            <dd class="col-sm-9">{{ user.created_at[:10] if user.created_at else 'Unknown' }}</dd>
+                            
+                            <dt class="col-sm-3">Last Login:</dt>
+                            <dd class="col-sm-9">{{ user.last_login[:19] if user.last_login else 'Never' }}</dd>
+                        </dl>
+                    </div>
+                    
+                    <!-- Timezone Settings -->
+                    <div class="mb-4">
+                        <h5 class="border-bottom pb-2">Timezone Settings</h5>
+                        <form method="POST" action="{{ url_for('profile') }}">
+                            <div class="mb-3">
+                                <label for="timezone" class="form-label">
+                                    <i class="bi bi-clock"></i> Your Timezone
+                                </label>
+                                <select class="form-select" id="timezone" name="timezone" required>
+                                    {% for tz in timezones %}
+                                    <option value="{{ tz }}" {% if user.timezone == tz %}selected{% endif %}>
+                                        {{ tz }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-text text-muted">
+                                    All times will be displayed in your selected timezone. 
+                                    Current timezone: <strong>{{ user.timezone or 'UTC' }}</strong>
+                                </small>
+                            </div>
+                            
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-circle"></i> Save Timezone
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <!-- Quick Actions -->
+                    <div class="mb-0">
+                        <h5 class="border-bottom pb-2">Quick Actions</h5>
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('change_password') }}" class="btn btn-outline-primary">
+                                <i class="bi bi-key"></i> Change Password
+                            </a>
+                            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-house"></i> Back to Home
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

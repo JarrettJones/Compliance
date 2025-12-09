@@ -22,6 +22,7 @@ import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+import pytz
 
 # Import firmware checking modules
 from firmware_modules.dc_scm import DCScmChecker
@@ -306,6 +307,7 @@ def init_db():
                 team TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_login TIMESTAMP,
+                timezone TEXT DEFAULT 'UTC',
                 CONSTRAINT valid_role CHECK (role IN ('admin', 'editor', 'viewer', 'scheduler'))
             )
         ''')
@@ -886,6 +888,87 @@ def scheduler_required(f):
             return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated_function
+
+# ==================== TIMEZONE UTILITIES ====================
+
+def get_user_timezone():
+    """Get the current user's timezone preference"""
+    if 'user_id' not in session:
+        return 'UTC'
+    
+    with get_db_connection() as conn:
+        user = conn.execute('SELECT timezone FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        return user['timezone'] if user and user['timezone'] else 'UTC'
+
+def convert_to_user_timezone(utc_datetime_str):
+    """Convert UTC datetime string to user's timezone"""
+    if not utc_datetime_str:
+        return None
+    
+    try:
+        # Parse UTC datetime
+        utc_time = datetime.strptime(utc_datetime_str, '%Y-%m-%d %H:%M:%S')
+        utc_time = pytz.utc.localize(utc_time)
+        
+        # Convert to user's timezone
+        user_tz = pytz.timezone(get_user_timezone())
+        local_time = utc_time.astimezone(user_tz)
+        
+        return local_time.strftime('%m/%d/%y %I:%M %p')
+    except Exception as e:
+        logger.error(f"Error converting timezone: {e}")
+        return utc_datetime_str
+
+def convert_from_user_timezone(local_datetime_str):
+    """Convert user's local datetime string to UTC"""
+    if not local_datetime_str:
+        return None
+    
+    try:
+        # Get user's timezone
+        user_tz = pytz.timezone(get_user_timezone())
+        
+        # Parse local datetime (format: MM/DD/YY HH:MM)
+        local_time = datetime.strptime(local_datetime_str, '%m/%d/%y %H:%M')
+        local_time = user_tz.localize(local_time)
+        
+        # Convert to UTC
+        utc_time = local_time.astimezone(pytz.utc)
+        
+        return utc_time.strftime('%Y-%m-%d %H:%M:%S')
+    except Exception as e:
+        logger.error(f"Error converting from timezone: {e}")
+        return None
+
+# Add timezone list for dropdown
+COMMON_TIMEZONES = [
+    'UTC',
+    'US/Pacific',
+    'US/Mountain',
+    'US/Central',
+    'US/Eastern',
+    'America/New_York',
+    'America/Chicago',
+    'America/Denver',
+    'America/Los_Angeles',
+    'America/Phoenix',
+    'Europe/London',
+    'Europe/Paris',
+    'Europe/Berlin',
+    'Asia/Tokyo',
+    'Asia/Shanghai',
+    'Asia/Kolkata',
+    'Australia/Sydney',
+]
+
+# Make timezone helpers available in templates
+@app.context_processor
+def inject_timezone_helpers():
+    return {
+        'user_timezone': get_user_timezone(),
+        'convert_to_user_timezone': convert_to_user_timezone,
+        'timezones': COMMON_TIMEZONES
+    }
 
 def sanitize_hostname(hostname):
     """
@@ -1758,6 +1841,30 @@ def change_password():
             return redirect(url_for('select_program'))
     
     return render_template('change_password.html', force=force)
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    """User profile page with timezone settings"""
+    if request.method == 'POST':
+        timezone = request.form.get('timezone')
+        
+        if timezone not in pytz.all_timezones:
+            flash('Invalid timezone selected', 'error')
+            return redirect(url_for('profile'))
+        
+        with get_db_connection() as conn:
+            conn.execute('UPDATE users SET timezone = ? WHERE id = ?', 
+                        (timezone, session['user_id']))
+            conn.commit()
+        
+        flash('Timezone updated successfully!', 'success')
+        return redirect(url_for('profile'))
+    
+    with get_db_connection() as conn:
+        user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    
+    return render_template('profile.html', user=user, timezones=COMMON_TIMEZONES)
 
 # Access Request Routes
 @app.route('/request-access', methods=['GET', 'POST'])
