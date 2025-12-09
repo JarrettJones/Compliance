@@ -54,11 +54,19 @@
                         </a>
                     </li>
                     {% if session.get('role') in ['admin', 'editor', 'scheduler'] %}
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'reservations' %}active{% endif %}" 
-                           href="{{ url_for('reservations') }}">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle {% if request.endpoint in ['reservations', 'reservations_calendar'] %}active{% endif %}" 
+                           href="#" id="reservationsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-calendar-check"></i> Reservations
                         </a>
+                        <ul class="dropdown-menu" aria-labelledby="reservationsDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('reservations') }}">
+                                <i class="bi bi-list-ul"></i> My Reservations
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('reservations_calendar') }}">
+                                <i class="bi bi-calendar3"></i> Calendar View
+                            </a></li>
+                        </ul>
                     </li>
                     {% endif %}
                     {% endif %}

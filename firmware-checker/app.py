@@ -3598,6 +3598,70 @@ def reservations():
     """View user's reservations"""
     return render_template('reservations.html')
 
+@app.route('/reservations/calendar')
+@login_required
+def reservations_calendar():
+    """Calendar view of all reservations"""
+    return render_template('reservations_calendar.html')
+
+@app.route('/api/reservations/calendar-events', methods=['GET'])
+@login_required
+def api_get_calendar_events():
+    """Get all reservations as calendar events"""
+    try:
+        start_date = request.args.get('start')
+        end_date = request.args.get('end')
+        
+        with get_db_connection() as conn:
+            query = '''
+                SELECT r.*, s.name as system_name, s.id as system_id, u.username
+                FROM reservations r
+                JOIN systems s ON r.system_id = s.id
+                JOIN users u ON r.user_id = u.id
+                WHERE r.status = 'active'
+            '''
+            
+            params = []
+            if start_date and end_date:
+                query += ' AND r.start_time <= ? AND r.end_time >= ?'
+                params = [end_date, start_date]
+            
+            query += ' ORDER BY r.start_time'
+            
+            reservations = conn.execute(query, params).fetchall()
+            
+            events = []
+            for res in reservations:
+                # Convert UTC to user timezone for display
+                start_dt = datetime.strptime(res['start_time'], '%Y-%m-%d %H:%M:%S')
+                end_dt = datetime.strptime(res['end_time'], '%Y-%m-%d %H:%M:%S')
+                
+                # Determine color based on ownership
+                is_mine = res['user_id'] == session.get('user_id')
+                color = '#0d6efd' if is_mine else '#6c757d'  # Blue for mine, gray for others
+                
+                events.append({
+                    'id': res['id'],
+                    'title': f"{res['system_name']} - {res['username']}",
+                    'start': res['start_time'].replace(' ', 'T'),
+                    'end': res['end_time'].replace(' ', 'T'),
+                    'backgroundColor': color,
+                    'borderColor': color,
+                    'extendedProps': {
+                        'systemId': res['system_id'],
+                        'systemName': res['system_name'],
+                        'username': res['username'],
+                        'purpose': res['purpose'],
+                        'isMine': is_mine
+                    }
+                })
+            
+            return jsonify(events)
+            
+    except Exception as e:
+        logger.error(f"Error fetching calendar events: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/reservations/check-availability', methods=['POST'])
 @scheduler_required
 def api_check_reservation_availability():
