@@ -3972,10 +3972,10 @@ def api_get_my_reservations():
                 FROM reservations r
                 JOIN systems s ON r.system_id = s.id
                 LEFT JOIN programs p ON s.program_id = p.id
-                LEFT JOIN locations l ON s.location_id = l.id
-                LEFT JOIN buildings b ON s.building_id = b.id
-                LEFT JOIN rooms rm ON s.room_id = rm.id
                 LEFT JOIN racks rk ON s.rack_id = rk.id
+                LEFT JOIN rooms rm ON rk.room_id = rm.id
+                LEFT JOIN buildings b ON rm.building_id = b.id
+                LEFT JOIN locations l ON b.location_id = l.id
                 WHERE r.user_id = ?
             '''
             params = [user_id]
@@ -4022,8 +4022,10 @@ def api_get_reservation_locations():
             locations = conn.execute('''
                 SELECT DISTINCT l.id, l.name
                 FROM locations l
-                JOIN systems s ON s.location_id = l.id
-                WHERE l.is_active = 1
+                JOIN buildings b ON b.location_id = l.id
+                JOIN rooms rm ON rm.building_id = b.id
+                JOIN racks rk ON rk.room_id = rm.id
+                JOIN systems s ON s.rack_id = rk.id
                 ORDER BY l.name
             ''').fetchall()
             
@@ -4045,8 +4047,10 @@ def api_get_reservation_buildings():
             buildings = conn.execute('''
                 SELECT DISTINCT b.id, b.name
                 FROM buildings b
-                JOIN systems s ON s.building_id = b.id
-                WHERE b.location_id = ? AND b.is_active = 1
+                JOIN rooms rm ON rm.building_id = b.id
+                JOIN racks rk ON rk.room_id = rm.id
+                JOIN systems s ON s.rack_id = rk.id
+                WHERE b.location_id = ?
                 ORDER BY b.name
             ''', (location_id,)).fetchall()
             
@@ -4068,8 +4072,9 @@ def api_get_reservation_rooms():
             rooms = conn.execute('''
                 SELECT DISTINCT rm.id, rm.name
                 FROM rooms rm
-                JOIN systems s ON s.room_id = rm.id
-                WHERE rm.building_id = ? AND rm.is_active = 1
+                JOIN racks rk ON rk.room_id = rm.id
+                JOIN systems s ON s.rack_id = rk.id
+                WHERE rm.building_id = ?
                 ORDER BY rm.name
             ''', (building_id,)).fetchall()
             
@@ -4092,7 +4097,7 @@ def api_get_reservation_racks():
                 SELECT DISTINCT rk.id, rk.name
                 FROM racks rk
                 JOIN systems s ON s.rack_id = rk.id
-                WHERE rk.room_id = ? AND rk.is_active = 1
+                WHERE rk.room_id = ?
                 ORDER BY rk.name
             ''', (room_id,)).fetchall()
             
@@ -4112,9 +4117,9 @@ def api_get_reservation_systems():
             
         with get_db_connection() as conn:
             systems = conn.execute('''
-                SELECT s.id, s.name, s.u_height, s.slot
+                SELECT s.id, s.name, s.u_height, s.description
                 FROM systems s
-                WHERE s.rack_id = ? AND s.is_active = 1
+                WHERE s.rack_id = ?
                 ORDER BY s.name
             ''', (rack_id,)).fetchall()
             
@@ -4122,7 +4127,7 @@ def api_get_reservation_systems():
                 'id': sys['id'], 
                 'name': sys['name'],
                 'u_height': sys['u_height'],
-                'slot': sys['slot']
+                'slot': sys['description']  # Using description as slot info
             } for sys in systems])
     except Exception as e:
         logger.error(f"Error getting systems: {e}")
