@@ -6,12 +6,15 @@
 <div class="container-fluid mt-4">
     <div class="row mb-4">
         <div class="col">
-            <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex justify-content-between align-items-center flex-wrap">
                 <div>
                     <h2>My Reservations</h2>
-                    <p class="text-muted">View and manage your system reservations</p>
+                    <p class="text-muted">View and manage your system reservations across all programs</p>
                 </div>
-                <div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createReservationModal">
+                        <i class="bi bi-plus-circle"></i> New Reservation
+                    </button>
                     <a href="{{ url_for('reservations_calendar') }}" class="btn btn-outline-primary">
                         <i class="bi bi-calendar3"></i> Calendar View
                     </a>
@@ -91,6 +94,99 @@
         </div>
     </div>
 </div>
+
+<!-- Create Reservation Modal -->
+<div class="modal fade" id="createReservationModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Create New Reservation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createReservationForm">
+                    <!-- Location Selection -->
+                    <div class="mb-3">
+                        <label for="locationSelect" class="form-label">Location <span class="text-danger">*</span></label>
+                        <select class="form-select" id="locationSelect" required>
+                            <option value="">Select Location...</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Building Selection -->
+                    <div class="mb-3">
+                        <label for="buildingSelect" class="form-label">Building <span class="text-danger">*</span></label>
+                        <select class="form-select" id="buildingSelect" required disabled>
+                            <option value="">Select Building...</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Room Selection -->
+                    <div class="mb-3">
+                        <label for="roomSelect" class="form-label">Room <span class="text-danger">*</span></label>
+                        <select class="form-select" id="roomSelect" required disabled>
+                            <option value="">Select Room...</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Rack Selection -->
+                    <div class="mb-3">
+                        <label for="rackSelect" class="form-label">Rack/Bench <span class="text-danger">*</span></label>
+                        <select class="form-select" id="rackSelect" required disabled>
+                            <option value="">Select Rack/Bench...</option>
+                        </select>
+                    </div>
+                    
+                    <!-- System Selection -->
+                    <div class="mb-3">
+                        <label for="systemSelect" class="form-label">System/Server <span class="text-danger">*</span></label>
+                        <select class="form-select" id="systemSelect" required disabled>
+                            <option value="">Select System...</option>
+                        </select>
+                    </div>
+                    
+                    <hr>
+                    
+                    <!-- Date/Time Selection -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="modalStartTime" class="form-label">Start Time <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="modalStartTime" placeholder="MM/DD/YY HH:MM" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="modalEndTime" class="form-label">End Time <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="modalEndTime" placeholder="MM/DD/YY HH:MM" required>
+                        </div>
+                    </div>
+                    
+                    <!-- Purpose -->
+                    <div class="mb-3">
+                        <label for="modalPurpose" class="form-label">Purpose</label>
+                        <textarea class="form-control" id="modalPurpose" rows="2" placeholder="Optional: Brief description of what you'll be doing"></textarea>
+                    </div>
+                    
+                    <!-- Availability Check Message -->
+                    <div id="modalAvailabilityMessage"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-outline-primary" id="modalCheckAvailabilityBtn" disabled>
+                    <i class="bi bi-search"></i> Check Availability
+                </button>
+                <button type="button" class="btn btn-primary" id="modalCreateReservationBtn" disabled>
+                    <i class="bi bi-check-circle"></i> Create Reservation
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Flatpickr CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
+<!-- Flatpickr JS -->
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
 <script>
 const SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
@@ -177,6 +273,14 @@ function renderReservationCard(reservation) {
     
     const canCancel = reservation.status === 'active' && endTime > now;
     
+    // Build location hierarchy display
+    let locationInfo = [];
+    if (reservation.program_name) locationInfo.push(reservation.program_name);
+    if (reservation.location_name) locationInfo.push(reservation.location_name);
+    if (reservation.building_name) locationInfo.push(reservation.building_name);
+    if (reservation.room_name) locationInfo.push(reservation.room_name);
+    if (reservation.rack_name) locationInfo.push(reservation.rack_name);
+    
     return `
         <div class="col-md-6 col-lg-4">
             <div class="card h-100 ${isOngoing ? 'border-success' : ''}">
@@ -187,6 +291,14 @@ function renderReservationCard(reservation) {
                         </h5>
                         ${statusBadge}
                     </div>
+                    
+                    ${locationInfo.length > 0 ? `
+                        <div class="mb-2">
+                            <small class="text-muted">
+                                <i class="bi bi-geo-alt"></i> ${locationInfo.join(' > ')}
+                            </small>
+                        </div>
+                    ` : ''}
                     
                     <div class="mb-2">
                         <small class="text-muted">
@@ -282,6 +394,305 @@ async function cancelReservation(reservationId) {
         console.error('Error cancelling reservation:', error);
         alert('Error cancelling reservation: ' + error.message);
     }
+}
+
+// ==================== CREATE RESERVATION MODAL ====================
+
+// Initialize modal when document loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadLocations();
+    initializeModalDatePickers();
+    setupModalEventListeners();
+});
+
+function initializeModalDatePickers() {
+    flatpickr("#modalStartTime", {
+        enableTime: true,
+        dateFormat: "m/d/y H:i",
+        minDate: "today",
+        time_24hr: false,
+        onChange: function(selectedDates, dateStr, instance) {
+            const endTimePicker = document.getElementById('modalEndTime')._flatpickr;
+            if (selectedDates[0]) {
+                endTimePicker.set('minDate', selectedDates[0]);
+            }
+            checkModalFormComplete();
+        }
+    });
+    
+    flatpickr("#modalEndTime", {
+        enableTime: true,
+        dateFormat: "m/d/y H:i",
+        minDate: "today",
+        time_24hr: false,
+        onChange: checkModalFormComplete
+    });
+}
+
+function setupModalEventListeners() {
+    document.getElementById('locationSelect').addEventListener('change', onLocationChange);
+    document.getElementById('buildingSelect').addEventListener('change', onBuildingChange);
+    document.getElementById('roomSelect').addEventListener('change', onRoomChange);
+    document.getElementById('rackSelect').addEventListener('change', onRackChange);
+    document.getElementById('systemSelect').addEventListener('change', checkModalFormComplete);
+    document.getElementById('modalCheckAvailabilityBtn').addEventListener('click', checkModalAvailability);
+    document.getElementById('modalCreateReservationBtn').addEventListener('click', createModalReservation);
+    
+    // Reset form when modal is hidden
+    document.getElementById('createReservationModal').addEventListener('hidden.bs.modal', resetModalForm);
+}
+
+async function loadLocations() {
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/locations`);
+        const locations = await response.json();
+        
+        const select = document.getElementById('locationSelect');
+        select.innerHTML = '<option value="">Select Location...</option>';
+        locations.forEach(loc => {
+            select.innerHTML += `<option value="${loc.id}">${loc.name}</option>`;
+        });
+    } catch (error) {
+        console.error('Error loading locations:', error);
+    }
+}
+
+async function onLocationChange(e) {
+    const locationId = e.target.value;
+    const buildingSelect = document.getElementById('buildingSelect');
+    
+    // Reset subsequent selects
+    buildingSelect.innerHTML = '<option value="">Select Building...</option>';
+    buildingSelect.disabled = !locationId;
+    document.getElementById('roomSelect').innerHTML = '<option value="">Select Room...</option>';
+    document.getElementById('roomSelect').disabled = true;
+    document.getElementById('rackSelect').innerHTML = '<option value="">Select Rack/Bench...</option>';
+    document.getElementById('rackSelect').disabled = true;
+    document.getElementById('systemSelect').innerHTML = '<option value="">Select System...</option>';
+    document.getElementById('systemSelect').disabled = true;
+    
+    checkModalFormComplete();
+    
+    if (!locationId) return;
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/buildings?location_id=${locationId}`);
+        const buildings = await response.json();
+        
+        buildings.forEach(building => {
+            buildingSelect.innerHTML += `<option value="${building.id}">${building.name}</option>`;
+        });
+    } catch (error) {
+        console.error('Error loading buildings:', error);
+    }
+}
+
+async function onBuildingChange(e) {
+    const buildingId = e.target.value;
+    const roomSelect = document.getElementById('roomSelect');
+    
+    // Reset subsequent selects
+    roomSelect.innerHTML = '<option value="">Select Room...</option>';
+    roomSelect.disabled = !buildingId;
+    document.getElementById('rackSelect').innerHTML = '<option value="">Select Rack/Bench...</option>';
+    document.getElementById('rackSelect').disabled = true;
+    document.getElementById('systemSelect').innerHTML = '<option value="">Select System...</option>';
+    document.getElementById('systemSelect').disabled = true;
+    
+    checkModalFormComplete();
+    
+    if (!buildingId) return;
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/rooms?building_id=${buildingId}`);
+        const rooms = await response.json();
+        
+        rooms.forEach(room => {
+            roomSelect.innerHTML += `<option value="${room.id}">${room.name}</option>`;
+        });
+    } catch (error) {
+        console.error('Error loading rooms:', error);
+    }
+}
+
+async function onRoomChange(e) {
+    const roomId = e.target.value;
+    const rackSelect = document.getElementById('rackSelect');
+    
+    // Reset subsequent selects
+    rackSelect.innerHTML = '<option value="">Select Rack/Bench...</option>';
+    rackSelect.disabled = !roomId;
+    document.getElementById('systemSelect').innerHTML = '<option value="">Select System...</option>';
+    document.getElementById('systemSelect').disabled = true;
+    
+    checkModalFormComplete();
+    
+    if (!roomId) return;
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/racks?room_id=${roomId}`);
+        const racks = await response.json();
+        
+        racks.forEach(rack => {
+            rackSelect.innerHTML += `<option value="${rack.id}">${rack.name}</option>`;
+        });
+    } catch (error) {
+        console.error('Error loading racks:', error);
+    }
+}
+
+async function onRackChange(e) {
+    const rackId = e.target.value;
+    const systemSelect = document.getElementById('systemSelect');
+    
+    // Reset system select
+    systemSelect.innerHTML = '<option value="">Select System...</option>';
+    systemSelect.disabled = !rackId;
+    
+    checkModalFormComplete();
+    
+    if (!rackId) return;
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/systems?rack_id=${rackId}`);
+        const systems = await response.json();
+        
+        systems.forEach(sys => {
+            let displayName = sys.name;
+            if (sys.u_height) displayName += ` (U${sys.u_height})`;
+            if (sys.slot) displayName += ` - Slot ${sys.slot}`;
+            systemSelect.innerHTML += `<option value="${sys.id}">${displayName}</option>`;
+        });
+    } catch (error) {
+        console.error('Error loading systems:', error);
+    }
+}
+
+function checkModalFormComplete() {
+    const systemId = document.getElementById('systemSelect').value;
+    const startTime = document.getElementById('modalStartTime').value;
+    const endTime = document.getElementById('modalEndTime').value;
+    
+    const isComplete = systemId && startTime && endTime;
+    document.getElementById('modalCheckAvailabilityBtn').disabled = !isComplete;
+    
+    // Reset availability message if form is incomplete
+    if (!isComplete) {
+        document.getElementById('modalAvailabilityMessage').innerHTML = '';
+        document.getElementById('modalCreateReservationBtn').disabled = true;
+    }
+}
+
+async function checkModalAvailability() {
+    const systemId = document.getElementById('systemSelect').value;
+    const startTime = document.getElementById('modalStartTime').value;
+    const endTime = document.getElementById('modalEndTime').value;
+    const messageDiv = document.getElementById('modalAvailabilityMessage');
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/check-availability`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                system_id: systemId,
+                start_time: startTime,
+                end_time: endTime
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            messageDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-circle"></i> ${result.error || 'Error checking availability'}</div>`;
+            document.getElementById('modalCreateReservationBtn').disabled = true;
+            return;
+        }
+        
+        if (result.available) {
+            messageDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle"></i> System is available during this time!</div>';
+            document.getElementById('modalCreateReservationBtn').disabled = false;
+        } else {
+            let html = '<div class="alert alert-danger">';
+            html += '<h6><i class="bi bi-exclamation-circle"></i> System is not available</h6>';
+            html += '<p class="mb-2">Conflicts with existing reservations:</p>';
+            html += '<ul class="mb-0">';
+            (result.conflicts || []).forEach(conflict => {
+                html += `<li>${conflict.user}: ${conflict.start_time} - ${conflict.end_time}</li>`;
+            });
+            html += '</ul>';
+            
+            if (result.next_available) {
+                html += `<hr><p class="mb-0"><strong>Next available:</strong> ${result.next_available.start_time} - ${result.next_available.end_time}</p>`;
+                html += `<button class="btn btn-sm btn-primary mt-2" onclick="useModalNextAvailable('${result.next_available.start_time}', '${result.next_available.end_time}')">Use This Time</button>`;
+            }
+            html += '</div>';
+            messageDiv.innerHTML = html;
+            document.getElementById('modalCreateReservationBtn').disabled = true;
+        }
+    } catch (error) {
+        console.error('Error checking availability:', error);
+        messageDiv.innerHTML = '<div class="alert alert-danger">Error checking availability</div>';
+        document.getElementById('modalCreateReservationBtn').disabled = true;
+    }
+}
+
+function useModalNextAvailable(startTime, endTime) {
+    document.getElementById('modalStartTime').value = startTime;
+    document.getElementById('modalEndTime').value = endTime;
+    document.getElementById('modalStartTime')._flatpickr.setDate(startTime, true);
+    document.getElementById('modalEndTime')._flatpickr.setDate(endTime, true);
+    checkModalAvailability();
+}
+
+async function createModalReservation() {
+    const systemId = document.getElementById('systemSelect').value;
+    const startTime = document.getElementById('modalStartTime').value;
+    const endTime = document.getElementById('modalEndTime').value;
+    const purpose = document.getElementById('modalPurpose').value;
+    const messageDiv = document.getElementById('modalAvailabilityMessage');
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/create`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                system_id: systemId,
+                start_time: startTime,
+                end_time: endTime,
+                purpose: purpose
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createReservationModal'));
+            modal.hide();
+            
+            // Reload reservations
+            loadReservations('active');
+            
+            // Show success message
+            alert('Reservation created successfully!');
+        } else {
+            messageDiv.innerHTML = `<div class="alert alert-danger">${result.error || 'Error creating reservation'}</div>`;
+        }
+    } catch (error) {
+        console.error('Error creating reservation:', error);
+        messageDiv.innerHTML = '<div class="alert alert-danger">Error creating reservation</div>';
+    }
+}
+
+function resetModalForm() {
+    document.getElementById('createReservationForm').reset();
+    document.getElementById('buildingSelect').disabled = true;
+    document.getElementById('roomSelect').disabled = true;
+    document.getElementById('rackSelect').disabled = true;
+    document.getElementById('systemSelect').disabled = true;
+    document.getElementById('modalCheckAvailabilityBtn').disabled = true;
+    document.getElementById('modalCreateReservationBtn').disabled = true;
+    document.getElementById('modalAvailabilityMessage').innerHTML = '';
 }
 </script>
 

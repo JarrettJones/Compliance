@@ -3956,16 +3956,26 @@ def api_get_system_reservations(system_id):
 @app.route('/api/reservations/my-reservations', methods=['GET'])
 @login_required
 def api_get_my_reservations():
-    """Get current user's reservations"""
+    """Get current user's reservations across all programs"""
     try:
         user_id = session.get('user_id')
         status_filter = request.args.get('status', 'active')
         
         with get_db_connection() as conn:
             query = '''
-                SELECT r.*, s.name as system_name
+                SELECT r.*, s.name as system_name, s.program_id,
+                       p.name as program_name,
+                       l.name as location_name,
+                       b.name as building_name,
+                       rm.name as room_name,
+                       rk.name as rack_name
                 FROM reservations r
                 JOIN systems s ON r.system_id = s.id
+                LEFT JOIN programs p ON s.program_id = p.id
+                LEFT JOIN locations l ON s.location_id = l.id
+                LEFT JOIN buildings b ON s.building_id = b.id
+                LEFT JOIN rooms rm ON s.room_id = rm.id
+                LEFT JOIN racks rk ON s.rack_id = rk.id
                 WHERE r.user_id = ?
             '''
             params = [user_id]
@@ -3984,6 +3994,11 @@ def api_get_my_reservations():
                     'id': r['id'],
                     'system_id': r['system_id'],
                     'system_name': r['system_name'],
+                    'program_name': r['program_name'],
+                    'location_name': r['location_name'],
+                    'building_name': r['building_name'],
+                    'room_name': r['room_name'],
+                    'rack_name': r['rack_name'],
                     'start_time': r['start_time'],
                     'end_time': r['end_time'],
                     'purpose': r['purpose'],
@@ -3995,6 +4010,122 @@ def api_get_my_reservations():
             
     except Exception as e:
         logger.error(f"Error getting user reservations: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+# API endpoints for reservation creation drill-down
+@app.route('/api/reservations/locations', methods=['GET'])
+@scheduler_required
+def api_get_reservation_locations():
+    """Get all locations with systems for reservation"""
+    try:
+        with get_db_connection() as conn:
+            locations = conn.execute('''
+                SELECT DISTINCT l.id, l.name
+                FROM locations l
+                JOIN systems s ON s.location_id = l.id
+                WHERE l.is_active = 1
+                ORDER BY l.name
+            ''').fetchall()
+            
+            return jsonify([{'id': loc['id'], 'name': loc['name']} for loc in locations])
+    except Exception as e:
+        logger.error(f"Error getting locations: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/reservations/buildings', methods=['GET'])
+@scheduler_required
+def api_get_reservation_buildings():
+    """Get buildings for a location"""
+    try:
+        location_id = request.args.get('location_id', type=int)
+        if not location_id:
+            return jsonify({'error': 'location_id required'}), 400
+            
+        with get_db_connection() as conn:
+            buildings = conn.execute('''
+                SELECT DISTINCT b.id, b.name
+                FROM buildings b
+                JOIN systems s ON s.building_id = b.id
+                WHERE b.location_id = ? AND b.is_active = 1
+                ORDER BY b.name
+            ''', (location_id,)).fetchall()
+            
+            return jsonify([{'id': b['id'], 'name': b['name']} for b in buildings])
+    except Exception as e:
+        logger.error(f"Error getting buildings: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/reservations/rooms', methods=['GET'])
+@scheduler_required
+def api_get_reservation_rooms():
+    """Get rooms for a building"""
+    try:
+        building_id = request.args.get('building_id', type=int)
+        if not building_id:
+            return jsonify({'error': 'building_id required'}), 400
+            
+        with get_db_connection() as conn:
+            rooms = conn.execute('''
+                SELECT DISTINCT rm.id, rm.name
+                FROM rooms rm
+                JOIN systems s ON s.room_id = rm.id
+                WHERE rm.building_id = ? AND rm.is_active = 1
+                ORDER BY rm.name
+            ''', (building_id,)).fetchall()
+            
+            return jsonify([{'id': r['id'], 'name': r['name']} for r in rooms])
+    except Exception as e:
+        logger.error(f"Error getting rooms: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/reservations/racks', methods=['GET'])
+@scheduler_required
+def api_get_reservation_racks():
+    """Get racks for a room"""
+    try:
+        room_id = request.args.get('room_id', type=int)
+        if not room_id:
+            return jsonify({'error': 'room_id required'}), 400
+            
+        with get_db_connection() as conn:
+            racks = conn.execute('''
+                SELECT DISTINCT rk.id, rk.name
+                FROM racks rk
+                JOIN systems s ON s.rack_id = rk.id
+                WHERE rk.room_id = ? AND rk.is_active = 1
+                ORDER BY rk.name
+            ''', (room_id,)).fetchall()
+            
+            return jsonify([{'id': r['id'], 'name': r['name']} for r in racks])
+    except Exception as e:
+        logger.error(f"Error getting racks: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/reservations/systems', methods=['GET'])
+@scheduler_required
+def api_get_reservation_systems():
+    """Get systems for a rack"""
+    try:
+        rack_id = request.args.get('rack_id', type=int)
+        if not rack_id:
+            return jsonify({'error': 'rack_id required'}), 400
+            
+        with get_db_connection() as conn:
+            systems = conn.execute('''
+                SELECT s.id, s.name, s.u_height, s.slot
+                FROM systems s
+                WHERE s.rack_id = ? AND s.is_active = 1
+                ORDER BY s.name
+            ''', (rack_id,)).fetchall()
+            
+            return jsonify([{
+                'id': sys['id'], 
+                'name': sys['name'],
+                'u_height': sys['u_height'],
+                'slot': sys['slot']
+            } for sys in systems])
+    except Exception as e:
+        logger.error(f"Error getting systems: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ==================== RACK MANAGEMENT ====================
