@@ -367,6 +367,7 @@ function deleteCheck(button) {
 // ==================== RESERVATION MANAGEMENT ====================
 
 {% if session.get('role') in ['admin', 'editor', 'scheduler'] %}
+const SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
 const systemId = {{ system.id }};
 
 // Load reservations when page loads
