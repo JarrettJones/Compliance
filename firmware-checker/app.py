@@ -2482,12 +2482,25 @@ def index():
         
         # Get recent firmware checks for this program (fetch more to ensure we have enough after filtering)
         recent_checks_query = f'''
-            SELECT fc.*, s.name as system_name, u.username as checked_by_username,
-                   u.first_name as checked_by_first_name, u.last_name as checked_by_last_name,
+            SELECT fc.*, 
+                   s.name as system_name, 
+                   s.u_height,
+                   u.username as checked_by_username,
+                   u.first_name as checked_by_first_name, 
+                   u.last_name as checked_by_last_name,
+                   ra.name as rack_name,
+                   ra.rack_type,
+                   ro.name as room_name,
+                   b.name as building_name,
+                   l.name as location_name,
                    'system' as check_type
             FROM firmware_checks fc
             JOIN systems s ON fc.system_id = s.id
             LEFT JOIN users u ON fc.user_id = u.id
+            LEFT JOIN racks ra ON s.rack_id = ra.id
+            LEFT JOIN rooms ro ON ra.room_id = ro.id
+            LEFT JOIN buildings b ON ro.building_id = b.id
+            LEFT JOIN locations l ON b.location_id = l.id
             {program_filter}
             ORDER BY fc.check_date DESC
             LIMIT 20
@@ -2498,7 +2511,13 @@ def index():
         # Get recent RSCM firmware checks (no program filter for racks, fetch more for balance)
         recent_checks_rscm = list(conn.execute('''
             SELECT rc.id, rc.rack_id, rc.check_date, rc.status, rc.error_message, rc.user_id,
-                   r.name as system_name, r.location,
+                   r.name as system_name, 
+                   r.name as rack_name,
+                   r.rack_type,
+                   ro.name as room_name,
+                   b.name as building_name,
+                   l.name as location_name,
+                   NULL as u_height,
                    u.username as checked_by_username,
                    u.first_name as checked_by_first_name,
                    u.last_name as checked_by_last_name,
@@ -2506,6 +2525,9 @@ def index():
                    NULL as system_id
             FROM rscm_firmware_checks rc
             JOIN racks r ON rc.rack_id = r.id
+            LEFT JOIN rooms ro ON r.room_id = ro.id
+            LEFT JOIN buildings b ON ro.building_id = b.id
+            LEFT JOIN locations l ON b.location_id = l.id
             LEFT JOIN users u ON rc.user_id = u.id
             ORDER BY rc.check_date DESC
             LIMIT 20

@@ -343,7 +343,17 @@
                                                         <h6 class="mb-1">{{ check.system_name }}</h6>
                                                         {% if check.system_description and 'Host:' in check.system_description %}
                                                             {% set host_part = check.system_description.split('Host:')[1].split('|')[0].strip() %}
-                                                            <small class="text-muted">{{ host_part }}</small>
+                                                            <small class="text-muted d-block">{{ host_part }}</small>
+                                                        {% endif %}
+                                                        {% if check.location_name or check.building_name or check.room_name or check.rack_name %}
+                                                            <small class="text-muted d-block">
+                                                                <i class="bi bi-geo-alt"></i>
+                                                                {% if check.location_name %}{{ check.location_name }}{% endif %}
+                                                                {% if check.building_name %} → {{ check.building_name }}{% endif %}
+                                                                {% if check.room_name %} → {{ check.room_name }}{% endif %}
+                                                                {% if check.rack_name %} → {{ check.rack_name }}{% if check.rack_type == 'bench' %} (Bench){% endif %}{% endif %}
+                                                                {% if check.u_height %} → U{{ check.u_height }}{% endif %}
+                                                            </small>
                                                         {% endif %}
                                                     </div>
                                                     <small class="text-muted">{{ check.check_date[:19] }}</small>
@@ -465,7 +475,17 @@
                                                         <h6 class="mb-1">{{ check.system_name }}</h6>
                                                         {% if check.system_description and 'Host:' in check.system_description %}
                                                             {% set host_part = check.system_description.split('Host:')[1].split('|')[0].strip() %}
-                                                            <small class="text-muted">{{ host_part }}</small>
+                                                            <small class="text-muted d-block">{{ host_part }}</small>
+                                                        {% endif %}
+                                                        {% if check.location_name or check.building_name or check.room_name or check.rack_name %}
+                                                            <small class="text-muted d-block">
+                                                                <i class="bi bi-geo-alt"></i>
+                                                                {% if check.location_name %}{{ check.location_name }}{% endif %}
+                                                                {% if check.building_name %} → {{ check.building_name }}{% endif %}
+                                                                {% if check.room_name %} → {{ check.room_name }}{% endif %}
+                                                                {% if check.rack_name %} → {{ check.rack_name }}{% if check.rack_type == 'bench' %} (Bench){% endif %}{% endif %}
+                                                                {% if check.u_height %} → U{{ check.u_height }}{% endif %}
+                                                            </small>
                                                         {% endif %}
                                                     </div>
                                                     <small class="text-muted">{{ check.check_date[:19] }}</small>
