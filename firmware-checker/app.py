@@ -6,6 +6,7 @@ from various systems including DC-SCM, OVL2, and other platform firmwares.
 """
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, make_response
+from version import get_version_info
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.wrappers import Response
@@ -981,7 +982,8 @@ def inject_timezone_helpers():
     return {
         'user_timezone': get_user_timezone(),
         'convert_to_user_timezone': convert_to_user_timezone,
-        'timezones': COMMON_TIMEZONES
+        'timezones': COMMON_TIMEZONES,
+        'app_version': get_version_info()
     }
 
 def sanitize_hostname(hostname):
