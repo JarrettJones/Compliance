@@ -349,10 +349,10 @@
                                                             <small class="text-muted d-block">
                                                                 <i class="bi bi-geo-alt"></i>
                                                                 {% if check.location_name %}{{ check.location_name }}{% endif %}
-                                                                {% if check.building_name %} → {{ check.building_name }}{% endif %}
-                                                                {% if check.room_name %} → {{ check.room_name }}{% endif %}
-                                                                {% if check.rack_name %} → {{ check.rack_name }}{% if check.rack_type == 'bench' %} (Bench){% endif %}{% endif %}
-                                                                {% if check.u_height %} → U{{ check.u_height }}{% endif %}
+                                                                {% if check.building_name %} / {{ check.building_name }}{% endif %}
+                                                                {% if check.room_name %} / {{ check.room_name }}{% endif %}
+                                                                {% if check.rack_name %} / {{ check.rack_name }}{% if check.rack_type == 'bench' %} (Bench){% endif %}{% endif %}
+                                                                {% if check.u_height %} / U{{ check.u_height }}{% endif %}
                                                             </small>
                                                         {% endif %}
                                                     </div>
@@ -481,10 +481,10 @@
                                                             <small class="text-muted d-block">
                                                                 <i class="bi bi-geo-alt"></i>
                                                                 {% if check.location_name %}{{ check.location_name }}{% endif %}
-                                                                {% if check.building_name %} → {{ check.building_name }}{% endif %}
-                                                                {% if check.room_name %} → {{ check.room_name }}{% endif %}
-                                                                {% if check.rack_name %} → {{ check.rack_name }}{% if check.rack_type == 'bench' %} (Bench){% endif %}{% endif %}
-                                                                {% if check.u_height %} → U{{ check.u_height }}{% endif %}
+                                                                {% if check.building_name %} / {{ check.building_name }}{% endif %}
+                                                                {% if check.room_name %} / {{ check.room_name }}{% endif %}
+                                                                {% if check.rack_name %} / {{ check.rack_name }}{% if check.rack_type == 'bench' %} (Bench){% endif %}{% endif %}
+                                                                {% if check.u_height %} / U{{ check.u_height }}{% endif %}
                                                             </small>
                                                         {% endif %}
                                                     </div>
