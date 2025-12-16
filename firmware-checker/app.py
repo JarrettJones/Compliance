@@ -4984,14 +4984,27 @@ def check_result(check_id):
     with get_db_connection() as conn:
         # Get the specific check
         check = conn.execute('''
-            SELECT fc.*, s.name as system_name, s.rscm_port, s.program_id, s.rack_id,
+            SELECT fc.*, 
+                   s.name as system_name, 
+                   s.rscm_port, 
+                   s.program_id, 
+                   s.rack_id,
+                   s.u_height,
                    COALESCE(r.rscm_upper_ip, r.rscm_lower_ip, s.rscm_ip) as rscm_ip,
                    u.username as checked_by_username,
                    u.first_name as checked_by_first_name, 
-                   u.last_name as checked_by_last_name
+                   u.last_name as checked_by_last_name,
+                   r.name as rack_name,
+                   r.rack_type as rack_type,
+                   ro.name as room_name,
+                   b.name as building_name,
+                   l.name as location_name
             FROM firmware_checks fc
             JOIN systems s ON fc.system_id = s.id
             LEFT JOIN racks r ON s.rack_id = r.id
+            LEFT JOIN rooms ro ON r.room_id = ro.id
+            LEFT JOIN buildings b ON ro.building_id = b.id
+            LEFT JOIN locations l ON b.location_id = l.id
             LEFT JOIN users u ON fc.user_id = u.id
             WHERE fc.id = ?
         ''', (check_id,)).fetchone()
