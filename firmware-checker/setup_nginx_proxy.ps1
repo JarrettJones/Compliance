@@ -120,9 +120,14 @@ http {
             return 301 /firmware-checker/;
         }
         
+        # Redirect /firmware-checker (without trailing slash) to /firmware-checker/
+        location = /firmware-checker {
+            return 301 /firmware-checker/;
+        }
+        
         # Firmware Checker application
         # Keep the /firmware-checker prefix when proxying
-        location /firmware-checker {
+        location /firmware-checker/ {
             # Rewrite to strip /firmware-checker before passing to Flask
             rewrite ^/firmware-checker(.*)$ `$1 break;
             
