@@ -66,23 +66,23 @@
                     <div class="mb-3">
                         <label class="form-label">Rack Assignment</label>
                         <div class="form-check">
-                            <input class="form-check-input" type="radio" name="rack_selection" id="rack_existing" value="existing" {% if auto_detected_rack %}checked{% else %}checked{% endif %}>
+                            <input class="form-check-input" type="radio" name="rack_selection" id="rack_existing" value="existing" checked>
                             <label class="form-check-label" for="rack_existing">
                                 Select Existing Rack
                             </label>
                         </div>
+                        {% if not auto_detected_rack %}
                         <div class="form-check">
                             <input class="form-check-input" type="radio" name="rack_selection" id="rack_new" value="new">
                             <label class="form-check-label" for="rack_new">
                                 Create New Rack
                             </label>
                         </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="rack_selection" id="rack_none" value="none">
-                            <label class="form-check-label" for="rack_none">
-                                No Rack (assign later)
-                            </label>
+                        {% else %}
+                        <div class="alert alert-warning py-2 mt-2 mb-0">
+                            <i class="bi bi-info-circle"></i> <small>A rack matching this RSCM IP already exists. Please select from existing racks.</small>
                         </div>
+                        {% endif %}
                     </div>
 
                     <!-- Existing Rack Selection -->

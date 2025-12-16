@@ -3290,16 +3290,21 @@ def add_system_metadata():
                     WHERE rc.ip_address = ?
                 ''', (pending['rscm_ip'],)).fetchone()
                 
-                if auto_detected and rack_selection == 'none':
-                    # Auto-assign to detected rack
-                    rack_id = auto_detected['id']
-                    rack_name = auto_detected['name']
-                    rack_location = auto_detected['location']
-                    rscm_component_id = auto_detected['rscm_id']
-                    flash(f'✓ Auto-detected and assigned to rack "{rack_name}" based on RSCM IP {pending["rscm_ip"]}', 'success')
-                
                 # Handle rack selection/creation
                 if rack_selection == 'new':
+                    # Prevent creating new rack if RSCM IP matches existing rack
+                    if auto_detected:
+                        flash(f'Cannot create new rack: RSCM IP {pending["rscm_ip"]} already belongs to rack "{auto_detected["name"]}". Please select the existing rack.', 'error')
+                        # Get locations for modal
+                        with get_db_connection() as conn2:
+                            locations = conn2.execute('SELECT id, name FROM locations ORDER BY name').fetchall()
+                        return render_template('add_system_metadata.html', 
+                                             system=pending,
+                                             custom_fields=custom_fields,
+                                             racks=racks,
+                                             auto_detected_rack=auto_detected_rack,
+                                             locations=locations)
+                    
                     # Check if rack was created via modal
                     if new_rack_id:
                         # Rack already created via modal, just use its ID
@@ -3320,7 +3325,31 @@ def add_system_metadata():
                                              auto_detected_rack=auto_detected_rack,
                                              locations=locations)
                 
-                elif rack_selection == 'existing' and existing_rack_id:
+                elif rack_selection == 'existing':
+                    if not existing_rack_id:
+                        flash('Please select a rack from the dropdown.', 'error')
+                        # Get locations for modal
+                        with get_db_connection() as conn2:
+                            locations = conn2.execute('SELECT id, name FROM locations ORDER BY name').fetchall()
+                        return render_template('add_system_metadata.html', 
+                                             system=pending,
+                                             custom_fields=custom_fields,
+                                             racks=racks,
+                                             auto_detected_rack=auto_detected_rack,
+                                             locations=locations)
+                    
+                    if not u_height:
+                        flash('U Position is required when selecting an existing rack.', 'error')
+                        # Get locations for modal
+                        with get_db_connection() as conn2:
+                            locations = conn2.execute('SELECT id, name FROM locations ORDER BY name').fetchall()
+                        return render_template('add_system_metadata.html', 
+                                             system=pending,
+                                             custom_fields=custom_fields,
+                                             racks=racks,
+                                             auto_detected_rack=auto_detected_rack,
+                                             locations=locations)
+                    
                     rack_id = int(existing_rack_id)
                     # Get rack details for description
                     rack = conn.execute('SELECT name, location FROM racks WHERE id = ?', (rack_id,)).fetchone()
@@ -3331,10 +3360,15 @@ def add_system_metadata():
                 # Validate that a rack was assigned
                 if rack_id is None:
                     flash('A rack assignment is required. Please select an existing rack or create a new one.', 'error')
+                    # Get locations for modal
+                    with get_db_connection() as conn2:
+                        locations = conn2.execute('SELECT id, name FROM locations ORDER BY name').fetchall()
                     return render_template('add_system_metadata.html', 
                                          system=pending,
                                          custom_fields=custom_fields,
-                                         racks=racks)
+                                         racks=racks,
+                                         auto_detected_rack=auto_detected_rack,
+                                         locations=locations)
                 
                 # If rack is selected, find matching RSCM component
                 if rack_id:
