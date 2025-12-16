@@ -321,50 +321,80 @@
                     });
 
                     // Open create rack modal
-                    window.openCreateRackModal = function() {
+                    window.openCreateRackModal = async function() {
                         const modal = new bootstrap.Modal(document.getElementById('createRackModal'));
+                        document.getElementById('createRackForm').reset();
+                        
+                        // Reset visibility of input fields
+                        document.getElementById('modal_city_input').style.display = 'none';
+                        document.getElementById('modal_building_input').style.display = 'none';
+                        document.getElementById('modal_room_input').style.display = 'none';
+                        
+                        // Load location options from API
+                        try {
+                            const response = await fetch('{{ url_for("api_rack_location_options") }}');
+                            modalLocationOptionsData = await response.json();
+                            
+                            // Populate city dropdown
+                            const citySelect = document.getElementById('modal_city_select');
+                            citySelect.innerHTML = '<option value="">Select existing city...</option>';
+                            citySelect.innerHTML += '<option value="__NEW__">+ Add New City</option>';
+                            
+                            Object.keys(modalLocationOptionsData).sort().forEach(city => {
+                                const option = document.createElement('option');
+                                option.value = city;
+                                option.textContent = city;
+                                citySelect.appendChild(option);
+                            });
+                        } catch (error) {
+                            console.error('Error loading location options:', error);
+                        }
+                        
                         modal.show();
                     };
 
                     // Handle rack creation
                     window.submitNewRack = async function() {
                         const form = document.getElementById('createRackForm');
+                        
+                        // Get values from selects or inputs
+                        const citySelect = document.getElementById('modal_city_select');
+                        const cityInput = document.getElementById('modal_city_input');
+                        const buildingSelect = document.getElementById('modal_building_select');
+                        const buildingInput = document.getElementById('modal_building_input');
+                        const roomSelect = document.getElementById('modal_room_select');
+                        const roomInput = document.getElementById('modal_room_input');
+                        
+                        const city = citySelect.value === '__NEW__' ? cityInput.value.trim() : citySelect.value;
+                        const building = buildingSelect.value === '__NEW__' ? buildingInput.value.trim() : buildingSelect.value;
+                        const room = roomSelect.value === '__NEW__' ? roomInput.value.trim() : roomSelect.value;
+                        
+                        // Validate required fields
+                        if (!city || !building || !room) {
+                            alert('Please fill in all location fields (City, Building, Room)');
+                            return;
+                        }
+                        
+                        if (!form.checkValidity()) {
+                            form.reportValidity();
+                            return;
+                        }
+                        
                         const formData = new FormData(form);
                         
-                        // Convert to JSON
-                        const data = {
+                        // Prepare data for API
+                        const apiData = {
                             name: formData.get('rack_name'),
+                            city: city,
+                            building: building,
+                            room: room,
                             rack_type: formData.get('rack_type'),
-                            location_id: formData.get('location_id'),
-                            building_id: formData.get('building_id'),
-                            room_id: formData.get('room_id'),
-                            rscm_upper_ip: formData.get('rscm_upper_ip'),
-                            rscm_lower_ip: formData.get('rscm_lower_ip'),
-                            description: formData.get('description')
+                            rscm_upper_ip: formData.get('rscm_upper_ip') || null,
+                            rscm_lower_ip: formData.get('rscm_lower_ip') || null,
+                            description: formData.get('description') || null
                         };
                         
                         try {
-                            // Get location, building, room names for display
-                            const locationSelect = document.getElementById('location_id');
-                            const buildingSelect = document.getElementById('building_id');
-                            const roomSelect = document.getElementById('room_id');
-                            
-                            const locationName = locationSelect.options[locationSelect.selectedIndex].text;
-                            const buildingName = buildingSelect.options[buildingSelect.selectedIndex].text;
-                            const roomName = roomSelect.options[roomSelect.selectedIndex].text;
-                            
-                            // Prepare data for API (uses different format)
-                            const apiData = {
-                                name: data.name,
-                                city: locationName,
-                                building: buildingName,
-                                room: roomName,
-                                rack_type: data.rack_type,
-                                rscm_upper_ip: data.rscm_upper_ip,
-                                rscm_lower_ip: data.rscm_lower_ip,
-                                description: data.description
-                            };
-                            
                             const response = await fetch('{{ url_for("api_add_rack") }}', {
                                 method: 'POST',
                                 headers: {
@@ -380,8 +410,8 @@
                                 document.getElementById('new_rack_id').value = result.rack_id;
                                 
                                 // Show preview
-                                document.getElementById('preview_rack_name').textContent = data.name;
-                                const locationDisplay = `${locationName} / ${buildingName} / ${roomName}`;
+                                document.getElementById('preview_rack_name').textContent = apiData.name;
+                                const locationDisplay = `${city} / ${building} / ${room}`;
                                 document.getElementById('preview_rack_location').textContent = locationDisplay;
                                 document.getElementById('new_rack_preview').style.display = 'block';
                                 
@@ -439,31 +469,58 @@
                     <div class="row">
                         <div class="col-md-4">
                             <div class="mb-3">
-                                <label for="location_id" class="form-label">City <span class="text-danger">*</span></label>
-                                <select class="form-select" id="location_id" name="location_id" required onchange="loadBuildingsForModal()">
-                                    <option value="">Select city...</option>
-                                    {% for location in locations %}
-                                    <option value="{{ location.id }}">{{ location.name }}</option>
-                                    {% endfor %}
-                                </select>
+                                <label for="modal_city_select" class="form-label">City <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <select class="form-select" id="modal_city_select" onchange="modalUpdateBuildingOptions()">
+                                        <option value="">Select or add new...</option>
+                                    </select>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="modalToggleCityInput()" title="Add new city">
+                                        <i class="bi bi-plus"></i>
+                                    </button>
+                                </div>
+                                <input type="text" 
+                                       class="form-control mt-2" 
+                                       id="modal_city_input" 
+                                       placeholder="Enter new city name"
+                                       style="display: none;">
                             </div>
                         </div>
                         
                         <div class="col-md-4">
                             <div class="mb-3">
-                                <label for="building_id" class="form-label">Building <span class="text-danger">*</span></label>
-                                <select class="form-select" id="building_id" name="building_id" required disabled onchange="loadRoomsForModal()">
-                                    <option value="">Select city first...</option>
-                                </select>
+                                <label for="modal_building_select" class="form-label">Building <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <select class="form-select" id="modal_building_select" onchange="modalUpdateRoomOptions()" disabled>
+                                        <option value="">Select city first...</option>
+                                    </select>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="modalToggleBuildingInput()" title="Add new building" disabled id="modal_add_building_btn">
+                                        <i class="bi bi-plus"></i>
+                                    </button>
+                                </div>
+                                <input type="text" 
+                                       class="form-control mt-2" 
+                                       id="modal_building_input" 
+                                       placeholder="Enter new building name"
+                                       style="display: none;">
                             </div>
                         </div>
                         
                         <div class="col-md-4">
                             <div class="mb-3">
-                                <label for="room_id" class="form-label">Room <span class="text-danger">*</span></label>
-                                <select class="form-select" id="room_id" name="room_id" required disabled>
-                                    <option value="">Select building first...</option>
-                                </select>
+                                <label for="modal_room_select" class="form-label">Room <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <select class="form-select" id="modal_room_select" disabled onchange="modalHandleRoomSelectChange()">
+                                        <option value="">Select building first...</option>
+                                    </select>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="modalToggleRoomInput()" title="Add new room" disabled id="modal_add_room_btn">
+                                        <i class="bi bi-plus"></i>
+                                    </button>
+                                </div>
+                                <input type="text" 
+                                       class="form-control mt-2" 
+                                       id="modal_room_input" 
+                                       placeholder="Enter new room number"
+                                       style="display: none;">
                             </div>
                         </div>
                     </div>
@@ -512,61 +569,186 @@
 </div>
 
 <script>
-    // Load buildings when location selected
-    window.loadBuildingsForModal = async function() {
-        const locationId = document.getElementById('location_id').value;
-        const buildingSelect = document.getElementById('building_id');
-        const roomSelect = document.getElementById('room_id');
+    // Location data for modal
+    let modalLocationOptionsData = {};
+    
+    // Toggle city input field
+    function modalToggleCityInput() {
+        const citySelect = document.getElementById('modal_city_select');
+        const cityInput = document.getElementById('modal_city_input');
+        const buildingSelect = document.getElementById('modal_building_select');
+        const addBuildingBtn = document.getElementById('modal_add_building_btn');
         
-        if (!locationId) {
+        if (cityInput.style.display === 'none') {
+            citySelect.value = '__NEW__';
+            cityInput.style.display = 'block';
+            cityInput.focus();
+            buildingSelect.disabled = false;
+            addBuildingBtn.disabled = false;
+            buildingSelect.innerHTML = '<option value="">Select or add building...</option><option value="__NEW__">+ Add New Building</option>';
+        } else {
+            cityInput.style.display = 'none';
+            cityInput.value = '';
+            citySelect.value = '';
             buildingSelect.disabled = true;
             buildingSelect.innerHTML = '<option value="">Select city first...</option>';
-            roomSelect.disabled = true;
-            roomSelect.innerHTML = '<option value="">Select building first...</option>';
-            return;
         }
-        
-        try {
-            const response = await fetch(`{{ url_for('get_buildings') }}?location_id=${locationId}`);
-            const buildings = await response.json();
-            
-            buildingSelect.innerHTML = '<option value="">Select building...</option>';
-            buildings.forEach(b => {
-                buildingSelect.innerHTML += `<option value="${b.id}">${b.name}</option>`;
-            });
-            buildingSelect.disabled = false;
-            
-            roomSelect.disabled = true;
-            roomSelect.innerHTML = '<option value="">Select building first...</option>';
-        } catch (error) {
-            console.error('Error loading buildings:', error);
-        }
-    };
+    }
     
-    // Load rooms when building selected
-    window.loadRoomsForModal = async function() {
-        const buildingId = document.getElementById('building_id').value;
-        const roomSelect = document.getElementById('room_id');
+    // Toggle building input field
+    function modalToggleBuildingInput() {
+        const buildingSelect = document.getElementById('modal_building_select');
+        const buildingInput = document.getElementById('modal_building_input');
+        const roomSelect = document.getElementById('modal_room_select');
+        const addRoomBtn = document.getElementById('modal_add_room_btn');
         
-        if (!buildingId) {
+        if (buildingInput.style.display === 'none') {
+            buildingSelect.value = '__NEW__';
+            buildingInput.style.display = 'block';
+            buildingInput.focus();
+            roomSelect.disabled = false;
+            addRoomBtn.disabled = false;
+            roomSelect.innerHTML = '<option value="">Select or add room...</option><option value="__NEW__">+ Add New Room</option>';
+        } else {
+            buildingInput.style.display = 'none';
+            buildingInput.value = '';
+            buildingSelect.value = '';
             roomSelect.disabled = true;
             roomSelect.innerHTML = '<option value="">Select building first...</option>';
-            return;
+        }
+    }
+    
+    // Toggle room input field
+    function modalToggleRoomInput() {
+        const roomSelect = document.getElementById('modal_room_select');
+        const roomInput = document.getElementById('modal_room_input');
+        
+        if (roomInput.style.display === 'none') {
+            roomSelect.value = '__NEW__';
+            roomInput.style.display = 'block';
+            roomInput.focus();
+        } else {
+            roomInput.style.display = 'none';
+            roomInput.value = '';
+            roomSelect.value = '';
+        }
+    }
+    
+    // Handle room select change
+    function modalHandleRoomSelectChange() {
+        const roomSelect = document.getElementById('modal_room_select');
+        const roomInput = document.getElementById('modal_room_input');
+        
+        if (roomSelect.value === '__NEW__') {
+            roomInput.style.display = 'block';
+            roomInput.focus();
+        } else {
+            roomInput.style.display = 'none';
+            roomInput.value = '';
+        }
+    }
+    
+    // Update building options when city changes
+    function modalUpdateBuildingOptions() {
+        const citySelect = document.getElementById('modal_city_select');
+        const cityInput = document.getElementById('modal_city_input');
+        const buildingSelect = document.getElementById('modal_building_select');
+        const buildingInput = document.getElementById('modal_building_input');
+        const addBuildingBtn = document.getElementById('modal_add_building_btn');
+        const roomSelect = document.getElementById('modal_room_select');
+        const addRoomBtn = document.getElementById('modal_add_room_btn');
+        
+        const selectedCity = citySelect.value;
+        
+        // Hide custom input if switching away from new
+        if (selectedCity !== '__NEW__') {
+            cityInput.style.display = 'none';
+            cityInput.value = '';
         }
         
-        try {
-            const response = await fetch(`{{ url_for('get_rooms') }}?building_id=${buildingId}`);
-            const rooms = await response.json();
+        buildingInput.style.display = 'none';
+        buildingInput.value = '';
+        
+        if (selectedCity && selectedCity !== '__NEW__') {
+            buildingSelect.disabled = false;
+            addBuildingBtn.disabled = false;
+            buildingSelect.innerHTML = '<option value="">Select existing building...</option>';
+            buildingSelect.innerHTML += '<option value="__NEW__">+ Add New Building</option>';
             
-            roomSelect.innerHTML = '<option value="">Select room...</option>';
-            rooms.forEach(r => {
-                roomSelect.innerHTML += `<option value="${r.id}">${r.name}</option>`;
+            const buildings = modalLocationOptionsData[selectedCity] || {};
+            Object.keys(buildings).sort().forEach(building => {
+                const option = document.createElement('option');
+                option.value = building;
+                option.textContent = building;
+                buildingSelect.appendChild(option);
             });
-            roomSelect.disabled = false;
-        } catch (error) {
-            console.error('Error loading rooms:', error);
+        } else if (selectedCity === '__NEW__') {
+            cityInput.style.display = 'block';
+            cityInput.focus();
+            buildingSelect.disabled = false;
+            addBuildingBtn.disabled = false;
+            buildingSelect.innerHTML = '<option value="">Select or add building...</option><option value="__NEW__">+ Add New Building</option>';
+        } else {
+            buildingSelect.disabled = true;
+            addBuildingBtn.disabled = true;
+            buildingSelect.innerHTML = '<option value="">Select city first...</option>';
         }
-    };
+        
+        // Reset room
+        roomSelect.disabled = true;
+        addRoomBtn.disabled = true;
+        roomSelect.innerHTML = '<option value="">Select building first...</option>';
+    }
+    
+    // Update room options when building changes
+    function modalUpdateRoomOptions() {
+        const citySelect = document.getElementById('modal_city_select');
+        const cityInput = document.getElementById('modal_city_input');
+        const buildingSelect = document.getElementById('modal_building_select');
+        const buildingInput = document.getElementById('modal_building_input');
+        const roomSelect = document.getElementById('modal_room_select');
+        const roomInput = document.getElementById('modal_room_input');
+        const addRoomBtn = document.getElementById('modal_add_room_btn');
+        
+        const selectedCity = citySelect.value === '__NEW__' ? cityInput.value : citySelect.value;
+        const selectedBuilding = buildingSelect.value;
+        
+        // Hide custom input if switching away from new
+        if (selectedBuilding !== '__NEW__') {
+            buildingInput.style.display = 'none';
+            buildingInput.value = '';
+        }
+        
+        roomInput.style.display = 'none';
+        roomInput.value = '';
+        
+        if (selectedBuilding && selectedBuilding !== '__NEW__') {
+            roomSelect.disabled = false;
+            addRoomBtn.disabled = false;
+            roomSelect.innerHTML = '<option value="">Select existing room...</option>';
+            roomSelect.innerHTML += '<option value="__NEW__">+ Add New Room</option>';
+            
+            if (selectedCity && modalLocationOptionsData[selectedCity] && modalLocationOptionsData[selectedCity][selectedBuilding]) {
+                const rooms = modalLocationOptionsData[selectedCity][selectedBuilding];
+                rooms.forEach(room => {
+                    const option = document.createElement('option');
+                    option.value = room;
+                    option.textContent = room;
+                    roomSelect.appendChild(option);
+                });
+            }
+        } else if (selectedBuilding === '__NEW__') {
+            buildingInput.style.display = 'block';
+            buildingInput.focus();
+            roomSelect.disabled = false;
+            addRoomBtn.disabled = false;
+            roomSelect.innerHTML = '<option value="">Select or add room...</option><option value="__NEW__">+ Add New Room</option>';
+        } else {
+            roomSelect.disabled = true;
+            addRoomBtn.disabled = true;
+            roomSelect.innerHTML = '<option value="">Select building first...</option>';
+        }
+    }
 </script>
 
 {% endblock %}
