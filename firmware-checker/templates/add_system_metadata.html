@@ -145,11 +145,11 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="u_height" class="form-label">
-                                <i class="bi bi-arrows-vertical"></i> U Position <span id="u_height_required" class="text-danger" style="display: none;">*</span>
+                                <i class="bi bi-arrows-vertical"></i> U Position <span id="u_height_required" class="text-danger" {% if auto_detected_rack %}style="display: inline;"{% else %}style="display: none;"{% endif %}>*</span>
                             </label>
                             <input type="number" class="form-control" id="u_height" name="u_height"
-                                   placeholder="e.g., 12" min="1" max="50">
-                            <div class="form-text" id="u_height_help">Rack unit position (positive integer, e.g., 10 for U10)</div>
+                                   placeholder="e.g., 12" min="1" max="50" {% if auto_detected_rack %}required{% endif %}>
+                            <div class="form-text" id="u_height_help">{% if auto_detected_rack %}Required when rack is assigned{% else %}Rack unit position (positive integer, e.g., 10 for U10){% endif %}</div>
                         </div>
                     </div>
 
@@ -244,14 +244,17 @@
                     function updateUHeightRequirement() {
                         const rackSelection = document.querySelector('input[name="rack_selection"]:checked');
                         
-                        if (rackSelection && rackSelection.value === 'existing') {
-                            // Make U height required for existing rack
+                        // Check if this is an auto-detected rack (no radio buttons visible)
+                        const isAutoDetected = document.querySelector('input[name="rack_selection"][type="hidden"]');
+                        
+                        if (isAutoDetected || (rackSelection && rackSelection.value === 'existing')) {
+                            // Make U height required for existing or auto-detected rack
                             uHeightInput.required = true;
                             uHeightRequired.style.display = 'inline';
-                            uHeightHelp.textContent = 'Required when selecting an existing rack';
+                            uHeightHelp.textContent = 'Required when rack is assigned';
                             uHeightHelp.classList.add('text-danger');
                         } else {
-                            // Make U height optional for new rack or no rack
+                            // Make U height optional for new rack
                             uHeightInput.required = false;
                             uHeightRequired.style.display = 'none';
                             uHeightHelp.textContent = 'Rack unit position (positive integer, e.g., 10 for U10)';

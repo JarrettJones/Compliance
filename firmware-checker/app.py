@@ -3306,6 +3306,19 @@ def add_system_metadata():
                                              auto_detected_rack=auto_detected_rack,
                                              locations=locations)
                     
+                    # Require U height for auto-detected rack
+                    if not u_height:
+                        flash('Error: U Position is required when rack is assigned', 'error')
+                        # Get locations for modal
+                        with get_db_connection() as conn2:
+                            locations = conn2.execute('SELECT id, name FROM locations ORDER BY name').fetchall()
+                        return render_template('add_system_metadata.html', 
+                                             system=pending,
+                                             custom_fields=custom_fields,
+                                             racks=racks,
+                                             auto_detected_rack=auto_detected_rack,
+                                             locations=locations)
+                    
                     flash(f'✓ Auto-assigned to rack "{rack_name}" based on RSCM IP {pending["rscm_ip"]}', 'success')
                 
                 # Handle rack selection/creation only if NOT auto-detected
