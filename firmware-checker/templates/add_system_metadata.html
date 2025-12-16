@@ -80,10 +80,10 @@
                     </div>
                     {% else %}
                     {% if rscm_matches_existing %}
-                    <!-- RSCM doesn't match, but exists in other racks - force new rack creation -->
-                    <div class="alert alert-warning py-2 mb-3">
-                        <i class="bi bi-exclamation-triangle"></i> <strong>RSCM Already Exists!</strong>
-                        <p class="mb-0 small mt-1">The RSCM IP <code>{{ system.rscm_ip }}</code> is already assigned to another rack. You must create a new rack for this system.</p>
+                    <!-- RSCM doesn't match any existing rack - force new rack creation via modal -->
+                    <div class="alert alert-info py-2 mb-3">
+                        <i class="bi bi-info-circle"></i> <strong>New Rack Required</strong>
+                        <p class="mb-0 small mt-1">The RSCM IP <code>{{ system.rscm_ip }}</code> doesn't match any existing rack. You must create a new rack for this system using the button below.</p>
                     </div>
                     <input type="hidden" name="rack_selection" value="new">
                     {% else %}

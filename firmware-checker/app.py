@@ -3233,24 +3233,17 @@ def add_system_metadata():
         
         if auto_detected_rack:
             # RSCM matches existing rack - lock to that rack
-            rscm_matches_existing = True
-        else:
-            # Check if RSCM matches ANY rack (not just the system's rack)
-            rscm_check = conn.execute('''
-                SELECT COUNT(*) as count
-                FROM rscm_components
-                WHERE ip_address = ?
-            ''', (pending['rscm_ip'],)).fetchone()
-            
-            rscm_matches_existing = rscm_check['count'] > 0
-        
-        # Only get existing racks if RSCM matches existing
-        if rscm_matches_existing:
+            rscm_matches_existing = False  # Don't force new rack creation
+            # Get existing racks for selection
             racks = conn.execute('''
                 SELECT id, name, location, rack_type 
                 FROM racks 
                 ORDER BY name
             ''').fetchall()
+        else:
+            # RSCM doesn't match any existing rack - must create new rack
+            rscm_matches_existing = True  # Force new rack creation
+            racks = []  # No rack selection allowed
     
     if request.method == 'POST':
         try:
