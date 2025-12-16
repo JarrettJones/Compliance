@@ -71,6 +71,93 @@ def add_timezone_column(conn):
         print(f"❌ Error adding timezone column: {e}")
         return False
 
+def fix_orphaned_systems(conn):
+    """Fix orphaned systems by assigning them to Redmond > Building 50 > Room 1110"""
+    print("\n=== Fixing orphaned systems ===")
+    cursor = conn.cursor()
+    
+    try:
+        # Check if location/building exist
+        location = cursor.execute("SELECT * FROM locations WHERE name = 'Redmond'").fetchone()
+        if not location:
+            print("⚠️  Redmond location not found - skipping orphaned systems fix")
+            return True
+        
+        building = cursor.execute(
+            "SELECT * FROM buildings WHERE name = 'Building 50' AND location_id = ?", 
+            (location[0],)
+        ).fetchone()
+        if not building:
+            print("⚠️  Building 50 not found - skipping orphaned systems fix")
+            return True
+        
+        # Check/create Room 1110
+        room = cursor.execute(
+            "SELECT * FROM rooms WHERE name = 'Room 1110' AND building_id = ?", 
+            (building[0],)
+        ).fetchone()
+        if not room:
+            print("Creating Room 1110...")
+            cursor.execute("""
+                INSERT INTO rooms (name, building_id, created_at)
+                VALUES ('Room 1110', ?, datetime('now'))
+            """, (building[0],))
+            conn.commit()
+            room_id = cursor.lastrowid
+            print(f"✓ Created Room 1110 (ID: {room_id})")
+        else:
+            room_id = room[0]
+            print(f"✓ Room 1110 exists (ID: {room_id})")
+        
+        # Check/create rack 17 (Unknown-Rack)
+        rack = cursor.execute("SELECT * FROM racks WHERE id = 17").fetchone()
+        if not rack:
+            print("Creating Unknown-Rack (ID: 17)...")
+            cursor.execute("""
+                INSERT INTO racks (id, name, room_id, rack_type, created_at)
+                VALUES (17, 'Unknown-Rack', ?, 'rack', datetime('now'))
+            """, (room_id,))
+            conn.commit()
+            print("✓ Created rack 17: Unknown-Rack")
+        else:
+            # Update rack 17's room_id if NULL
+            if rack[2] is None:  # room_id is column 2
+                cursor.execute("UPDATE racks SET room_id = ? WHERE id = 17", (room_id,))
+                conn.commit()
+                print("✓ Updated rack 17 to Room 1110")
+            else:
+                print("✓ Rack 17 (Unknown-Rack) already exists")
+        
+        # Find orphaned systems
+        orphaned = cursor.execute("""
+            SELECT COUNT(*) FROM systems s
+            LEFT JOIN racks r ON s.rack_id = r.id
+            WHERE s.rack_id IS NULL OR r.id IS NULL
+        """).fetchone()[0]
+        
+        if orphaned > 0:
+            print(f"Found {orphaned} orphaned system(s)")
+            cursor.execute("""
+                UPDATE systems
+                SET rack_id = 17
+                WHERE id IN (
+                    SELECT s.id
+                    FROM systems s
+                    LEFT JOIN racks r ON s.rack_id = r.id
+                    WHERE s.rack_id IS NULL OR r.id IS NULL
+                )
+            """)
+            conn.commit()
+            print(f"✓ Fixed {orphaned} orphaned system(s)")
+        else:
+            print("✓ No orphaned systems found")
+        
+        return True
+        
+    except sqlite3.Error as e:
+        print(f"❌ Error fixing orphaned systems: {e}")
+        return False
+
 def add_unique_location_constraint(conn):
     """Add unique constraint to location names"""
     print("\n=== Adding unique constraint to locations ===")
@@ -254,6 +341,7 @@ def main():
         # Run migrations
         success = True
         success = add_timezone_column(conn) and success
+        success = fix_orphaned_systems(conn) and success
         success = add_unique_location_constraint(conn) and success
         success = add_reservations_table(conn) and success
         
