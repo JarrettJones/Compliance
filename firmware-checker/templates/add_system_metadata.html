@@ -193,11 +193,11 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="u_height" class="form-label">
-                                <i class="bi bi-arrows-vertical"></i> U Position
+                                <i class="bi bi-arrows-vertical"></i> U Position <span id="u_height_required" class="text-danger" style="display: none;">*</span>
                             </label>
                             <input type="number" class="form-control" id="u_height" name="u_height"
                                    placeholder="e.g., 12" min="1" max="50">
-                            <div class="form-text">Rack unit position (positive integer, e.g., 10 for U10)</div>
+                            <div class="form-text" id="u_height_help">Rack unit position (positive integer, e.g., 10 for U10)</div>
                         </div>
                     </div>
 
@@ -284,6 +284,29 @@
                 </form>
 
                 <script>
+                    const uHeightInput = document.getElementById('u_height');
+                    const uHeightRequired = document.getElementById('u_height_required');
+                    const uHeightHelp = document.getElementById('u_height_help');
+                    const form = document.querySelector('form');
+
+                    function updateUHeightRequirement() {
+                        const rackSelection = document.querySelector('input[name="rack_selection"]:checked');
+                        
+                        if (rackSelection && rackSelection.value === 'existing') {
+                            // Make U height required for existing rack
+                            uHeightInput.required = true;
+                            uHeightRequired.style.display = 'inline';
+                            uHeightHelp.textContent = 'Required when selecting an existing rack';
+                            uHeightHelp.classList.add('text-danger');
+                        } else {
+                            // Make U height optional for new rack or no rack
+                            uHeightInput.required = false;
+                            uHeightRequired.style.display = 'none';
+                            uHeightHelp.textContent = 'Rack unit position (positive integer, e.g., 10 for U10)';
+                            uHeightHelp.classList.remove('text-danger');
+                        }
+                    }
+
                     // Toggle rack sections based on radio selection
                     document.querySelectorAll('input[name="rack_selection"]').forEach(radio => {
                         radio.addEventListener('change', function() {
@@ -291,7 +314,36 @@
                                 this.value === 'existing' ? 'block' : 'none';
                             document.getElementById('new_rack_section').style.display = 
                                 this.value === 'new' ? 'block' : 'none';
+                            
+                            updateUHeightRequirement();
                         });
+                    });
+
+                    // Initialize U height requirement based on current selection
+                    updateUHeightRequirement();
+
+                    // Add form validation
+                    form.addEventListener('submit', function(e) {
+                        const rackSelection = document.querySelector('input[name="rack_selection"]:checked');
+                        
+                        if (rackSelection && rackSelection.value === 'existing') {
+                            const existingRackId = document.getElementById('existing_rack_id').value;
+                            const uHeight = uHeightInput.value;
+                            
+                            if (!existingRackId) {
+                                e.preventDefault();
+                                alert('Please select a rack from the dropdown.');
+                                document.getElementById('existing_rack_id').focus();
+                                return false;
+                            }
+                            
+                            if (!uHeight || uHeight < 1) {
+                                e.preventDefault();
+                                alert('U Position is required when selecting an existing rack.');
+                                uHeightInput.focus();
+                                return false;
+                            }
+                        }
                     });
                 </script>
             </div>
