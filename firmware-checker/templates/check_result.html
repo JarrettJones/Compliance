@@ -21,7 +21,7 @@
                         {% if check.location_name %}{{ check.location_name }}{% else %}Unknown{% endif %}
                         {% if check.building_name %} / {{ check.building_name.replace('Building ', '') }}{% endif %}
                         {% if check.room_name %} / {{ check.room_name.replace('Room ', '') }}{% endif %}
-                        {% if check.rack_name %} / {{ check.rack_name }}{% if check.rack_type == 'bench' %} (Bench){% endif %}{% endif %}
+                        {% if check.rack_name %} / {{ check.rack_name.replace('Rack ', '').replace('Rack', '') }}{% if check.rack_type == 'bench' %} (Bench){% endif %}{% endif %}
                         {% if check.u_height %} / U{{ check.u_height }}{% endif %}
                     </strong>
                 </p>
