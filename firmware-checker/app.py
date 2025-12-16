@@ -3259,6 +3259,7 @@ def add_system_metadata():
             
             rack_selection = request.form.get('rack_selection', 'existing')
             existing_rack_id = request.form.get('existing_rack_id', '')
+            new_rack_id = request.form.get('new_rack_id', '').strip()  # Rack created via modal
             new_rack_name = request.form.get('new_rack_name', '').strip()
             new_rack_location = request.form.get('new_rack_location', '').strip()
             new_rack_type = request.form.get('new_rack_type', 'rack')
@@ -3299,57 +3300,25 @@ def add_system_metadata():
                 
                 # Handle rack selection/creation
                 if rack_selection == 'new':
-                    # Creating new rack - validate required fields
-                    if not new_rack_name:
-                        flash('Rack name is required when creating a new rack', 'error')
+                    # Check if rack was created via modal
+                    if new_rack_id:
+                        # Rack already created via modal, just use its ID
+                        rack_id = int(new_rack_id)
+                        rack_info = conn.execute('SELECT name FROM racks WHERE id = ?', (rack_id,)).fetchone()
+                        if rack_info:
+                            rack_name = rack_info['name']
+                            flash(f'✓ Using newly created rack "{rack_name}"', 'success')
+                    else:
+                        flash('Please create a rack using the "Create New Rack" button', 'error')
+                        # Get locations for modal
+                        with get_db_connection() as conn2:
+                            locations = conn2.execute('SELECT id, name FROM locations ORDER BY name').fetchall()
                         return render_template('add_system_metadata.html', 
                                              system=pending,
                                              custom_fields=custom_fields,
-                                             racks=racks)
-                    
-                    if not new_rack_location:
-                        flash('Rack location is required when creating a new rack', 'error')
-                        return render_template('add_system_metadata.html', 
-                                             system=pending,
-                                             custom_fields=custom_fields,
-                                             racks=racks)
-                    
-                    if not rscm_upper_ip or not rscm_lower_ip:
-                        flash('Both Upper and Lower RSCM IPs are required when creating a new rack', 'error')
-                        return render_template('add_system_metadata.html', 
-                                             system=pending,
-                                             custom_fields=custom_fields,
-                                             racks=racks)
-                    
-                    # Create new rack
-                    try:
-                        new_rack_room = request.form.get('new_rack_room', '').strip()
-                        cursor = conn.execute('''
-                            INSERT INTO racks (name, location, rack_type, room)
-                            VALUES (?, ?, ?, ?)
-                        ''', (new_rack_name, new_rack_location, new_rack_type, new_rack_room))
-                        rack_id = cursor.lastrowid
-                        rack_name = new_rack_name
-                        rack_location = new_rack_location
-                        
-                        # Create RSCM components (upper and lower)
-                        cursor = conn.execute('''
-                            INSERT INTO rscm_components (rack_id, name, ip_address, port)
-                            VALUES (?, ?, ?, ?)
-                        ''', (rack_id, 'RSCM-Upper', rscm_upper_ip, 22))
-                        
-                        cursor = conn.execute('''
-                            INSERT INTO rscm_components (rack_id, name, ip_address, port)
-                            VALUES (?, ?, ?, ?)
-                        ''', (rack_id, 'RSCM-Lower', rscm_lower_ip, 22))
-                        
-                        flash(f'Created new rack "{new_rack_name}" with upper and lower RSCMs', 'success')
-                    except sqlite3.IntegrityError as e:
-                        flash(f'Error creating rack: Rack name may already exist', 'error')
-                        return render_template('add_system_metadata.html', 
-                                             system=pending,
-                                             custom_fields=custom_fields,
-                                             racks=racks)
+                                             racks=racks,
+                                             auto_detected_rack=auto_detected_rack,
+                                             locations=locations)
                 
                 elif rack_selection == 'existing' and existing_rack_id:
                     rack_id = int(existing_rack_id)
@@ -3442,11 +3411,16 @@ def add_system_metadata():
             logger.error(f"Error saving system metadata: {str(e)}")
             flash(f'Error saving system: {str(e)}', 'error')
     
+    # Get locations for rack creation modal
+    with get_db_connection() as conn:
+        locations = conn.execute('SELECT id, name FROM locations ORDER BY name').fetchall()
+    
     return render_template('add_system_metadata.html', 
                          system=pending,
                          custom_fields=custom_fields,
                          racks=racks,
-                         auto_detected_rack=auto_detected_rack)
+                         auto_detected_rack=auto_detected_rack,
+                         locations=locations)
 
 @app.route('/systems/<int:system_id>')
 @login_required
@@ -4874,6 +4848,48 @@ def api_rack_location_options():
             return jsonify(result)
     except Exception as e:
         logger.error(f"Error in api_rack_location_options: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/buildings', methods=['GET'])
+@login_required
+def get_buildings():
+    """Get buildings for a specific location"""
+    location_id = request.args.get('location_id')
+    if not location_id:
+        return jsonify({'error': 'location_id required'}), 400
+    
+    try:
+        with get_db_connection() as conn:
+            buildings = conn.execute('''
+                SELECT id, name FROM buildings 
+                WHERE location_id = ? 
+                ORDER BY name
+            ''', (location_id,)).fetchall()
+            
+            return jsonify([{'id': b['id'], 'name': b['name']} for b in buildings])
+    except Exception as e:
+        logger.error(f"Error getting buildings: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/rooms', methods=['GET'])
+@login_required
+def get_rooms():
+    """Get rooms for a specific building"""
+    building_id = request.args.get('building_id')
+    if not building_id:
+        return jsonify({'error': 'building_id required'}), 400
+    
+    try:
+        with get_db_connection() as conn:
+            rooms = conn.execute('''
+                SELECT id, name FROM rooms 
+                WHERE building_id = ? 
+                ORDER BY name
+            ''', (building_id,)).fetchall()
+            
+            return jsonify([{'id': r['id'], 'name': r['name']} for r in rooms])
+    except Exception as e:
+        logger.error(f"Error getting rooms: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/racks/<int:rack_id>/systems')
