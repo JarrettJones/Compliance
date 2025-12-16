@@ -61,8 +61,24 @@
                         <i class="bi bi-check-circle"></i> <strong>Rack Auto-Detected!</strong>
                         <p class="mb-0 small mt-1">Based on RSCM IP <code>{{ system.rscm_ip }}</code>, this system belongs to rack <strong>{{ auto_detected_rack.name }}</strong> ({{ auto_detected_rack.rscm_name }}) at {{ auto_detected_rack.location }}</p>
                     </div>
-                    {% endif %}
                     
+                    <!-- Auto-detected rack - locked selection -->
+                    <div class="mb-3">
+                        <label class="form-label">Rack Assignment (Auto-Detected)</label>
+                        <input type="hidden" name="rack_selection" value="existing">
+                        <input type="hidden" name="existing_rack_id" value="{{ auto_detected_rack.id }}">
+                        
+                        <div class="card bg-light">
+                            <div class="card-body py-2">
+                                <h6 class="mb-1"><i class="bi bi-lock"></i> {{ auto_detected_rack.name }}</h6>
+                                <p class="mb-0 text-muted small">{{ auto_detected_rack.location }}</p>
+                            </div>
+                        </div>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i> This system's RSCM IP matches this rack. Selection is locked to prevent data inconsistency.
+                        </div>
+                    </div>
+                    {% else %}
                     <div class="mb-3">
                         <label class="form-label">Rack Assignment</label>
                         <div class="form-check">
@@ -71,18 +87,12 @@
                                 Select Existing Rack
                             </label>
                         </div>
-                        {% if not auto_detected_rack %}
                         <div class="form-check">
                             <input class="form-check-input" type="radio" name="rack_selection" id="rack_new" value="new">
                             <label class="form-check-label" for="rack_new">
                                 Create New Rack
                             </label>
                         </div>
-                        {% else %}
-                        <div class="alert alert-warning py-2 mt-2 mb-0">
-                            <i class="bi bi-info-circle"></i> <small>A rack matching this RSCM IP already exists. Please select from existing racks.</small>
-                        </div>
-                        {% endif %}
                     </div>
 
                     <!-- Existing Rack Selection -->
@@ -91,20 +101,17 @@
                         <select class="form-select" id="existing_rack_id" name="existing_rack_id">
                             <option value="">-- Select a Rack --</option>
                             {% for rack in racks %}
-                            <option value="{{ rack.id }}" data-location="{{ rack.location }}" {% if auto_detected_rack and rack.id == auto_detected_rack.id %}selected{% endif %}>
+                            <option value="{{ rack.id }}" data-location="{{ rack.location }}">
                                 {{ rack.name }} - {{ rack.location }}
                             </option>
                             {% endfor %}
                         </select>
                         <div class="form-text">
                             System RSCM IP: <code>{{ system.rscm_ip }}</code><br>
-                            {% if auto_detected_rack %}
-                            ✓ Matched to {{ auto_detected_rack.name }}
-                            {% else %}
                             Make sure this matches an RSCM in the selected rack
-                            {% endif %}
                         </div>
                     </div>
+                    {% endif %}
 
                     <!-- New Rack Creation Button -->
                     <div id="new_rack_section" class="mb-3" style="display: none;">

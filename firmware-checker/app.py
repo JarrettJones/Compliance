@@ -3260,11 +3260,6 @@ def add_system_metadata():
             rack_selection = request.form.get('rack_selection', 'existing')
             existing_rack_id = request.form.get('existing_rack_id', '')
             new_rack_id = request.form.get('new_rack_id', '').strip()  # Rack created via modal
-            new_rack_name = request.form.get('new_rack_name', '').strip()
-            new_rack_location = request.form.get('new_rack_location', '').strip()
-            new_rack_type = request.form.get('new_rack_type', 'rack')
-            rscm_upper_ip = request.form.get('rscm_upper_ip', '').strip()
-            rscm_lower_ip = request.form.get('rscm_lower_ip', '').strip()
             u_height_raw = request.form.get('u_height', '')
             u_height = normalize_u_height(u_height_raw) if u_height_raw else None
             description = request.form.get('description', '')
@@ -3290,11 +3285,17 @@ def add_system_metadata():
                     WHERE rc.ip_address = ?
                 ''', (pending['rscm_ip'],)).fetchone()
                 
-                # Handle rack selection/creation
-                if rack_selection == 'new':
-                    # Prevent creating new rack if RSCM IP matches existing rack
-                    if auto_detected:
-                        flash(f'Cannot create new rack: RSCM IP {pending["rscm_ip"]} already belongs to rack "{auto_detected["name"]}". Please select the existing rack.', 'error')
+                # If auto-detected, force use of that rack
+                if auto_detected:
+                    # Override any user selection - must use auto-detected rack
+                    rack_id = auto_detected['id']
+                    rack_name = auto_detected['name']
+                    rack_location = auto_detected['location']
+                    rscm_component_id = auto_detected['rscm_id']
+                    
+                    # Verify they didn't try to select a different rack
+                    if existing_rack_id and int(existing_rack_id) != rack_id:
+                        flash(f'Error: System RSCM IP {pending["rscm_ip"]} belongs to rack "{rack_name}". Cannot assign to a different rack.', 'error')
                         # Get locations for modal
                         with get_db_connection() as conn2:
                             locations = conn2.execute('SELECT id, name FROM locations ORDER BY name').fetchall()
@@ -3304,6 +3305,11 @@ def add_system_metadata():
                                              racks=racks,
                                              auto_detected_rack=auto_detected_rack,
                                              locations=locations)
+                    
+                    flash(f'✓ Auto-assigned to rack "{rack_name}" based on RSCM IP {pending["rscm_ip"]}', 'success')
+                
+                # Handle rack selection/creation only if NOT auto-detected
+                elif rack_selection == 'new':
                     
                     # Check if rack was created via modal
                     if new_rack_id:
