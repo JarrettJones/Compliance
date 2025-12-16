@@ -919,25 +919,39 @@ def convert_to_user_timezone(utc_datetime_str):
         logger.error(f"Error converting timezone: {e}")
         return utc_datetime_str
 
-def convert_from_user_timezone(local_datetime_str):
-    """Convert user's local datetime string to UTC"""
-    if not local_datetime_str:
+def convert_from_user_timezone(local_datetime):
+    """Convert user's local datetime to UTC
+    
+    Args:
+        local_datetime: Either a datetime object or string in 'MM/DD/YY HH:MM' format
+    
+    Returns:
+        datetime object in UTC
+    """
+    if not local_datetime:
         return None
     
     try:
         # Get user's timezone
         user_tz = pytz.timezone(get_user_timezone())
         
-        # Parse local datetime (format: MM/DD/YY HH:MM)
-        local_time = datetime.strptime(local_datetime_str, '%m/%d/%y %H:%M')
-        local_time = user_tz.localize(local_time)
+        # Handle both datetime objects and strings
+        if isinstance(local_datetime, str):
+            local_time = datetime.strptime(local_datetime, '%m/%d/%y %H:%M')
+        else:
+            local_time = local_datetime
+        
+        # Localize to user's timezone if naive
+        if local_time.tzinfo is None:
+            local_time = user_tz.localize(local_time)
         
         # Convert to UTC
         utc_time = local_time.astimezone(pytz.utc)
         
-        return utc_time.strftime('%Y-%m-%d %H:%M:%S')
+        return utc_time.replace(tzinfo=None)  # Return naive datetime in UTC
     except Exception as e:
         logger.error(f"Error converting from timezone: {e}")
+        return None
         return None
 
 # Add timezone list for dropdown
@@ -3020,13 +3034,17 @@ def systems():
                        u.username as created_by_username,
                        u.first_name as created_by_first_name,
                        u.last_name as created_by_last_name,
-                       r.name as rack_name,
-                       r.location as rack_location,
-                       r.room as rack_room
+                       ra.name as rack_name,
+                       ro.name as rack_room,
+                       b.name as rack_building,
+                       l.name as rack_location
                 FROM systems s
                 LEFT JOIN firmware_checks fc ON s.id = fc.system_id
                 LEFT JOIN users u ON s.created_by = u.id
-                LEFT JOIN racks r ON s.rack_id = r.id
+                LEFT JOIN racks ra ON s.rack_id = ra.id
+                LEFT JOIN rooms ro ON ra.room_id = ro.id
+                LEFT JOIN buildings b ON ro.building_id = b.id
+                LEFT JOIN locations l ON b.location_id = l.id
                 WHERE s.program_id = ?
                 GROUP BY s.id
                 ORDER BY s.name
@@ -3049,13 +3067,17 @@ def systems():
                        u.username as created_by_username,
                        u.first_name as created_by_first_name,
                        u.last_name as created_by_last_name,
-                       r.name as rack_name,
-                       r.location as rack_location,
-                       r.room as rack_room
+                       ra.name as rack_name,
+                       ro.name as rack_room,
+                       b.name as rack_building,
+                       l.name as rack_location
                 FROM systems s
                 LEFT JOIN firmware_checks fc ON s.id = fc.system_id
                 LEFT JOIN users u ON s.created_by = u.id
-                LEFT JOIN racks r ON s.rack_id = r.id
+                LEFT JOIN racks ra ON s.rack_id = ra.id
+                LEFT JOIN rooms ro ON ra.room_id = ro.id
+                LEFT JOIN buildings b ON ro.building_id = b.id
+                LEFT JOIN locations l ON b.location_id = l.id
                 GROUP BY s.id
                 ORDER BY s.name
             ''').fetchall()
@@ -3312,6 +3334,14 @@ def add_system_metadata():
                     if rack:
                         rack_name = rack['name']
                         rack_location = rack['location']
+                
+                # Validate that a rack was assigned
+                if rack_id is None:
+                    flash('A rack assignment is required. Please select an existing rack or create a new one.', 'error')
+                    return render_template('add_system_metadata.html', 
+                                         system=pending,
+                                         custom_fields=custom_fields,
+                                         racks=racks)
                 
                 # If rack is selected, find matching RSCM component
                 if rack_id:
@@ -3636,6 +3666,14 @@ def api_get_calendar_events():
                 start_dt = datetime.strptime(res['start_time'], '%Y-%m-%d %H:%M:%S')
                 end_dt = datetime.strptime(res['end_time'], '%Y-%m-%d %H:%M:%S')
                 
+                # Localize to UTC and convert to user's timezone
+                start_dt = pytz.utc.localize(start_dt)
+                end_dt = pytz.utc.localize(end_dt)
+                
+                user_tz = pytz.timezone(get_user_timezone())
+                start_user_tz = start_dt.astimezone(user_tz)
+                end_user_tz = end_dt.astimezone(user_tz)
+                
                 # Determine color based on ownership
                 is_mine = res['user_id'] == session.get('user_id')
                 color = '#0d6efd' if is_mine else '#6c757d'  # Blue for mine, gray for others
@@ -3643,8 +3681,8 @@ def api_get_calendar_events():
                 events.append({
                     'id': res['id'],
                     'title': f"{res['system_name']} - {res['username']}",
-                    'start': res['start_time'].replace(' ', 'T'),
-                    'end': res['end_time'].replace(' ', 'T'),
+                    'start': start_user_tz.strftime('%Y-%m-%dT%H:%M:%S'),
+                    'end': end_user_tz.strftime('%Y-%m-%dT%H:%M:%S'),
                     'backgroundColor': color,
                     'borderColor': color,
                     'extendedProps': {
@@ -3652,7 +3690,8 @@ def api_get_calendar_events():
                         'systemName': res['system_name'],
                         'username': res['username'],
                         'purpose': res['purpose'],
-                        'isMine': is_mine
+                        'isMine': is_mine,
+                        'status': res['status']
                     }
                 })
             
@@ -3676,19 +3715,24 @@ def api_check_reservation_availability():
         if not all([system_id, start_time, end_time]):
             return jsonify({'error': 'Missing required fields'}), 400
         
-        # Parse datetime strings
+        # Parse datetime strings (these are in user's local timezone)
         from datetime import datetime
         try:
-            start_dt = datetime.strptime(start_time, '%m/%d/%y %H:%M')
-            end_dt = datetime.strptime(end_time, '%m/%d/%y %H:%M')
+            start_dt_local = datetime.strptime(start_time, '%m/%d/%y %H:%M')
+            end_dt_local = datetime.strptime(end_time, '%m/%d/%y %H:%M')
         except ValueError:
             return jsonify({'error': 'Invalid date format. Use MM/DD/YY HH:MM'}), 400
         
-        # Validate time range
-        if end_dt <= start_dt:
+        # Validate time range (in local time)
+        if end_dt_local <= start_dt_local:
             return jsonify({'available': False, 'error': 'End time must be after start time'}), 200
         
-        if start_dt < datetime.now():
+        # Convert to UTC for comparison and storage
+        start_dt_utc = convert_from_user_timezone(start_dt_local)
+        end_dt_utc = convert_from_user_timezone(end_dt_local)
+        now_utc = convert_from_user_timezone(datetime.now())
+        
+        if start_dt_utc < now_utc:
             return jsonify({'available': False, 'error': 'Start time cannot be in the past'}), 200
         
         with get_db_connection() as conn:
@@ -3705,7 +3749,9 @@ def api_check_reservation_availability():
                     OR (r.start_time >= ? AND r.end_time <= ?)
                 )
             '''
-            params = [system_id, start_dt, start_dt, end_dt, end_dt, start_dt, end_dt]
+            params = [system_id, start_dt_utc.strftime('%Y-%m-%d %H:%M:%S'), start_dt_utc.strftime('%Y-%m-%d %H:%M:%S'), 
+                     end_dt_utc.strftime('%Y-%m-%d %H:%M:%S'), end_dt_utc.strftime('%Y-%m-%d %H:%M:%S'), 
+                     start_dt_utc.strftime('%Y-%m-%d %H:%M:%S'), end_dt_utc.strftime('%Y-%m-%d %H:%M:%S')]
             
             if reservation_id:
                 query += ' AND r.id != ?'
@@ -3715,7 +3761,7 @@ def api_check_reservation_availability():
             
             if conflicts:
                 # Find next available time slot
-                next_available = find_next_available_slot(conn, system_id, start_dt, end_dt)
+                next_available = find_next_available_slot(conn, system_id, start_dt_utc, end_dt_utc)
                 
                 conflict_info = []
                 for conflict in conflicts:
@@ -3804,18 +3850,25 @@ def api_create_reservation():
         if not all([system_id, start_time, end_time]):
             return jsonify({'error': 'Missing required fields'}), 400
         
-        # Parse datetime strings
+        # Parse datetime strings (these are in user's local timezone)
         from datetime import datetime
         try:
-            start_dt = datetime.strptime(start_time, '%m/%d/%y %H:%M')
-            end_dt = datetime.strptime(end_time, '%m/%d/%y %H:%M')
+            start_dt_local = datetime.strptime(start_time, '%m/%d/%y %H:%M')
+            end_dt_local = datetime.strptime(end_time, '%m/%d/%y %H:%M')
         except ValueError:
             return jsonify({'error': 'Invalid date format. Use MM/DD/YY HH:MM'}), 400
+        
+        # Convert from user's timezone to UTC for storage
+        start_dt_utc = convert_from_user_timezone(start_dt_local)
+        end_dt_utc = convert_from_user_timezone(end_dt_local)
         
         user_id = session.get('user_id')
         
         with get_db_connection() as conn:
-            # Double-check availability before creating
+            # Double-check availability before creating (using UTC times)
+            start_str = start_dt_utc.strftime('%Y-%m-%d %H:%M:%S')
+            end_str = end_dt_utc.strftime('%Y-%m-%d %H:%M:%S')
+            
             conflicts = conn.execute('''
                 SELECT COUNT(*) as count FROM reservations
                 WHERE system_id = ? AND status = 'active'
@@ -3824,7 +3877,7 @@ def api_create_reservation():
                     OR (start_time < ? AND end_time >= ?)
                     OR (start_time >= ? AND end_time <= ?)
                 )
-            ''', (system_id, start_dt, start_dt, end_dt, end_dt, start_dt, end_dt)).fetchone()
+            ''', (system_id, start_str, start_str, end_str, end_str, start_str, end_str)).fetchone()
             
             if conflicts['count'] > 0:
                 return jsonify({'error': 'System is not available during this time'}), 409
@@ -3833,7 +3886,7 @@ def api_create_reservation():
             cursor = conn.execute('''
                 INSERT INTO reservations (system_id, user_id, start_time, end_time, purpose, status)
                 VALUES (?, ?, ?, ?, ?, 'active')
-            ''', (system_id, user_id, start_dt, end_dt, purpose))
+            ''', (system_id, user_id, start_str, end_str, purpose))
             
             reservation_id = cursor.lastrowid
             
@@ -3841,7 +3894,7 @@ def api_create_reservation():
             conn.execute('''
                 INSERT INTO reservation_history (reservation_id, action, performed_by, new_start_time, new_end_time, notes)
                 VALUES (?, 'created', ?, ?, ?, ?)
-            ''', (reservation_id, user_id, start_dt, end_dt, purpose))
+            ''', (reservation_id, user_id, start_str, end_str, purpose))
             
             conn.commit()
             
@@ -3883,13 +3936,14 @@ def api_cancel_reservation(reservation_id):
             
             from datetime import datetime
             now = datetime.now()
+            now_str = now.strftime('%Y-%m-%d %H:%M:%S')
             
             # Update reservation status
             conn.execute('''
                 UPDATE reservations
                 SET status = 'cancelled', cancelled_at = ?, cancelled_by = ?, updated_at = ?
                 WHERE id = ?
-            ''', (now, user_id, now, reservation_id))
+            ''', (now_str, user_id, now_str, reservation_id))
             
             # Log to history
             conn.execute('''
@@ -3903,6 +3957,54 @@ def api_cancel_reservation(reservation_id):
             
     except Exception as e:
         logger.error(f"Error cancelling reservation: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/reservations/<int:reservation_id>/complete', methods=['POST'])
+@scheduler_required
+def api_complete_reservation(reservation_id):
+    """Mark a reservation as completed"""
+    try:
+        user_id = session.get('user_id')
+        user_role = session.get('role')
+        
+        with get_db_connection() as conn:
+            reservation = conn.execute('''
+                SELECT * FROM reservations WHERE id = ?
+            ''', (reservation_id,)).fetchone()
+            
+            if not reservation:
+                return jsonify({'error': 'Reservation not found'}), 404
+            
+            # Only allow completion by the user who made it, or by admin/editor
+            if reservation['user_id'] != user_id and user_role not in ['admin', 'editor']:
+                return jsonify({'error': 'You can only complete your own reservations'}), 403
+            
+            if reservation['status'] != 'active':
+                return jsonify({'error': 'Reservation is not active'}), 400
+            
+            from datetime import datetime
+            now = datetime.now()
+            now_str = now.strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Update reservation status
+            conn.execute('''
+                UPDATE reservations
+                SET status = 'completed', updated_at = ?
+                WHERE id = ?
+            ''', (now_str, reservation_id))
+            
+            # Log to history
+            conn.execute('''
+                INSERT INTO reservation_history (reservation_id, action, performed_by, notes)
+                VALUES (?, 'completed', ?, 'Reservation completed')
+            ''', (reservation_id, user_id))
+            
+            conn.commit()
+            
+            return jsonify({'success': True, 'message': 'Reservation completed'}), 200
+            
+    except Exception as e:
+        logger.error(f"Error completing reservation: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/systems/<int:system_id>/reservations', methods=['GET'])
@@ -4123,12 +4225,24 @@ def api_get_reservation_systems():
                 ORDER BY s.name
             ''', (rack_id,)).fetchall()
             
-            return jsonify([{
-                'id': sys['id'], 
-                'name': sys['name'],
-                'u_height': sys['u_height'],
-                'slot': sys['description']  # Using description as slot info
-            } for sys in systems])
+            result = []
+            for sys in systems:
+                # Extract hostname from description (format: "Host: {hostname} | ...")
+                hostname = None
+                if sys['description']:
+                    import re
+                    host_match = re.search(r'Host:\s*([^|]+)', sys['description'])
+                    if host_match:
+                        hostname = host_match.group(1).strip()
+                
+                result.append({
+                    'id': sys['id'], 
+                    'serial_number': sys['name'],
+                    'u_height': sys['u_height'],
+                    'hostname': hostname
+                })
+            
+            return jsonify(result)
     except Exception as e:
         logger.error(f"Error getting systems: {e}")
         return jsonify({'error': str(e)}), 500

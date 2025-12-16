@@ -87,6 +87,21 @@
 
 <script>
 const SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+const USER_TIMEZONE = {{ user_timezone|tojson|safe }};
+
+// Helper function to parse UTC time string
+function parseUTCTime(utcTimeStr) {
+    const parts = utcTimeStr.split(/[- :]/);
+    const utcDate = new Date(Date.UTC(
+        parseInt(parts[0]), 
+        parseInt(parts[1]) - 1, 
+        parseInt(parts[2]),
+        parseInt(parts[3]),
+        parseInt(parts[4]),
+        parseInt(parts[5] || 0)
+    ));
+    return utcDate;
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     const calendarEl = document.getElementById('calendar');
@@ -165,7 +180,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             <div class="modal-footer">
                                 ${props.isMine && event.end > new Date() ? `
                                     <button type="button" class="btn btn-danger" onclick="cancelReservation(${event.id})">
-                                        <i class="bi bi-x-circle"></i> Cancel Reservation
+                                        <i class="bi bi-x-circle"></i> Cancel
+                                    </button>
+                                ` : ''}
+                                ${props.isMine && event.end < new Date() && props.status === 'active' ? `
+                                    <button type="button" class="btn btn-success" onclick="completeReservation(${event.id})">
+                                        <i class="bi bi-check-circle"></i> Complete
                                     </button>
                                 ` : ''}
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -236,6 +256,40 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+async function completeReservation(reservationId) {
+    if (!confirm('Mark this reservation as completed?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/${reservationId}/complete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('eventModal'));
+            if (modal) modal.hide();
+            
+            // Refresh calendar
+            window.reservationCalendar.refetchEvents();
+            
+            // Show success message
+            showAlert('Reservation marked as completed!', 'success');
+        } else {
+            showAlert(result.error || 'Error completing reservation', 'danger');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showAlert('Error completing reservation', 'danger');
+    }
 }
 
 async function cancelReservation(reservationId) {

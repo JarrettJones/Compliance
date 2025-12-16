@@ -190,6 +190,22 @@
 
 <script>
 const SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+const USER_TIMEZONE = {{ user_timezone|tojson|safe }};
+
+// Helper function to convert UTC time string to user's local timezone
+function parseUTCTime(utcTimeStr) {
+    // Parse the UTC time string (format: "YYYY-MM-DD HH:MM:SS")
+    const parts = utcTimeStr.split(/[- :]/);
+    const utcDate = new Date(Date.UTC(
+        parseInt(parts[0]), 
+        parseInt(parts[1]) - 1, 
+        parseInt(parts[2]),
+        parseInt(parts[3]),
+        parseInt(parts[4]),
+        parseInt(parts[5] || 0)
+    ));
+    return utcDate;
+}
 
 // Load reservations when page loads
 document.addEventListener('DOMContentLoaded', function() {
@@ -206,6 +222,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function loadReservations(status) {
     const container = document.getElementById(`${status}Reservations`);
+    
+    // Safety check - ensure container exists
+    if (!container) {
+        console.error(`Container element not found: ${status}Reservations`);
+        return;
+    }
     
     try {
         const response = await fetch(`${SCRIPT_ROOT}/api/reservations/my-reservations?status=${status}`);
@@ -247,8 +269,9 @@ async function loadReservations(status) {
 }
 
 function renderReservationCard(reservation) {
-    const startTime = new Date(reservation.start_time);
-    const endTime = new Date(reservation.end_time);
+    // Parse UTC times and get current time
+    const startTime = parseUTCTime(reservation.start_time);
+    const endTime = parseUTCTime(reservation.end_time);
     const now = new Date();
     
     const isActive = reservation.status === 'active';
@@ -325,11 +348,18 @@ function renderReservationCard(reservation) {
                         </small>
                     </div>
                     
-                    ${canCancel ? `
-                        <button class="btn btn-sm btn-outline-danger mt-2" onclick="cancelReservation(${reservation.id})">
-                            <i class="bi bi-x-circle"></i> Cancel Reservation
-                        </button>
-                    ` : ''}
+                    <div class="mt-2">
+                        ${canCancel ? `
+                            <button class="btn btn-sm btn-outline-danger" onclick="cancelReservation(${reservation.id})">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </button>
+                        ` : ''}
+                        ${isPast && reservation.status === 'active' ? `
+                            <button class="btn btn-sm btn-outline-success ms-2" onclick="completeReservation(${reservation.id})">
+                                <i class="bi bi-check-circle"></i> Complete
+                            </button>
+                        ` : ''}
+                    </div>
                 </div>
             </div>
         </div>
@@ -365,6 +395,35 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+async function completeReservation(reservationId) {
+    if (!confirm('Mark this reservation as completed?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/${reservationId}/complete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Reservation marked as completed');
+            // Reload the current tab
+            const activeTab = document.querySelector('.nav-link.active').id.replace('-tab', '');
+            loadReservations(activeTab);
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error completing reservation:', error);
+        alert('Failed to complete reservation');
+    }
 }
 
 async function cancelReservation(reservationId) {
@@ -558,9 +617,18 @@ async function onRackChange(e) {
         const systems = await response.json();
         
         systems.forEach(sys => {
-            let displayName = sys.name;
-            if (sys.u_height) displayName += ` (U${sys.u_height})`;
-            if (sys.slot) displayName += ` - Slot ${sys.slot}`;
+            let displayParts = [];
+            
+            // Serial Number
+            if (sys.serial_number) displayParts.push(sys.serial_number);
+            
+            // U Height
+            if (sys.u_height) displayParts.push(`U${sys.u_height}`);
+            
+            // Hostname
+            if (sys.hostname) displayParts.push(sys.hostname);
+            
+            const displayName = displayParts.join(' | ');
             systemSelect.innerHTML += `<option value="${sys.id}">${displayName}</option>`;
         });
     } catch (error) {

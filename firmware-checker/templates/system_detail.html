@@ -369,6 +369,21 @@ function deleteCheck(button) {
 {% if session.get('role') in ['admin', 'editor', 'scheduler'] %}
 const SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
 const systemId = {{ system.id }};
+const USER_TIMEZONE = {{ user_timezone|tojson|safe }};
+
+// Helper function to parse UTC time string
+function parseUTCTime(utcTimeStr) {
+    const parts = utcTimeStr.split(/[- :]/);
+    const utcDate = new Date(Date.UTC(
+        parseInt(parts[0]), 
+        parseInt(parts[1]) - 1, 
+        parseInt(parts[2]),
+        parseInt(parts[3]),
+        parseInt(parts[4]),
+        parseInt(parts[5] || 0)
+    ));
+    return utcDate;
+}
 
 // Load reservations when page loads
 document.addEventListener('DOMContentLoaded', function() {
@@ -413,10 +428,11 @@ async function loadSystemReservations() {
         let html = '<div class="list-group">';
         
         reservations.forEach(reservation => {
-            const startTime = new Date(reservation.start_time);
-            const endTime = new Date(reservation.end_time);
+            const startTime = parseUTCTime(reservation.start_time);
+            const endTime = parseUTCTime(reservation.end_time);
             const isOngoing = startTime <= now && endTime >= now;
             const isUpcoming = startTime > now;
+            const isPast = endTime < now;
             
             let statusBadge = '';
             let statusClass = '';
@@ -425,6 +441,8 @@ async function loadSystemReservations() {
                 statusClass = 'border-success';
             } else if (isUpcoming) {
                 statusBadge = '<span class="badge bg-primary">Upcoming</span>';
+            } else if (isPast && reservation.status === 'active') {
+                statusBadge = '<span class="badge bg-warning">Past Due</span>';
             }
             
             const canCancel = reservation.user_id === {{ session.get('user_id') }} || {{ 'true' if session.get('role') in ['admin', 'editor'] else 'false' }};
@@ -441,11 +459,18 @@ async function loadSystemReservations() {
                             </p>
                             ${reservation.purpose ? `<p class="mb-0"><small>${escapeHtml(reservation.purpose)}</small></p>` : ''}
                         </div>
-                        ${canCancel && isUpcoming ? `
-                            <button class="btn btn-sm btn-outline-danger" onclick="cancelReservation(${reservation.id})">
-                                <i class="bi bi-x-circle"></i> Cancel
-                            </button>
-                        ` : ''}
+                        <div>
+                            ${canCancel && isUpcoming ? `
+                                <button class="btn btn-sm btn-outline-danger" onclick="cancelReservation(${reservation.id})">
+                                    <i class="bi bi-x-circle"></i> Cancel
+                                </button>
+                            ` : ''}
+                            ${canCancel && isPast && reservation.status === 'active' ? `
+                                <button class="btn btn-sm btn-outline-success ms-2" onclick="completeReservation(${reservation.id})">
+                                    <i class="bi bi-check-circle"></i> Complete
+                                </button>
+                            ` : ''}
+                        </div>
                     </div>
                 </div>
             `;
@@ -563,6 +588,30 @@ async function createReservation() {
     } catch (error) {
         console.error('Error creating reservation:', error);
         messageDiv.innerHTML = '<div class="alert alert-danger">Error creating reservation</div>';
+    }
+}
+
+async function completeReservation(reservationId) {
+    if (!confirm('Mark this reservation as completed?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${SCRIPT_ROOT}/api/reservations/${reservationId}/complete`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            loadSystemReservations();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error completing reservation:', error);
+        alert('Failed to complete reservation');
     }
 }
 

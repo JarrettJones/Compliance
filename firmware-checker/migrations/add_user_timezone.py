@@ -22,12 +22,28 @@ def migrate():
         if 'timezone' not in columns:
             print("Adding timezone column to users table...")
             cursor.execute("""
-                ALTER TABLE users ADD COLUMN timezone TEXT DEFAULT 'UTC'
+                ALTER TABLE users ADD COLUMN timezone TEXT DEFAULT 'America/Los_Angeles'
             """)
             conn.commit()
-            print("✓ Successfully added timezone column")
+            print("✓ Successfully added timezone column with default PST/PDT (America/Los_Angeles)")
+            
+            # Update existing users to PST/PDT
+            cursor.execute("""
+                UPDATE users SET timezone = 'America/Los_Angeles' WHERE timezone IS NULL OR timezone = 'UTC'
+            """)
+            conn.commit()
+            updated_count = cursor.rowcount
+            print(f"✓ Updated {updated_count} existing user(s) to PST/PDT timezone")
         else:
             print("✓ Timezone column already exists")
+            
+            # Update users still on UTC to PST/PDT
+            cursor.execute("""
+                UPDATE users SET timezone = 'America/Los_Angeles' WHERE timezone = 'UTC'
+            """)
+            conn.commit()
+            if cursor.rowcount > 0:
+                print(f"✓ Updated {cursor.rowcount} user(s) from UTC to PST/PDT")
             
     except Exception as e:
         print(f"✗ Error during migration: {e}")

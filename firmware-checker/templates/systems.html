@@ -532,9 +532,8 @@ function renderTreeView(systems) {
     const tree = {};
     
     systems.forEach(system => {
-        const metadata = parseMetadata(system.description);
-        const location = metadata.location || system.rack_location || 'Unknown Location';
-        const building = metadata.building || 'Unknown Building';
+        const location = system.rack_location || 'Unknown Location';
+        const building = system.rack_building || 'Unknown Building';
         const room = system.rack_room || 'Unknown Room';
         const rackName = system.rack_name || 'No Rack';
         const uHeight = system.u_height || 'No U-Height';
