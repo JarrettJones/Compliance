@@ -3224,12 +3224,27 @@ def add_system_metadata():
             ''', (program_id,)).fetchall()
         
         # Check if system's RSCM IP matches any existing rack's RSCM
+        # First check rscm_components table
         auto_detected_rack = conn.execute('''
             SELECT r.id, r.name, r.location, rc.name as rscm_name
             FROM rscm_components rc
             JOIN racks r ON rc.rack_id = r.id
             WHERE rc.ip_address = ?
         ''', (pending['rscm_ip'],)).fetchone()
+        
+        # If not found in rscm_components, check racks table directly
+        if not auto_detected_rack:
+            auto_detected_rack = conn.execute('''
+                SELECT r.id, r.name, r.location, 
+                       CASE 
+                           WHEN r.rscm_upper_ip = ? THEN 'Upper RSCM'
+                           WHEN r.rscm_lower_ip = ? THEN 'Lower RSCM'
+                           WHEN r.rscm_ip = ? THEN 'RSCM'
+                       END as rscm_name
+                FROM racks r
+                WHERE r.rscm_upper_ip = ? OR r.rscm_lower_ip = ? OR r.rscm_ip = ?
+            ''', (pending['rscm_ip'], pending['rscm_ip'], pending['rscm_ip'],
+                  pending['rscm_ip'], pending['rscm_ip'], pending['rscm_ip'])).fetchone()
         
         if auto_detected_rack:
             # RSCM matches existing rack - lock to that rack
@@ -3291,13 +3306,29 @@ def add_system_metadata():
             rack_location = None
             
             with get_db_connection() as conn:
-                # First, try to auto-detect rack based on RSCM IP
+                # First, try to auto-detect rack based on RSCM IP from rscm_components table
                 auto_detected = conn.execute('''
                     SELECT r.id, r.name, r.location, rc.id as rscm_id
                     FROM rscm_components rc
                     JOIN racks r ON rc.rack_id = r.id
                     WHERE rc.ip_address = ?
                 ''', (pending['rscm_ip'],)).fetchone()
+                
+                # If not found in rscm_components, check racks table directly
+                if not auto_detected:
+                    rack_match = conn.execute('''
+                        SELECT r.id, r.name, r.location
+                        FROM racks r
+                        WHERE r.rscm_upper_ip = ? OR r.rscm_lower_ip = ? OR r.rscm_ip = ?
+                    ''', (pending['rscm_ip'], pending['rscm_ip'], pending['rscm_ip'])).fetchone()
+                    
+                    if rack_match:
+                        auto_detected = {
+                            'id': rack_match['id'],
+                            'name': rack_match['name'],
+                            'location': rack_match['location'],
+                            'rscm_id': None  # No rscm_component entry
+                        }
                 
                 # If auto-detected, force use of that rack
                 if auto_detected:
