@@ -3213,6 +3213,7 @@ def add_system_metadata():
     custom_fields = []
     racks = []
     auto_detected_rack = None
+    rscm_matches_existing = False
     
     with get_db_connection() as conn:
         if program_id:
@@ -3222,20 +3223,34 @@ def add_system_metadata():
                 ORDER BY display_order, field_label
             ''', (program_id,)).fetchall()
         
-        # Get existing racks
-        racks = conn.execute('''
-            SELECT id, name, location, rack_type 
-            FROM racks 
-            ORDER BY name
-        ''').fetchall()
-        
-        # Check if system's RSCM IP matches any existing rack
+        # Check if system's RSCM IP matches any existing rack's RSCM
         auto_detected_rack = conn.execute('''
             SELECT r.id, r.name, r.location, rc.name as rscm_name
             FROM rscm_components rc
             JOIN racks r ON rc.rack_id = r.id
             WHERE rc.ip_address = ?
         ''', (pending['rscm_ip'],)).fetchone()
+        
+        if auto_detected_rack:
+            # RSCM matches existing rack - lock to that rack
+            rscm_matches_existing = True
+        else:
+            # Check if RSCM matches ANY rack (not just the system's rack)
+            rscm_check = conn.execute('''
+                SELECT COUNT(*) as count
+                FROM rscm_components
+                WHERE ip_address = ?
+            ''', (pending['rscm_ip'],)).fetchone()
+            
+            rscm_matches_existing = rscm_check['count'] > 0
+        
+        # Only get existing racks if RSCM matches existing
+        if rscm_matches_existing:
+            racks = conn.execute('''
+                SELECT id, name, location, rack_type 
+                FROM racks 
+                ORDER BY name
+            ''').fetchall()
     
     if request.method == 'POST':
         try:
@@ -3246,10 +3261,16 @@ def add_system_metadata():
                         field_value = request.form.get(f'custom_{field["field_name"]}', '').strip()
                         if not field_value:
                             flash(f'{field["field_label"]} is required', 'error')
+                            # Get locations for modal
+                            with get_db_connection() as conn2:
+                                locations = conn2.execute('SELECT id, name FROM locations ORDER BY name').fetchall()
                             return render_template('add_system_metadata.html', 
                                                  system=pending,
                                                  custom_fields=custom_fields,
-                                                 racks=racks)
+                                                 racks=racks,
+                                                 auto_detected_rack=auto_detected_rack,
+                                                 rscm_matches_existing=rscm_matches_existing,
+                                                 locations=locations)
             
             # Get metadata from form
             system_hostname = request.form.get('system_hostname', '').strip()
@@ -3304,6 +3325,7 @@ def add_system_metadata():
                                              custom_fields=custom_fields,
                                              racks=racks,
                                              auto_detected_rack=auto_detected_rack,
+                                             rscm_matches_existing=rscm_matches_existing,
                                              locations=locations)
                     
                     # Require U height for auto-detected rack
@@ -3317,6 +3339,7 @@ def add_system_metadata():
                                              custom_fields=custom_fields,
                                              racks=racks,
                                              auto_detected_rack=auto_detected_rack,
+                                             rscm_matches_existing=rscm_matches_existing,
                                              locations=locations)
                     
                     flash(f'✓ Auto-assigned to rack "{rack_name}" based on RSCM IP {pending["rscm_ip"]}', 'success')
@@ -3342,6 +3365,7 @@ def add_system_metadata():
                                              custom_fields=custom_fields,
                                              racks=racks,
                                              auto_detected_rack=auto_detected_rack,
+                                             rscm_matches_existing=rscm_matches_existing,
                                              locations=locations)
                 
                 elif rack_selection == 'existing':
@@ -3355,6 +3379,7 @@ def add_system_metadata():
                                              custom_fields=custom_fields,
                                              racks=racks,
                                              auto_detected_rack=auto_detected_rack,
+                                             rscm_matches_existing=rscm_matches_existing,
                                              locations=locations)
                     
                     if not u_height:
@@ -3367,6 +3392,7 @@ def add_system_metadata():
                                              custom_fields=custom_fields,
                                              racks=racks,
                                              auto_detected_rack=auto_detected_rack,
+                                             rscm_matches_existing=rscm_matches_existing,
                                              locations=locations)
                     
                     rack_id = int(existing_rack_id)
@@ -3387,6 +3413,7 @@ def add_system_metadata():
                                          custom_fields=custom_fields,
                                          racks=racks,
                                          auto_detected_rack=auto_detected_rack,
+                                         rscm_matches_existing=rscm_matches_existing,
                                          locations=locations)
                 
                 # If rack is selected, find matching RSCM component
@@ -3473,6 +3500,7 @@ def add_system_metadata():
                          custom_fields=custom_fields,
                          racks=racks,
                          auto_detected_rack=auto_detected_rack,
+                         rscm_matches_existing=rscm_matches_existing,
                          locations=locations)
 
 @app.route('/systems/<int:system_id>')

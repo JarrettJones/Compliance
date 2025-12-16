@@ -79,6 +79,14 @@
                         </div>
                     </div>
                     {% else %}
+                    {% if rscm_matches_existing %}
+                    <!-- RSCM doesn't match, but exists in other racks - force new rack creation -->
+                    <div class="alert alert-warning py-2 mb-3">
+                        <i class="bi bi-exclamation-triangle"></i> <strong>RSCM Already Exists!</strong>
+                        <p class="mb-0 small mt-1">The RSCM IP <code>{{ system.rscm_ip }}</code> is already assigned to another rack. You must create a new rack for this system.</p>
+                    </div>
+                    <input type="hidden" name="rack_selection" value="new">
+                    {% else %}
                     <div class="mb-3">
                         <label class="form-label">Rack Assignment</label>
                         <div class="form-check">
@@ -112,9 +120,10 @@
                         </div>
                     </div>
                     {% endif %}
+                    {% endif %}
 
                     <!-- New Rack Creation Button -->
-                    <div id="new_rack_section" class="mb-3" style="display: none;">
+                    <div id="new_rack_section" class="mb-3" {% if auto_detected_rack is none and rscm_matches_existing %}style="display: block;"{% else %}style="display: none;"{% endif %}>
                         <input type="hidden" id="new_rack_id" name="new_rack_id" value="">
                         <div class="alert alert-info py-2 mb-3">
                             <i class="bi bi-info-circle"></i> Click the button below to create a new rack with location details
