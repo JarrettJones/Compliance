@@ -361,7 +361,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const systemCount = parseInt(button.getAttribute('data-rack-systems') || '0');
             
             document.getElementById('deleteRackName').textContent = rackName || 'Unknown Rack';
-            document.getElementById('deleteForm').action = `/racks/${rackId}/delete`;
+            document.getElementById('deleteForm').action = `{{ request.script_root }}/racks/${rackId}/delete`;
             
             // Show system count warning
             const systemCountEl = document.getElementById('deleteSystemCount');
