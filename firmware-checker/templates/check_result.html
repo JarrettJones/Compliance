@@ -16,11 +16,11 @@
                 
                 <!-- Location Hierarchy -->
                 <p class="text-muted mb-0">
-                    <i class="bi bi-geo-alt"></i> Location: 
+                    <i class="bi bi-geo-alt"></i> 
                     <strong>
                         {% if check.location_name %}{{ check.location_name }}{% else %}Unknown{% endif %}
-                        {% if check.building_name %} / {{ check.building_name }}{% endif %}
-                        {% if check.room_name %} / {{ check.room_name }}{% endif %}
+                        {% if check.building_name %} / {{ check.building_name.replace('Building ', '') }}{% endif %}
+                        {% if check.room_name %} / {{ check.room_name.replace('Room ', '') }}{% endif %}
                         {% if check.rack_name %} / {{ check.rack_name }}{% if check.rack_type == 'bench' %} (Bench){% endif %}{% endif %}
                         {% if check.u_height %} / U{{ check.u_height }}{% endif %}
                     </strong>
