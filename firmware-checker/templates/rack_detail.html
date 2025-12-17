@@ -92,6 +92,48 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                {% elif rscm_upper_ip or rscm_lower_ip or rack.rscm_ip %}
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Component</th>
+                                <th>IP Address</th>
+                                <th>Port</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if rscm_upper_ip %}
+                            <tr>
+                                <td>
+                                    <i class="bi bi-hdd-network-fill text-primary"></i>
+                                    Upper RSCM
+                                </td>
+                                <td>{{ rscm_upper_ip }}</td>
+                                <td>22</td>
+                            </tr>
+                            {% endif %}
+                            {% if rscm_lower_ip %}
+                            <tr>
+                                <td>
+                                    <i class="bi bi-hdd-network-fill text-primary"></i>
+                                    Lower RSCM
+                                </td>
+                                <td>{{ rscm_lower_ip }}</td>
+                                <td>22</td>
+                            </tr>
+                            {% endif %}
+                            {% if rack.rscm_ip %}
+                            <tr>
+                                <td>
+                                    <i class="bi bi-hdd-network-fill text-primary"></i>
+                                    RSCM
+                                </td>
+                                <td>{{ rack.rscm_ip }}</td>
+                                <td>22</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
                 {% else %}
                     <p class="text-muted text-center my-3">No RSCM components configured</p>
                 {% endif %}
@@ -206,7 +248,7 @@
                     <div class="text-center py-5">
                         <i class="bi bi-clock-history fs-1 text-muted"></i>
                         <h4 class="mt-3 text-muted">No RSCM Firmware Checks Yet</h4>
-                        {% if rscm_components %}
+                        {% if rscm_components or rscm_upper_ip or rscm_lower_ip or rack.rscm_ip %}
                             <p class="text-muted">Run your first RSCM firmware check to see the results here</p>
                             <button class="btn btn-success"
                                     onclick="openRSCMCheckModal()">
