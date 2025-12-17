@@ -238,13 +238,13 @@
 
             <div class="credential-box">
         <h5>Windows OS Credentials (Optional)</h5>
-        <p><strong>Used for:</strong> M.2/E.1s storage firmware and MANA driver checks</p>
+        <p><strong>Used for:</strong> M.2/E.1s storage firmware, DIMM information, Windows OS version, and MANA driver checks</p>
         <ul>
             <li><strong>Computer Name:</strong> Target Windows computer name or IP (e.g., SERVER01 or 192.168.1.100)</li>
             <li><strong>Username:</strong> Windows administrator account</li>
             <li><strong>Password:</strong> Windows administrator password</li>
         </ul>
-        <p class="mb-0"><em>Note: If OS credentials are not provided, storage and driver checks will be skipped.</em></p>
+        <p class="mb-0"><em>Note: If OS credentials are not provided, storage, driver, and system information checks will be skipped.</em></p>
             </div>
         </div>
 
@@ -284,6 +284,8 @@
             <li>SOC VR Configs</li>
             <li>M.2 Storage - requires OS credentials (shows drive number and version)</li>
             <li>E.1s Storage - requires OS credentials (shows all drives with versions)</li>
+            <li>Windows OS Version - requires OS credentials</li>
+            <li>DIMM Information - requires OS credentials (shows memory configuration)</li>
         </ul>
             </div>
         </div>
@@ -317,7 +319,7 @@
             <div class="mb-3">
         <span class="step-number">4</span>
         <strong>Add OS Credentials (Optional)</strong>
-        <p class="ms-5">If you want to check storage (M.2/E.1s) and MANA driver firmware:</p>
+        <p class="ms-5">If you want to check storage (M.2/E.1s), DIMM information, Windows OS version, and MANA driver firmware:</p>
         <ul class="ms-5">
             <li>Enter the target Windows computer name or IP</li>
             <li>Provide Windows administrator credentials</li>
@@ -362,7 +364,13 @@
         <h5>Storage Firmware Display:</h5>
         <p><strong>M.2:</strong> Shows as "Drive X: VERSION" (e.g., "Drive 4: LDBD1M4Q")</p>
         <p><strong>E.1s:</strong> Shows multiple drives separated by " | " (e.g., "Drive 1: 61080A50 | Drive 2: 61080A50 | Drive 3: 61080A50")</p>
-        <p class="mb-0"><em>Each drive number corresponds to its physical disk number in the system.</em></p>
+        <p><em>Each drive number corresponds to its physical disk number in the system.</em></p>
+            </div>
+            
+            <div class="note-box">
+        <h5>DIMM Information Display:</h5>
+        <p><strong>Format:</strong> Shows memory configuration summary (e.g., "12x 96GB SK Hynix HMCGM4AKBRB449N 7200MHz")</p>
+        <p class="mb-0"><em>Groups DIMMs by manufacturer, part number, and speed. Click to view detailed information including bank labels, capacities, and serial numbers.</em></p>
             </div>
         </div>
 

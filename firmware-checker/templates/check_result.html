@@ -681,7 +681,7 @@ function recheckFirmware(firmwareType, category) {
     
     // Show OS credentials section if it's a driver/storage check
     const osCredSection = document.getElementById('recheckOsCredentials');
-    if (firmwareType.includes('MANA Driver') || firmwareType.includes('M.2') || firmwareType.includes('E.1s') || firmwareType.includes('Windows')) {
+    if (firmwareType.includes('MANA Driver') || firmwareType.includes('M.2') || firmwareType.includes('E.1s') || firmwareType.includes('Windows') || firmwareType.includes('DIMM')) {
         osCredSection.style.display = 'block';
     } else {
         osCredSection.style.display = 'none';

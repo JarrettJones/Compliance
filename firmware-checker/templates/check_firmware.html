@@ -176,7 +176,7 @@
                         <div class="card h-100">
                             <div class="card-body">
                                 <h6><i class="bi bi-pc-display"></i> Windows OS Credentials <span class="badge bg-secondary">Optional</span></h6>
-                                <p class="text-muted small">Required for M.2 and E.1s storage firmware checks via WinRM. Leave blank to skip in-band storage checks.</p>
+                                <p class="text-muted small">Required for M.2, E.1s storage firmware, DIMM information, and Windows OS version checks via WinRM. Leave blank to skip in-band checks.</p>
                                 <div class="mb-3">
                                     <label for="os_username" class="form-label">OS Username</label>
                                     <input type="text" class="form-control" id="os_username" placeholder="Windows OS username">
@@ -403,12 +403,16 @@
                                                 <input class="form-check-input fw-category other_platform" type="checkbox" value="Windows OS Version" id="fw_os_version" checked>
                                                 <label class="form-check-label small" for="fw_os_version">Windows OS Version</label>
                                             </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input fw-category other_platform" type="checkbox" value="DIMM Information" id="fw_dimm_info" checked>
+                                                <label class="form-check-label small" for="fw_dimm_info">DIMM Information</label>
+                                            </div>
                                         </div>
                                     </div>
                                     
                                     <div class="mt-3">
                                         <p class="text-muted small mb-0">
-                                            <i class="bi bi-info-circle"></i> <span id="selectedCount">33 firmware types</span> will be checked
+                                            <i class="bi bi-info-circle"></i> <span id="selectedCount">34 firmware types</span> will be checked
                                         </p>
                                     </div>
                                 </div>
