@@ -12,6 +12,7 @@ from urllib3.exceptions import InsecureRequestWarning
 import urllib3
 from .storage_firmware import StorageFirmwareChecker
 from .os_version import OSVersionChecker
+from .dimm_info import DIMMInfoChecker
 
 # Disable SSL warnings for self-signed certificates
 urllib3.disable_warnings(InsecureRequestWarning)
@@ -27,7 +28,8 @@ class OtherPlatformChecker:
             'SOC VR Configs',
             'E.1s',
             'M.2',
-            'Windows OS Version'
+            'Windows OS Version',
+            'DIMM Information'
         ]
         
         # Credentials for Redfish API access
@@ -48,6 +50,13 @@ class OtherPlatformChecker:
         
         # Initialize OS version checker
         self.os_version_checker = OSVersionChecker(
+            os_username=os_username,
+            os_password=os_password,
+            timeout=timeout
+        )
+        
+        # Initialize DIMM info checker
+        self.dimm_checker = DIMMInfoChecker(
             os_username=os_username,
             os_password=os_password,
             timeout=timeout
@@ -154,6 +163,32 @@ class OtherPlatformChecker:
                     'error': skip_reason,
                     'checked_at': datetime.now().isoformat(),
                     'method': 'os_version_check'
+                }
+            
+            # Check DIMM Information if we have OS credentials and computer name
+            if self.os_username and self.os_password and computer_name:
+                # We have credentials and a target computer - check DIMM info
+                print(f"[OTHER] Checking DIMM information on {computer_name}...")
+                dimm_info_result = self.dimm_checker.get_dimm_info(computer_name)
+                results['firmware_versions']['DIMM Information'] = dimm_info_result
+                print(f"[OTHER] DIMM information check completed")
+            else:
+                # No OS credentials or target computer - skip DIMM check
+                if not self.os_username or not self.os_password:
+                    skip_reason = "No OS credentials provided"
+                    print(f"[OTHER] Skipping DIMM information check: {skip_reason}")
+                elif not computer_name:
+                    skip_reason = "No target computer specified"
+                    print(f"[OTHER] Skipping DIMM information check: {skip_reason}")
+                else:
+                    skip_reason = "Missing requirements"
+                
+                results['firmware_versions']['DIMM Information'] = {
+                    'version': 'NOT CONFIGURED - OS Credentials Required',
+                    'status': 'error',
+                    'error': skip_reason,
+                    'checked_at': datetime.now().isoformat(),
+                    'method': 'dimm_info_check'
                 }
             
             # SOC VR Configs - still placeholder
