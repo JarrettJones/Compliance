@@ -4906,7 +4906,7 @@ def api_racks_hierarchy():
                     'rscm_upper': rack['rscm_upper_ip'],
                     'rscm_lower': rack['rscm_lower_ip'],
                     'rscm_ip': rack['rscm_ip'],
-                    'edit_url': f'/racks/{rack["id"]}/edit'
+                    'edit_url': url_for('edit_rack', rack_id=rack['id'])
                 })
             
             return jsonify(hierarchy)
