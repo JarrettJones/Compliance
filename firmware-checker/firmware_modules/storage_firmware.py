@@ -97,41 +97,45 @@ class StorageFirmwareChecker:
                     'storage_devices': {}
                 }
             
-            # Get disk details from PowerShell (model, serial, size)
+            # Get disk details from PowerShell (model, serial, size) - THIS IS THE PRIMARY SOURCE
             logger.info(f"Collecting disk details via PowerShell for {computer_name}")
             disk_details = self._get_disk_details_powershell(computer_name)
             
-            # Execute the storage firmware check
-            raw_output = self._execute_storage_command(computer_name)
-            
-            if raw_output.startswith("Error:"):
+            if not disk_details:
                 return {
                     'status': 'error',
-                    'error': raw_output,
-                    'raw_output': raw_output,
+                    'error': 'Failed to collect disk information via PowerShell',
+                    'raw_output': '',
                     'storage_devices': {}
                 }
             
-            # Parse the output to extract storage device information
-            storage_devices = self._parse_storage_output(raw_output)
-            logger.info(f"Found {len(storage_devices)} devices from UpdateStorageFirmware")
-            logger.info(f"Found {len(disk_details)} disks from PowerShell Get-Disk")
+            # Build storage devices from PowerShell Get-Disk data (primary source)
+            storage_devices = {}
+            for disk_num, ps_details in disk_details.items():
+                device_key = f"Disk_{disk_num}"
+                model = ps_details.get('model', '')
+                size_gb = ps_details.get('size_gb', 0)
+                location = ps_details.get('location_path', '')
+                
+                # Classify device as M.2 or E.1s based on size and location
+                device_type = self._classify_device_by_characteristics(model, size_gb, location)
+                
+                storage_devices[device_key] = {
+                    'disk_number': disk_num,
+                    'model': model,
+                    'serial_number': ps_details.get('serial_number', ''),
+                    'firmware_version': ps_details.get('firmware_version', ''),
+                    'bus_type': ps_details.get('bus_type', ''),
+                    'size_gb': size_gb,
+                    'device_type': device_type,
+                    'friendly_name': ps_details.get('friendly_name', ''),
+                    'location_path': location,
+                    'partition_style': ps_details.get('partition_style', '')
+                }
+                
+                logger.debug(f"Disk {disk_num}: {model} - {size_gb}GB - Classified as {device_type}")
             
-            # Merge PowerShell disk details with UpdateStorageFirmware output
-            for device_key, device_info in storage_devices.items():
-                disk_num = device_info.get('disk_number')
-                if disk_num and disk_num in disk_details:
-                    ps_details = disk_details[disk_num]
-                    logger.debug(f"Merging PowerShell data for Disk {disk_num}: size={ps_details.get('size_gb')}GB, model={ps_details.get('model')}")
-                    device_info['model'] = ps_details.get('model', device_info.get('vendor_product', ''))
-                    device_info['size_gb'] = ps_details.get('size_gb', 0)
-                    # Prefer PowerShell serial if available and different
-                    if ps_details.get('serial_number'):
-                        device_info['serial_number'] = ps_details['serial_number']
-                    device_info['friendly_name'] = ps_details.get('friendly_name', '')
-                    device_info['location_path'] = ps_details.get('location_path', '')
-                else:
-                    logger.debug(f"No PowerShell data found for Disk {disk_num} (available: {list(disk_details.keys())})")
+            logger.info(f"Successfully collected data for {len(storage_devices)} disk(s) from PowerShell")
             
             return {
                 'status': 'success',
@@ -514,76 +518,66 @@ class StorageFirmwareChecker:
         
         return devices
     
-    def _classify_storage_device(self, vendor_product: str, bus_type: str) -> str:
-        """Classify storage device as M.2, E.1s, or Other based on vendor/product patterns"""
-        vendor_product_upper = vendor_product.upper()
+    def _classify_device_by_characteristics(self, model: str, size_gb: float, location: str) -> str:
+        """
+        Classify storage device as M.2 or E.1s based on model, size, and physical location
         
-        # M.2 device patterns - Samsung is the most reliable indicator
-        # Samsung M.2 SSDs typically start with MZ* model numbers
-        samsung_m2_patterns = [
-            'MZVL',  # Samsung PM9A1, PM981a, etc. (like MZVL6960HFLB-00AMV from your example)
-            'MZ-VL', 
-            'MZVK',  # Samsung PM9B1
-            'MZQL',  # Samsung PM1735
-            'MZ7L',  # Samsung PM893
-            'MZ-7L',
-            'MZ9L',  # Samsung PM9C1
-            'SAMSUNG'
+        M.2 drives are typically:
+        - Smaller capacity (< 2TB usually)
+        - Consumer brands (Samsung, WD, Intel, etc.)
+        - Often in PCI Slot 10 (boot drive location)
+        
+        E.1s drives are typically:
+        - Larger capacity (3TB+ for data storage)
+        - Enterprise/OEM drives
+        - Multiple identical drives in sequential slots
+        """
+        model_upper = model.upper()
+        
+        # M.2 consumer brand indicators
+        m2_brands = [
+            'MZVL',      # Samsung PM9A1, 983 series
+            'SAMSUNG',   # Samsung consumer
+            'WD', 'WDS', # Western Digital
+            'INTEL',     # Intel
+            'KINGSTON',  # Kingston
+            'CRUCIAL',   # Crucial
+            'CORSAIR',   # Corsair
+            'ADATA',     # ADATA
+            'SABRENT'    # Sabrent
         ]
         
-        # Other M.2 device patterns
-        other_m2_patterns = [
-            'WDS',   # Western Digital M.2
-            'WD_BLACK', 'WD BLACK',
-            'INTEL SSD',
-            'SSDPE',  # Intel NVMe
-            'SSDPF',  # Intel Optane
-            'THNSN',  # Toshiba/Kioxia M.2
-            'KXG',    # Toshiba/Kioxia
-            '980 PRO', '970 EVO', '960 EVO',  # Samsung consumer model names
-            'CRUCIAL', 'CT',  # Crucial M.2
-            'CORSAIR',
-            'KINGSTON'
-        ]
+        # Check for M.2 brand patterns
+        for brand in m2_brands:
+            if brand in model_upper:
+                # M.2 drives are typically smaller (boot drives)
+                if size_gb > 0 and size_gb < 2000:  # Less than 2TB
+                    return 'M.2'
         
-        # Check for Samsung M.2 first (most reliable for your use case)
-        for pattern in samsung_m2_patterns:
-            if pattern in vendor_product_upper:
-                return 'M.2'
-        
-        # Check for other M.2 patterns
-        for pattern in other_m2_patterns:
-            if pattern in vendor_product_upper:
-                return 'M.2'
-        
-        # E.1s device patterns - more flexible since they vary
-        # If it's NVMe but not identified as M.2, and meets certain criteria, it's likely E.1s
-        e1s_indicators = [
-            'OSNN',  # Based on your example
-            'E1S', 'E.1S',  # Explicit E.1s naming
+        # E.1s enterprise drive indicators  
+        e1s_patterns = [
+            'HFS',       # SK Hynix Enterprise (HFS3T8GFMWX183N)
+            'OSNN',      # Enterprise OEM
+            'E1S', 'E.1S',
             'ENTERPRISE',
-            'DC ',   # Data center drives
             'DATACENTER'
         ]
         
         # Check for explicit E.1s patterns
-        for pattern in e1s_indicators:
-            if pattern in vendor_product_upper:
+        for pattern in e1s_patterns:
+            if pattern in model_upper:
                 return 'E.1s'
         
-        # Heuristic: If it's NVMe and not identified as M.2, 
-        # and the vendor/product string is short (like "OSNN"), it might be E.1s
-        if (bus_type.upper() == 'NVME' and 
-            len(vendor_product.strip()) <= 8 and  # Short vendor strings often indicate OEM/enterprise drives
-            not any(consumer in vendor_product_upper for consumer in ['SAMSUNG', 'WD', 'INTEL', 'CRUCIAL', 'CORSAIR'])):
+        # Size-based heuristic: Large drives (>= 2TB) are likely E.1s data drives
+        if size_gb >= 2000:
             return 'E.1s'
         
-        # If NVMe but no clear classification, default to E.1s (more common in these enterprise systems)
-        if bus_type.upper() == 'NVME':
-            return 'E.1s'
+        # Location-based heuristic: Slot 10 is typically boot drive (M.2)
+        if 'SLOT 10' in location.upper():
+            return 'M.2'
         
-        # Default fallback
-        return 'Other'
+        # Default: if it's NVMe and not clearly M.2, assume E.1s
+        return 'E.1s'
     
     def get_m2_devices(self, computer_name: str) -> Dict[str, Any]:
         """Get M.2 device information - returns combined drive info with expandable details"""
