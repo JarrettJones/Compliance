@@ -378,6 +378,19 @@ class OtherPlatformChecker:
                         'checked_at': datetime.now().isoformat(),
                         'method': 'os_version_check'
                     }
+            elif firmware_type == 'DIMM Information':
+                # Use provided computer_name for DIMM info check, fallback to rscm_ip if not provided
+                target_computer = computer_name if computer_name else rscm_ip
+                if self.os_username and self.os_password:
+                    return self.dimm_checker.get_dimm_info(target_computer)
+                else:
+                    return {
+                        'version': 'NOT CONFIGURED - OS Credentials Required',
+                        'status': 'error',
+                        'error': 'No OS credentials provided for DIMM information check',
+                        'checked_at': datetime.now().isoformat(),
+                        'method': 'dimm_info_check'
+                    }
             else:
                 return self._check_firmware_placeholder(firmware_type, rscm_ip, system_port)
         
