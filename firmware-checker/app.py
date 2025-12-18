@@ -3616,8 +3616,7 @@ def edit_system(system_id):
     
     if request.method == 'POST':
         name = request.form['name']
-        rscm_ip = request.form['rscm_ip']
-        rscm_port = request.form.get('rscm_port', 22, type=int)
+        # IP and port are no longer editable - keep existing values
         
         # Get metadata from form
         system_hostname = request.form.get('system_hostname', '').strip()
@@ -3625,10 +3624,12 @@ def edit_system(system_id):
         # Sanitize hostname (remove domain)
         system_hostname = sanitize_hostname(system_hostname)
         
-        geo_location = request.form.get('geo_location', '')
-        building = request.form.get('building', '')
-        room = request.form.get('room', '')
-        rack = request.form.get('rack', '')
+        # Get rack_id from cascading dropdown
+        rack_id = request.form.get('rack_id', type=int)
+        if not rack_id:
+            flash('Please select a complete location (City > Building > Room > Rack)', 'error')
+            return redirect(url_for('edit_system', system_id=system_id))
+        
         u_height_raw = request.form.get('u_height', '')
         u_height = normalize_u_height(u_height_raw) if u_height_raw else None
         additional_notes = request.form.get('additional_notes', '')
@@ -3640,39 +3641,24 @@ def edit_system(system_id):
                 u_height = detected_u
                 logger.info(f"Auto-detected U-height {u_height} from hostname {system_hostname}")
         
-        # Build description with metadata
+        # Build description with just hostname and notes (location is in relational data)
         desc_parts = []
         if system_hostname:
             desc_parts.append(f"Host: {system_hostname}")
-        if geo_location:
-            desc_parts.append(f"Geo: {geo_location}")
-        if building:
-            desc_parts.append(f"Building: {building}")
-        if room:
-            desc_parts.append(f"Room: {room}")
-        if rack:
-            desc_parts.append(f"Rack: {rack}")
         if u_height:
             desc_parts.append(f"U: {u_height}")
         if additional_notes:
             desc_parts.append(additional_notes)
         
-        description = " | ".join(desc_parts)
+        description = " | ".join(desc_parts) if desc_parts else None
         
         try:
             with get_db_connection() as conn:
-                # Look up rack_id by rack name if rack is provided
-                rack_id = None
-                if rack:
-                    rack_row = conn.execute('SELECT id FROM racks WHERE name = ?', (rack,)).fetchone()
-                    if rack_row:
-                        rack_id = rack_row['id']
-                
                 conn.execute('''
                     UPDATE systems 
-                    SET name = ?, rscm_ip = ?, rscm_port = ?, description = ?, u_height = ?, rack_id = ?, updated_at = CURRENT_TIMESTAMP
+                    SET name = ?, description = ?, u_height = ?, rack_id = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
-                ''', (name, rscm_ip, rscm_port, description, u_height, rack_id, system_id))
+                ''', (name, description, u_height, rack_id, system_id))
                 conn.commit()
             
             flash(f'System "{name}" updated successfully!', 'success')
@@ -3687,8 +3673,11 @@ def edit_system(system_id):
     with get_db_connection() as conn:
         location_data = conn.execute('''
             SELECT 
+                l.id as location_id,
                 l.name as location_name,
+                b.id as building_id,
                 b.name as building_name,
+                ro.id as room_id,
                 ro.name as room_name,
                 ra.name as rack_name
             FROM systems s
@@ -3699,9 +3688,12 @@ def edit_system(system_id):
             WHERE s.id = ?
         ''', (system_id,)).fetchone()
     
-    # Use database values as primary source
+    # Extract IDs and names for template
+    location_id = location_data['location_id'] if location_data else None
     geo_location = location_data['location_name'] if location_data and location_data['location_name'] else ''
+    building_id = location_data['building_id'] if location_data else None
     building = location_data['building_name'] if location_data and location_data['building_name'] else ''
+    room_id = location_data['room_id'] if location_data else None
     room = location_data['room_name'] if location_data and location_data['room_name'] else ''
     rack = location_data['rack_name'] if location_data and location_data['rack_name'] else ''
     
@@ -3729,8 +3721,11 @@ def edit_system(system_id):
     return render_template('edit_system.html', 
                          system=system,
                          system_hostname=system_hostname,
+                         location_id=location_id,
                          geo_location=geo_location,
+                         building_id=building_id,
                          building=building,
+                         room_id=room_id,
                          room=room,
                          rack=rack,
                          u_height=u_height,

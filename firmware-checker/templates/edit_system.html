@@ -25,28 +25,24 @@
             </div>
             <div class="card-body">
                 <form method="POST">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="name" class="form-label">System Name *</label>
-                            <input type="text" class="form-control" id="name" name="name" required
-                                   value="{{ system.name }}" placeholder="e.g., Production-Server-01">
-                            <div class="form-text">Unique identifier for this system</div>
-                        </div>
-                        
-                        <div class="col-md-6 mb-3">
-                            <label for="rscm_ip" class="form-label">RSCM IP Address *</label>
-                            <input type="text" class="form-control" id="rscm_ip" name="rscm_ip" required
-                                   value="{{ system.rscm_ip }}" placeholder="e.g., 192.168.1.100" 
-                                   pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$">
-                            <div class="form-text">IP address for RSCM connection</div>
-                        </div>
+                    <div class="mb-3">
+                        <label for="name" class="form-label">System Name *</label>
+                        <input type="text" class="form-control" id="name" name="name" required
+                               value="{{ system.name }}" placeholder="e.g., Production-Server-01">
+                        <div class="form-text">Unique identifier for this system</div>
                     </div>
                     
-                    <div class="mb-3">
-                        <label for="rscm_port" class="form-label">RSCM Port</label>
-                        <input type="number" class="form-control" id="rscm_port" name="rscm_port" 
-                               value="{{ system.rscm_port }}" min="1" max="65535">
-                        <div class="form-text">Port number for RSCM connection (default: 22)</div>
+                    <div class="card bg-light mb-3">
+                        <div class="card-body">
+                            <h6><i class="bi bi-info-circle"></i> Connection Information (Read-Only)</h6>
+                            <dl class="row mb-0">
+                                <dt class="col-sm-3">RSCM IP:</dt>
+                                <dd class="col-sm-9"><code>{{ system.rscm_ip }}</code></dd>
+                                <dt class="col-sm-3">RSCM Port:</dt>
+                                <dd class="col-sm-9"><code>{{ system.rscm_port }}</code></dd>
+                            </dl>
+                            <small class="text-muted">IP address and port cannot be changed after system creation</small>
+                        </div>
                     </div>
                     
                     <hr class="my-4">
@@ -64,48 +60,45 @@
                     
                     <hr class="my-4">
                     <h6><i class="bi bi-geo-alt"></i> Location Information</h6>
+                    <p class="text-muted">Select the location where this system is physically installed</p>
                     
                     <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="geo_location" class="form-label">Geographic Location</label>
-                            <input type="text" class="form-control" id="geo_location" name="geo_location"
-                                   value="{{ geo_location or '' }}"
-                                   placeholder="e.g., Seattle, WA">
-                            <div class="form-text">City, region, or datacenter location</div>
+                        <div class="col-md-3 mb-3">
+                            <label for="citySelect" class="form-label">City <span class="text-danger">*</span></label>
+                            <select class="form-select" id="citySelect" name="location_id" required onchange="updateBuildingOptions()">
+                                <option value="">Select city...</option>
+                            </select>
                         </div>
                         
-                        <div class="col-md-6 mb-3">
-                            <label for="building" class="form-label">Building / Datacenter</label>
-                            <input type="text" class="form-control" id="building" name="building"
-                                   value="{{ building or '' }}"
-                                   placeholder="e.g., Building 99">
-                            <div class="form-text">Building name or datacenter identifier</div>
+                        <div class="col-md-3 mb-3">
+                            <label for="buildingSelect" class="form-label">Building <span class="text-danger">*</span></label>
+                            <select class="form-select" id="buildingSelect" name="building_id" required onchange="updateRoomOptions()" disabled>
+                                <option value="">Select city first...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-3 mb-3">
+                            <label for="roomSelect" class="form-label">Room <span class="text-danger">*</span></label>
+                            <select class="form-select" id="roomSelect" name="room_id" required onchange="updateRackOptions()" disabled>
+                                <option value="">Select building first...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-3 mb-3">
+                            <label for="rackSelect" class="form-label">Rack <span class="text-danger">*</span></label>
+                            <select class="form-select" id="rackSelect" name="rack_id" required disabled>
+                                <option value="">Select room first...</option>
+                            </select>
                         </div>
                     </div>
                     
                     <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label for="room" class="form-label">Room / Floor</label>
-                            <input type="text" class="form-control" id="room" name="room"
-                                   value="{{ room or '' }}"
-                                   placeholder="e.g., Room 2045">
-                            <div class="form-text">Room number or floor</div>
-                        </div>
-                        
-                        <div class="col-md-4 mb-3">
-                            <label for="rack" class="form-label">Rack / Bench</label>
-                            <input type="text" class="form-control" id="rack" name="rack"
-                                   value="{{ rack or '' }}"
-                                   placeholder="e.g., Rack A12">
-                            <div class="form-text">Rack identifier or bench location</div>
-                        </div>
-                        
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-12 mb-3">
                             <label for="u_height" class="form-label">U Position</label>
                             <input type="number" class="form-control" id="u_height" name="u_height"
                                    value="{{ u_height or '' }}"
                                    placeholder="e.g., 12" min="1" max="50">
-                            <div class="form-text">Rack unit position (positive integer)</div>
+                            <div class="form-text">Rack unit position (1-50)</div>
                         </div>
                     </div>
                     
@@ -147,29 +140,192 @@
 
 {% block extra_scripts %}
 <script>
+let allLocations = [];
+let allBuildings = [];
+let allRooms = [];
+let allRacks = [];
+
+// Current selections from database
+const currentLocation = "{{ geo_location or '' }}";
+const currentBuilding = "{{ building or '' }}";
+const currentRoom = "{{ room or '' }}";
+const currentRack = "{{ rack or '' }}";
+const currentLocationId = {{ location_id if location_id else 'null' }};
+const currentBuildingId = {{ building_id if building_id else 'null' }};
+const currentRoomId = {{ room_id if room_id else 'null' }};
+const currentRackId = {{ system.rack_id if system.rack_id else 'null' }};
+
+// Load all location data
+async function loadLocationData() {
+    try {
+        const [locationsResp, buildingsResp, roomsResp, racksResp] = await Promise.all([
+            fetch('/api/locations'),
+            fetch('/api/buildings'),
+            fetch('/api/rooms'),
+            fetch('/api/racks')
+        ]);
+        
+        allLocations = await locationsResp.json();
+        allBuildings = await buildingsResp.json();
+        allRooms = await roomsResp.json();
+        allRacks = await racksResp.json();
+        
+        // Initialize city dropdown
+        populateCityOptions();
+        
+        // Pre-select current values if they exist
+        if (currentRackId) {
+            preselectCurrentLocation();
+        }
+        
+    } catch (error) {
+        console.error('Error loading location data:', error);
+    }
+}
+
+function populateCityOptions() {
+    const citySelect = document.getElementById('citySelect');
+    citySelect.innerHTML = '<option value="">Select city...</option>';
+    
+    allLocations.forEach(loc => {
+        const option = document.createElement('option');
+        option.value = loc.id;
+        option.textContent = loc.name;
+        citySelect.appendChild(option);
+    });
+}
+
+function updateBuildingOptions() {
+    const cityId = document.getElementById('citySelect').value;
+    const buildingSelect = document.getElementById('buildingSelect');
+    const roomSelect = document.getElementById('roomSelect');
+    const rackSelect = document.getElementById('rackSelect');
+    
+    // Reset dependent dropdowns
+    buildingSelect.innerHTML = '<option value="">Select building...</option>';
+    roomSelect.innerHTML = '<option value="">Select building first...</option>';
+    rackSelect.innerHTML = '<option value="">Select room first...</option>';
+    roomSelect.disabled = true;
+    rackSelect.disabled = true;
+    
+    if (!cityId) {
+        buildingSelect.disabled = true;
+        return;
+    }
+    
+    buildingSelect.disabled = false;
+    const cityBuildings = allBuildings.filter(b => b.location_id == cityId);
+    
+    cityBuildings.forEach(building => {
+        const option = document.createElement('option');
+        option.value = building.id;
+        option.textContent = building.name;
+        buildingSelect.appendChild(option);
+    });
+}
+
+function updateRoomOptions() {
+    const buildingId = document.getElementById('buildingSelect').value;
+    const roomSelect = document.getElementById('roomSelect');
+    const rackSelect = document.getElementById('rackSelect');
+    
+    roomSelect.innerHTML = '<option value="">Select room...</option>';
+    rackSelect.innerHTML = '<option value="">Select room first...</option>';
+    rackSelect.disabled = true;
+    
+    if (!buildingId) {
+        roomSelect.disabled = true;
+        return;
+    }
+    
+    roomSelect.disabled = false;
+    const buildingRooms = allRooms.filter(r => r.building_id == buildingId);
+    
+    buildingRooms.forEach(room => {
+        const option = document.createElement('option');
+        option.value = room.id;
+        option.textContent = room.name;
+        roomSelect.appendChild(option);
+    });
+}
+
+function updateRackOptions() {
+    const roomId = document.getElementById('roomSelect').value;
+    const rackSelect = document.getElementById('rackSelect');
+    
+    rackSelect.innerHTML = '<option value="">Select rack...</option>';
+    
+    if (!roomId) {
+        rackSelect.disabled = true;
+        return;
+    }
+    
+    rackSelect.disabled = false;
+    const roomRacks = allRacks.filter(r => r.room_id == roomId);
+    
+    roomRacks.forEach(rack => {
+        const option = document.createElement('option');
+        option.value = rack.id;
+        option.textContent = rack.name;
+        rackSelect.appendChild(option);
+    });
+}
+
+function preselectCurrentLocation() {
+    // Find the rack's full hierarchy
+    const rack = allRacks.find(r => r.id == currentRackId);
+    if (!rack) return;
+    
+    const room = allRooms.find(r => r.id == rack.room_id);
+    if (!room) return;
+    
+    const building = allBuildings.find(b => b.id == room.building_id);
+    if (!building) return;
+    
+    const location = allLocations.find(l => l.id == building.location_id);
+    if (!location) return;
+    
+    // Set selections in order
+    document.getElementById('citySelect').value = location.id;
+    updateBuildingOptions();
+    
+    setTimeout(() => {
+        document.getElementById('buildingSelect').value = building.id;
+        updateRoomOptions();
+        
+        setTimeout(() => {
+            document.getElementById('roomSelect').value = room.id;
+            updateRackOptions();
+            
+            setTimeout(() => {
+                document.getElementById('rackSelect').value = rack.id;
+            }, 50);
+        }, 50);
+    }, 50);
+}
+
 // Form validation
 document.addEventListener('DOMContentLoaded', function() {
-    const form = document.querySelector('form');
-    const ipInput = document.getElementById('rscm_ip');
+    // Load location data
+    loadLocationData();
     
-    // IP address validation
-    ipInput.addEventListener('input', function() {
-        const ipPattern = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
-        if (this.value && !ipPattern.test(this.value)) {
-            this.setCustomValidity('Please enter a valid IP address');
-        } else {
-            this.setCustomValidity('');
-        }
-    });
+    const form = document.querySelector('form');
     
     // Form submission
     form.addEventListener('submit', function(e) {
         const name = document.getElementById('name').value.trim();
-        const ip = document.getElementById('rscm_ip').value.trim();
+        const rackId = document.getElementById('rackSelect').value;
         
-        if (!name || !ip) {
+        if (!name) {
             e.preventDefault();
-            alert('Please fill in all required fields');
+            alert('Please enter a system name');
+            return;
+        }
+        
+        if (!rackId) {
+            e.preventDefault();
+            alert('Please select a complete location (City > Building > Room > Rack)');
+            return;
         }
     });
 });
