@@ -163,10 +163,10 @@ const currentRackId = {{ system.rack_id if system.rack_id else 'null' }};
 async function loadLocationData() {
     try {
         const [locationsResp, buildingsResp, roomsResp, racksResp] = await Promise.all([
-            fetch('/api/locations'),
-            fetch('/api/buildings'),
-            fetch('/api/rooms'),
-            fetch('/api/racks')
+            fetch('{{ url_for("get_locations") }}'),
+            fetch('{{ url_for("get_buildings") }}'),
+            fetch('{{ url_for("get_rooms") }}'),
+            fetch('{{ url_for("get_racks") }}')
         ]);
         
         allLocations = await locationsResp.json();
