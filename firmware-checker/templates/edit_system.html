@@ -32,16 +32,23 @@
                         <div class="form-text">Unique identifier for this system</div>
                     </div>
                     
-                    <div class="card bg-light mb-3">
-                        <div class="card-body">
-                            <h6><i class="bi bi-info-circle"></i> Connection Information (Read-Only)</h6>
-                            <dl class="row mb-0">
-                                <dt class="col-sm-3">RSCM IP:</dt>
-                                <dd class="col-sm-9"><code>{{ system.rscm_ip }}</code></dd>
-                                <dt class="col-sm-3">RSCM Port:</dt>
-                                <dd class="col-sm-9"><code>{{ system.rscm_port }}</code></dd>
-                            </dl>
-                            <small class="text-muted">IP address and port cannot be changed after system creation</small>
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <h6><i class="bi bi-info-circle"></i> RSCM IP Address (Read-Only)</h6>
+                                    <p class="mb-0"><code>{{ system.rscm_ip }}</code></p>
+                                    <small class="text-muted">IP address cannot be changed after system creation</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="rscm_port" class="form-label">RSCM Port</label>
+                                <input type="number" class="form-control" id="rscm_port" name="rscm_port" 
+                                       value="{{ system.rscm_port }}" min="1" max="65535" required>
+                                <div class="form-text">Connection port (1-65535)</div>
+                            </div>
                         </div>
                     </div>
                     
