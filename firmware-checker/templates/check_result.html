@@ -562,10 +562,20 @@ function displayDetailedResults() {
             const statusBadge = getStatusBadge(fwData.status);
             const methodText = fwData.method || 'N/A';
             
+            // Check if this firmware has detailed information (like DIMM data or storage drives)
+            const hasDimmDetails = fwData.dimms && fwData.dimms.length > 0;
+            const hasStorageDetails = fwData.storage_drives && fwData.storage_drives.length > 0;
+            const hasDetails = hasDimmDetails || hasStorageDetails;
+            const detailsId = `details-${categoryKey}-${fwType.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            const buttonId = `btn-${detailsId}`;
+            
             html += `
                 <tr id="fw-row-${categoryKey}-${fwType.replace(/[^a-zA-Z0-9]/g, '_')}">
                     <td><strong>${fwType}</strong></td>
-                    <td><code>${fwData.version || 'N/A'}</code></td>
+                    <td>
+                        <code>${fwData.version || 'N/A'}</code>
+                        ${hasDetails ? `<button id="${buttonId}" class="btn btn-sm btn-link p-0 ms-2 text-decoration-none" type="button" data-bs-toggle="collapse" data-bs-target="#${detailsId}" aria-expanded="false"><i class="bi bi-plus-circle"></i> Expand for additional details</button>` : ''}
+                    </td>
                     <td>${statusBadge}</td>
                     <td><small class="text-muted">${methodText}</small></td>
                     <td><small class="text-muted">${new Date(fwData.checked_at).toLocaleString()}</small></td>
@@ -578,6 +588,82 @@ function displayDetailedResults() {
                     </td>
                 </tr>
             `;
+            
+            // Add expandable details row if data exists
+            if (hasDimmDetails) {
+                html += `
+                <tr>
+                    <td colspan="6" class="p-0">
+                        <div class="collapse" id="${detailsId}">
+                            <div class="card card-body bg-light m-2">
+                                <h6 class="mb-2">Detailed DIMM Information (${fwData.dimm_count} modules, ${fwData.total_capacity_gb}GB total)</h6>
+                                <table class="table table-sm table-bordered mb-0">
+                                    <thead class="table-secondary">
+                                        <tr>
+                                            <th>Bank</th>
+                                            <th>Capacity</th>
+                                            <th>Manufacturer</th>
+                                            <th>Part Number</th>
+                                            <th>Speed</th>
+                                            <th>Serial Number</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${fwData.dimms.map(dimm => `
+                                            <tr>
+                                                <td>${dimm.bank_label}</td>
+                                                <td>${dimm.capacity_gb}GB</td>
+                                                <td>${dimm.manufacturer}</td>
+                                                <td><code>${dimm.part_number}</code></td>
+                                                <td>${dimm.speed_mhz}MHz</td>
+                                                <td><code>${dimm.serial_number}</code></td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                `;
+            } else if (hasStorageDetails) {
+                const totalSize = fwData.storage_drives.reduce((sum, drive) => sum + (drive.size_gb || 0), 0);
+                html += `
+                <tr>
+                    <td colspan="6" class="p-0">
+                        <div class="collapse" id="${detailsId}">
+                            <div class="card card-body bg-light m-2">
+                                <h6 class="mb-2">Detailed Storage Drive Information (${fwData.drive_count} drives, ${totalSize.toFixed(2)}GB total)</h6>
+                                <table class="table table-sm table-bordered mb-0">
+                                    <thead class="table-secondary">
+                                        <tr>
+                                            <th>Disk #</th>
+                                            <th>Model</th>
+                                            <th>Capacity</th>
+                                            <th>Firmware</th>
+                                            <th>Bus Type</th>
+                                            <th>Serial Number</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${fwData.storage_drives.map(drive => `
+                                            <tr>
+                                                <td>${drive.disk_number}</td>
+                                                <td><code>${drive.model}</code></td>
+                                                <td>${drive.size_gb}GB</td>
+                                                <td><code>${drive.firmware_version}</code></td>
+                                                <td>${drive.bus_type}</td>
+                                                <td><code>${drive.serial_number}</code></td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                `;
+            }
         }
         
         html += `
@@ -592,6 +678,24 @@ function displayDetailedResults() {
     console.log('Final HTML preview:', html.substring(0, 500));
     container.innerHTML = html;
     console.log('HTML set to container');
+    
+    // Add event listeners for expand/collapse buttons
+    document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(button => {
+        const targetId = button.getAttribute('data-bs-target');
+        const targetElement = document.querySelector(targetId);
+        
+        if (targetElement) {
+            targetElement.addEventListener('show.bs.collapse', () => {
+                button.innerHTML = '<i class="bi bi-dash-circle"></i> Hide additional details';
+                button.setAttribute('aria-expanded', 'true');
+            });
+            
+            targetElement.addEventListener('hide.bs.collapse', () => {
+                button.innerHTML = '<i class="bi bi-plus-circle"></i> Expand for additional details';
+                button.setAttribute('aria-expanded', 'false');
+            });
+        }
+    });
 }
 
 function getStatusBadge(status) {

@@ -97,6 +97,10 @@ class StorageFirmwareChecker:
                     'storage_devices': {}
                 }
             
+            # Get disk details from PowerShell (model, serial, size)
+            logger.info(f"Collecting disk details via PowerShell for {computer_name}")
+            disk_details = self._get_disk_details_powershell(computer_name)
+            
             # Execute the storage firmware check
             raw_output = self._execute_storage_command(computer_name)
             
@@ -110,6 +114,19 @@ class StorageFirmwareChecker:
             
             # Parse the output to extract storage device information
             storage_devices = self._parse_storage_output(raw_output)
+            
+            # Merge PowerShell disk details with UpdateStorageFirmware output
+            for device_key, device_info in storage_devices.items():
+                disk_num = device_info.get('disk_number')
+                if disk_num and disk_num in disk_details:
+                    ps_details = disk_details[disk_num]
+                    device_info['model'] = ps_details.get('model', device_info.get('vendor_product', ''))
+                    device_info['size_gb'] = ps_details.get('size_gb', 0)
+                    # Prefer PowerShell serial if available and different
+                    if ps_details.get('serial_number'):
+                        device_info['serial_number'] = ps_details['serial_number']
+                    device_info['friendly_name'] = ps_details.get('friendly_name', '')
+                    device_info['location_path'] = ps_details.get('location_path', '')
             
             return {
                 'status': 'success',
@@ -183,6 +200,78 @@ class StorageFirmwareChecker:
             
         except Exception as e:
             return f"Error: {str(e)}"
+    
+    def _get_disk_details_powershell(self, computer_name: str) -> Dict[str, Dict[str, Any]]:
+        """Get disk details using PowerShell Get-Disk command"""
+        disk_details = {}
+        
+        try:
+            # PowerShell script to get disk information
+            ps_script = """
+            Get-Disk | Where-Object { $_.BusType -in @('NVMe','SATA') } | ForEach-Object {
+                [PSCustomObject]@{
+                    Number = $_.Number
+                    FriendlyName = $_.FriendlyName
+                    Model = $_.Model
+                    SerialNumber = $_.SerialNumber
+                    FirmwareVersion = $_.FirmwareVersion
+                    BusType = $_.BusType
+                    SizeGB = [math]::Round($_.Size/1GB,2)
+                    PartitionStyle = $_.PartitionStyle
+                    LocationPath = $_.LocationPath
+                }
+            } | ConvertTo-Json -Compress
+            """
+            
+            is_remote = computer_name.lower() not in ['localhost', '127.0.0.1', '.']
+            
+            if is_remote:
+                if not WINRM_AVAILABLE or not self.os_username or not self.os_password:
+                    return {}
+                
+                session = winrm.Session(
+                    f'http://{computer_name}:5985/wsman',
+                    auth=(self.os_username, self.os_password),
+                    transport='ntlm'
+                )
+                result = session.run_ps(ps_script)
+                output = result.std_out.decode('utf-8').strip()
+            else:
+                pwsh_exe = self.get_powershell_executable()
+                result = subprocess.run(
+                    [pwsh_exe, '-Command', ps_script],
+                    capture_output=True,
+                    text=True,
+                    timeout=self.timeout
+                )
+                output = result.stdout.strip()
+            
+            # Parse JSON output
+            if output:
+                import json
+                disks_data = json.loads(output)
+                
+                # Handle single disk vs multiple disks
+                if isinstance(disks_data, dict):
+                    disks_data = [disks_data]
+                
+                for disk in disks_data:
+                    disk_num = str(disk.get('Number', ''))
+                    disk_details[disk_num] = {
+                        'friendly_name': disk.get('FriendlyName', ''),
+                        'model': disk.get('Model', ''),
+                        'serial_number': disk.get('SerialNumber', ''),
+                        'firmware_version': disk.get('FirmwareVersion', ''),
+                        'bus_type': disk.get('BusType', ''),
+                        'size_gb': disk.get('SizeGB', 0),
+                        'partition_style': disk.get('PartitionStyle', ''),
+                        'location_path': disk.get('LocationPath', '')
+                    }
+        
+        except Exception as e:
+            logger.warning(f"Could not get disk details via PowerShell: {e}")
+        
+        return disk_details
     
     def _execute_remote_command(self, computer_name: str) -> str:
         """Execute UpdateStorageFirmware.exe on remote computer"""
@@ -436,7 +525,7 @@ class StorageFirmwareChecker:
         return 'Other'
     
     def get_m2_devices(self, computer_name: str) -> Dict[str, Any]:
-        """Get M.2 device information - returns combined drive info"""
+        """Get M.2 device information - returns combined drive info with expandable details"""
         storage_info = self.check_storage_firmware(computer_name)
         
         if storage_info['status'] != 'success':
@@ -464,32 +553,40 @@ class StorageFirmwareChecker:
         # Sort devices by disk number
         sorted_devices = sorted(m2_devices.items(), key=lambda x: int(x[1]['disk_number']))
         
-        # Create combined version string with drive numbers and versions
-        version_parts = []
-        device_details = []
-        
-        for device_id, device_info in sorted_devices:
-            disk_num = device_info['disk_number']
+        # Create summary version string
+        if len(sorted_devices) == 1:
+            device_info = sorted_devices[0][1]
+            model = device_info.get('model', device_info.get('vendor_product', 'Unknown'))
             firmware_ver = device_info['firmware_version']
-            version_parts.append(f"Drive {disk_num}: {firmware_ver}")
-            device_details.append(device_info)
+            size_gb = device_info.get('size_gb', 0)
+            version = f"{size_gb}GB {model} FW:{firmware_ver}"
+        else:
+            version = f"{len(sorted_devices)} M.2 drives detected"
         
-        combined_version = " | ".join(version_parts)
+        # Prepare detailed device list
+        device_details = []
+        for device_id, device_info in sorted_devices:
+            device_details.append({
+                'disk_number': device_info['disk_number'],
+                'model': device_info.get('model', device_info.get('vendor_product', 'Unknown')),
+                'serial_number': device_info.get('serial_number', 'N/A'),
+                'firmware_version': device_info['firmware_version'],
+                'size_gb': device_info.get('size_gb', 0),
+                'bus_type': device_info.get('bus_type', 'Unknown')
+            })
         
         return {
-            'version': combined_version,
+            'version': version,
             'status': 'success',
             'error': None,
             'checked_at': datetime.now().isoformat(),
             'method': 'storage_firmware_tool',
-            'device_info': {
-                'device_count': len(sorted_devices),
-                'devices': device_details
-            }
+            'storage_drives': device_details,
+            'drive_count': len(sorted_devices)
         }
     
     def get_e1s_devices(self, computer_name: str) -> Dict[str, Any]:
-        """Get E.1s device information - returns combined drive info"""
+        """Get E.1s device information - returns combined drive info with expandable details"""
         storage_info = self.check_storage_firmware(computer_name)
         
         if storage_info['status'] != 'success':
@@ -517,26 +614,34 @@ class StorageFirmwareChecker:
         # Sort devices by disk number
         sorted_devices = sorted(e1s_devices.items(), key=lambda x: int(x[1]['disk_number']))
         
-        # Create combined version string with drive numbers and versions
-        version_parts = []
-        device_details = []
-        
-        for device_id, device_info in sorted_devices:
-            disk_num = device_info['disk_number']
+        # Create summary version string
+        if len(sorted_devices) == 1:
+            device_info = sorted_devices[0][1]
+            model = device_info.get('model', device_info.get('vendor_product', 'Unknown'))
             firmware_ver = device_info['firmware_version']
-            version_parts.append(f"Drive {disk_num}: {firmware_ver}")
-            device_details.append(device_info)
+            size_gb = device_info.get('size_gb', 0)
+            version = f"{size_gb}GB {model} FW:{firmware_ver}"
+        else:
+            version = f"{len(sorted_devices)" E.1s drives detected"
         
-        combined_version = " | ".join(version_parts)
+        # Prepare detailed device list
+        device_details = []
+        for device_id, device_info in sorted_devices:
+            device_details.append({
+                'disk_number': device_info['disk_number'],
+                'model': device_info.get('model', device_info.get('vendor_product', 'Unknown')),
+                'serial_number': device_info.get('serial_number', 'N/A'),
+                'firmware_version': device_info['firmware_version'],
+                'size_gb': device_info.get('size_gb', 0),
+                'bus_type': device_info.get('bus_type', 'Unknown')
+            })
         
         return {
-            'version': combined_version,
+            'version': version,
             'status': 'success',
             'error': None,
             'checked_at': datetime.now().isoformat(),
             'method': 'storage_firmware_tool',
-            'device_info': {
-                'device_count': len(sorted_devices),
-                'devices': device_details
-            }
+            'storage_drives': device_details,
+            'drive_count': len(sorted_devices)
         }
