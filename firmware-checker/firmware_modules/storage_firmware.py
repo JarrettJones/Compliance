@@ -622,7 +622,7 @@ class StorageFirmwareChecker:
             size_gb = device_info.get('size_gb', 0)
             version = f"{size_gb}GB {model} FW:{firmware_ver}"
         else:
-            version = f"{len(sorted_devices)" E.1s drives detected"
+            version = f"{len(sorted_devices)} E.1s drives detected"
         
         # Prepare detailed device list
         device_details = []
