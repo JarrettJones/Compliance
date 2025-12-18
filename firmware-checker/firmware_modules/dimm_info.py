@@ -276,28 +276,44 @@ class DIMMInfoChecker:
             
             total_capacity_gb = round(total_capacity_bytes / (1024**3), 2)
             
-            # Generate version string (summary of DIMM configuration)
+            # Generate detailed version string with all DIMM information
             if dimms:
-                # Group by manufacturer and part number to create a summary
+                # Create detailed list showing each DIMM with serial number
+                version_lines = []
+                for dimm in dimms:
+                    dimm_detail = (
+                        f"{dimm['bank_label']}: {dimm['capacity_gb']}GB "
+                        f"{dimm['manufacturer']} {dimm['part_number']} "
+                        f"{dimm['speed_mhz']}MHz S/N:{dimm['serial_number']}"
+                    )
+                    version_lines.append(dimm_detail)
+                
+                # Join with newline for display
+                version = "\n".join(version_lines)
+                
+                # Also create a summary line
                 unique_types = {}
                 for dimm in dimms:
-                    key = f"{dimm['manufacturer']} {dimm['part_number']} {dimm['speed_mhz']}MHz"
+                    key = f"{dimm['manufacturer']} {dimm['part_number']}"
                     if key not in unique_types:
                         unique_types[key] = []
                     unique_types[key].append(dimm)
                 
-                version_parts = []
+                summary_parts = []
                 for dimm_type, dimm_list in unique_types.items():
                     count = len(dimm_list)
                     capacity = dimm_list[0]['capacity_gb']
-                    version_parts.append(f"{count}x {capacity}GB {dimm_type}")
+                    speed = dimm_list[0]['speed_mhz']
+                    summary_parts.append(f"{count}x {capacity}GB {dimm_type} {speed}MHz")
                 
-                version = " | ".join(version_parts)
+                summary = " | ".join(summary_parts)
             else:
                 version = "NO_DIMMS_FOUND"
+                summary = "NO_DIMMS_FOUND"
             
             return {
                 'version': version,
+                'summary': summary,
                 'status': 'success',
                 'error': None,
                 'dimm_count': len(dimms),
