@@ -82,6 +82,9 @@ if not SECRET_KEY:
 
 app.secret_key = SECRET_KEY
 
+# Enable template auto-reload for development
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+
 # Configuration
 DATABASE = 'firmware_checker.db'
 UPLOAD_FOLDER = 'uploads'
