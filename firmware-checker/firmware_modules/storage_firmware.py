@@ -233,8 +233,10 @@ class StorageFirmwareChecker:
             
             if is_remote:
                 if not WINRM_AVAILABLE or not self.os_username or not self.os_password:
+                    logger.warning(f"WinRM not available or missing credentials for {computer_name}")
                     return {}
                 
+                logger.info(f"Executing Get-Disk via WinRM on {computer_name}")
                 session = winrm.Session(
                     f'http://{computer_name}:5985/wsman',
                     auth=(self.os_username, self.os_password),
@@ -242,7 +244,18 @@ class StorageFirmwareChecker:
                 )
                 result = session.run_ps(ps_script)
                 output = result.std_out.decode('utf-8').strip()
+                stderr = result.std_err.decode('utf-8').strip()
+                
+                if result.status_code != 0:
+                    logger.error(f"Get-Disk command failed with status {result.status_code}: {stderr}")
+                    return {}
+                
+                if stderr:
+                    logger.warning(f"Get-Disk stderr: {stderr}")
+                    
+                logger.info(f"Get-Disk WinRM output length: {len(output)} chars")
             else:
+                logger.info(f"Executing Get-Disk locally")
                 pwsh_exe = self.get_powershell_executable()
                 result = subprocess.run(
                     [pwsh_exe, '-Command', ps_script],
@@ -251,6 +264,12 @@ class StorageFirmwareChecker:
                     timeout=self.timeout
                 )
                 output = result.stdout.strip()
+                
+                if result.returncode != 0:
+                    logger.error(f"Get-Disk command failed: {result.stderr}")
+                    return {}
+                
+                logger.info(f"Get-Disk local output length: {len(output)} chars")
             
             # Parse JSON output
             if output:
