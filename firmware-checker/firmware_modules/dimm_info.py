@@ -276,22 +276,9 @@ class DIMMInfoChecker:
             
             total_capacity_gb = round(total_capacity_bytes / (1024**3), 2)
             
-            # Generate detailed version string with all DIMM information
+            # Generate version string (summary) and detailed info
             if dimms:
-                # Create detailed list showing each DIMM with serial number
-                version_lines = []
-                for dimm in dimms:
-                    dimm_detail = (
-                        f"{dimm['bank_label']}: {dimm['capacity_gb']}GB "
-                        f"{dimm['manufacturer']} {dimm['part_number']} "
-                        f"{dimm['speed_mhz']}MHz S/N:{dimm['serial_number']}"
-                    )
-                    version_lines.append(dimm_detail)
-                
-                # Join with newline for display
-                version = "\n".join(version_lines)
-                
-                # Also create a summary line
+                # Create summary for main display
                 unique_types = {}
                 for dimm in dimms:
                     key = f"{dimm['manufacturer']} {dimm['part_number']}"
@@ -306,14 +293,12 @@ class DIMMInfoChecker:
                     speed = dimm_list[0]['speed_mhz']
                     summary_parts.append(f"{count}x {capacity}GB {dimm_type} {speed}MHz")
                 
-                summary = " | ".join(summary_parts)
+                version = " | ".join(summary_parts)
             else:
                 version = "NO_DIMMS_FOUND"
-                summary = "NO_DIMMS_FOUND"
             
             return {
                 'version': version,
-                'summary': summary,
                 'status': 'success',
                 'error': None,
                 'dimm_count': len(dimms),
