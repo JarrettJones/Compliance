@@ -244,13 +244,38 @@ class StorageFirmwareChecker:
                     auth=(self.os_username, self.os_password),
                     transport='ntlm'
                 )
-                result = session.run_ps(ps_script)
+                
+                # Use encoded command approach to avoid PATH issues
+                # Try multiple PowerShell paths like we do for UpdateStorageFirmware
+                pwsh_paths = [
+                    r'D:\Tools\PowerShell\pwsh.exe',
+                    r'C:\Program Files\PowerShell\7\pwsh.exe',
+                    r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+                ]
+                
+                encoded_script = base64.b64encode(ps_script.encode('utf-16-le')).decode('ascii')
+                
+                result = None
+                for pwsh_path in pwsh_paths:
+                    try:
+                        cmd = f'{pwsh_path} -NoProfile -EncodedCommand {encoded_script}'
+                        result = session.run_cmd(cmd)
+                        
+                        if result.status_code == 0:
+                            logger.info(f"Get-Disk succeeded using {pwsh_path}")
+                            break
+                        else:
+                            logger.debug(f"PowerShell path {pwsh_path} failed with status {result.status_code}")
+                    except Exception as e:
+                        logger.debug(f"PowerShell path {pwsh_path} exception: {e}")
+                        continue
+                
+                if not result or result.status_code != 0:
+                    logger.error(f"All PowerShell paths failed for Get-Disk command")
+                    return {}
+                
                 output = result.std_out.decode('utf-8').strip()
                 stderr = result.std_err.decode('utf-8').strip()
-                
-                if result.status_code != 0:
-                    logger.error(f"Get-Disk command failed with status {result.status_code}: {stderr}")
-                    return {}
                 
                 if stderr:
                     logger.warning(f"Get-Disk stderr: {stderr}")
