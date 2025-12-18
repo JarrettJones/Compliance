@@ -3683,13 +3683,31 @@ def edit_system(system_id):
         except Exception as e:
             flash(f'Error updating system: {str(e)}', 'error')
     
-    # Parse description into individual fields for GET request
+    # Get location data from database relationships (PRIMARY SOURCE)
+    with get_db_connection() as conn:
+        location_data = conn.execute('''
+            SELECT 
+                l.name as location_name,
+                b.name as building_name,
+                ro.name as room_name,
+                ra.name as rack_name
+            FROM systems s
+            LEFT JOIN racks ra ON s.rack_id = ra.id
+            LEFT JOIN rooms ro ON ra.room_id = ro.id
+            LEFT JOIN buildings b ON ro.building_id = b.id
+            LEFT JOIN locations l ON b.location_id = l.id
+            WHERE s.id = ?
+        ''', (system_id,)).fetchone()
+    
+    # Use database values as primary source
+    geo_location = location_data['location_name'] if location_data and location_data['location_name'] else ''
+    building = location_data['building_name'] if location_data and location_data['building_name'] else ''
+    room = location_data['room_name'] if location_data and location_data['room_name'] else ''
+    rack = location_data['rack_name'] if location_data and location_data['rack_name'] else ''
+    
+    # Parse description for other fields (hostname, notes)
     system_hostname = ''
-    geo_location = ''
-    building = ''
-    room = ''
-    rack = ''
-    u_height = system['u_height'] if system['u_height'] else ''  # Get from u_height column
+    u_height = system['u_height'] if system['u_height'] else ''
     additional_notes = ''
     
     if system['description']:
@@ -3700,14 +3718,6 @@ def edit_system(system_id):
             part = part.strip()
             if part.startswith('Host:'):
                 system_hostname = part.replace('Host:', '').strip()
-            elif part.startswith('Geo:'):
-                geo_location = part.replace('Geo:', '').strip()
-            elif part.startswith('Building:'):
-                building = part.replace('Building:', '').strip()
-            elif part.startswith('Room:'):
-                room = part.replace('Room:', '').strip()
-            elif part.startswith('Rack:'):
-                rack = part.replace('Rack:', '').strip()
             elif part.startswith('U:'):
                 # Only use from description if u_height column is empty
                 if not u_height:
