@@ -213,18 +213,20 @@ class StorageFirmwareChecker:
         
         try:
             # PowerShell script to get disk information
+            # Note: Using if-else to handle null Size values
             ps_script = """
             Get-Disk | Where-Object { $_.BusType -in @('NVMe','SATA') } | ForEach-Object {
+                $sizeGB = if ($_.Size -and $_.Size -gt 0) { [math]::Round($_.Size/1GB,2) } else { 0 }
                 [PSCustomObject]@{
                     Number = $_.Number
-                    FriendlyName = $_.FriendlyName
-                    Model = $_.Model
-                    SerialNumber = $_.SerialNumber
-                    FirmwareVersion = $_.FirmwareVersion
-                    BusType = $_.BusType
-                    SizeGB = [math]::Round($_.Size/1GB,2)
-                    PartitionStyle = $_.PartitionStyle
-                    LocationPath = $_.LocationPath
+                    FriendlyName = if ($_.FriendlyName) { $_.FriendlyName } else { '' }
+                    Model = if ($_.Model) { $_.Model } else { '' }
+                    SerialNumber = if ($_.SerialNumber) { $_.SerialNumber } else { '' }
+                    FirmwareVersion = if ($_.FirmwareVersion) { $_.FirmwareVersion } else { '' }
+                    BusType = if ($_.BusType) { $_.BusType } else { '' }
+                    SizeGB = $sizeGB
+                    PartitionStyle = if ($_.PartitionStyle) { $_.PartitionStyle } else { '' }
+                    LocationPath = if ($_.LocationPath) { $_.LocationPath } else { '' }
                 }
             } | ConvertTo-Json -Compress
             """
@@ -287,7 +289,8 @@ class StorageFirmwareChecker:
                     for disk in disks_data:
                         disk_num = str(disk.get('Number', ''))
                         size_gb = disk.get('SizeGB', 0)
-                        logger.info(f"Disk {disk_num}: Model={disk.get('Model', 'N/A')}, Size={size_gb}GB, Serial={disk.get('SerialNumber', 'N/A')}")
+                        logger.info(f"Disk {disk_num}: Model={disk.get('Model', 'N/A')}, Size={size_gb}GB (type: {type(size_gb)}), Serial={disk.get('SerialNumber', 'N/A')}")
+                        logger.info(f"  Raw disk data: {disk}")
                         disk_details[disk_num] = {
                             'friendly_name': disk.get('FriendlyName', ''),
                             'model': disk.get('Model', ''),
