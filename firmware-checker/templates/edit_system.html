@@ -33,12 +33,21 @@
                     </div>
                     
                     <div class="alert alert-info" id="rscmInfoAlert" style="display: none;">
-                        <i class="bi bi-info-circle"></i> <strong>RSCM will be updated from rack:</strong>
+                        <i class="bi bi-info-circle"></i> <strong>RSCM IP will be updated from rack:</strong>
                         <span id="rscmInfoText"></span>
                     </div>
                     
                     <input type="hidden" id="rscm_ip" name="rscm_ip" value="{{ system.rscm_ip }}">
-                    <input type="hidden" id="rscm_port" name="rscm_port" value="{{ system.rscm_port }}">
+                    
+                    <div class="mb-3">
+                        <label for="rscm_port" class="form-label">
+                            <i class="bi bi-ethernet"></i> RSCM/Redfish Port <span class="text-danger">*</span>
+                        </label>
+                        <input type="number" class="form-control" id="rscm_port" name="rscm_port"
+                               value="{{ system.rscm_port if system.rscm_port else '' }}"
+                               placeholder="e.g., 22, 23, or 24" min="1" max="65535" required>
+                        <div class="form-text">Port used to connect to RSCM or Redfish (varies by rack/system)</div>
+                    </div>
                     
                     <hr class="my-4">
                     <h6><i class="bi bi-hdd-network"></i> System Details</h6>
@@ -89,10 +98,10 @@
                     
                     <div class="row">
                         <div class="col-md-12 mb-3">
-                            <label for="u_height" class="form-label">U Position</label>
+                            <label for="u_height" class="form-label">U Position <span class="text-danger">*</span></label>
                             <input type="number" class="form-control" id="u_height" name="u_height"
                                    value="{{ u_height or '' }}"
-                                   placeholder="e.g., 12" min="1" max="50">
+                                   placeholder="e.g., 12" min="1" max="50" required>
                             <div class="form-text">Rack unit position (1-50)</div>
                         </div>
                     </div>
@@ -284,7 +293,6 @@ function updateRSCMFromRack() {
     
     // Determine RSCM IP based on rack type
     let rscmIp = null;
-    let rscmPort = 22;
     
     if (rack.rack_type === 'bench' && rack.rscm_ip) {
         // Bench uses single rscm_ip
@@ -298,12 +306,11 @@ function updateRSCMFromRack() {
     }
     
     if (rscmIp) {
-        // Update hidden fields
+        // Update hidden IP field only - user must set port manually
         document.getElementById('rscm_ip').value = rscmIp;
-        document.getElementById('rscm_port').value = rscmPort;
         
-        // Show info alert
-        rscmInfoText.textContent = `${rscmIp}:${rscmPort}`;
+        // Show info alert with just the IP
+        rscmInfoText.textContent = rscmIp;
         rscmInfoAlert.style.display = 'block';
     } else {
         rscmInfoAlert.style.display = 'none';
