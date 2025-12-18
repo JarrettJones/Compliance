@@ -32,25 +32,13 @@
                         <div class="form-text">Unique identifier for this system</div>
                     </div>
                     
-                    <div class="row">
-                        <div class="col-md-8">
-                            <div class="card bg-light mb-3">
-                                <div class="card-body">
-                                    <h6><i class="bi bi-info-circle"></i> RSCM IP Address (Read-Only)</h6>
-                                    <p class="mb-0"><code>{{ system.rscm_ip }}</code></p>
-                                    <small class="text-muted">IP address cannot be changed after system creation</small>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="rscm_port" class="form-label">RSCM Port</label>
-                                <input type="number" class="form-control" id="rscm_port" name="rscm_port" 
-                                       value="{{ system.rscm_port }}" min="1" max="65535" required>
-                                <div class="form-text">Connection port (1-65535)</div>
-                            </div>
-                        </div>
+                    <div class="alert alert-info" id="rscmInfoAlert" style="display: none;">
+                        <i class="bi bi-info-circle"></i> <strong>RSCM will be updated from rack:</strong>
+                        <span id="rscmInfoText"></span>
                     </div>
+                    
+                    <input type="hidden" id="rscm_ip" name="rscm_ip" value="{{ system.rscm_ip }}">
+                    <input type="hidden" id="rscm_port" name="rscm_port" value="{{ system.rscm_port }}">
                     
                     <hr class="my-4">
                     <h6><i class="bi bi-hdd-network"></i> System Details</h6>
@@ -93,7 +81,7 @@
                         
                         <div class="col-md-3 mb-3">
                             <label for="rackSelect" class="form-label">Rack <span class="text-danger">*</span></label>
-                            <select class="form-select" id="rackSelect" name="rack_id" required disabled>
+                            <select class="form-select" id="rackSelect" name="rack_id" required disabled onchange="updateRSCMFromRack()">
                                 <option value="">Select room first...</option>
                             </select>
                         </div>
@@ -278,6 +266,51 @@ function updateRackOptions() {
     });
 }
 
+function updateRSCMFromRack() {
+    const rackId = document.getElementById('rackSelect').value;
+    const rscmInfoAlert = document.getElementById('rscmInfoAlert');
+    const rscmInfoText = document.getElementById('rscmInfoText');
+    
+    if (!rackId) {
+        rscmInfoAlert.style.display = 'none';
+        return;
+    }
+    
+    const rack = allRacks.find(r => r.id == rackId);
+    if (!rack) {
+        rscmInfoAlert.style.display = 'none';
+        return;
+    }
+    
+    // Determine RSCM IP based on rack type
+    let rscmIp = null;
+    let rscmPort = 22;
+    
+    if (rack.rack_type === 'bench' && rack.rscm_ip) {
+        // Bench uses single rscm_ip
+        rscmIp = rack.rscm_ip;
+    } else if (rack.rscm_upper_ip) {
+        // Rack uses upper RSCM by default
+        rscmIp = rack.rscm_upper_ip;
+    } else if (rack.rscm_lower_ip) {
+        // Fallback to lower RSCM
+        rscmIp = rack.rscm_lower_ip;
+    }
+    
+    if (rscmIp) {
+        // Update hidden fields
+        document.getElementById('rscm_ip').value = rscmIp;
+        document.getElementById('rscm_port').value = rscmPort;
+        
+        // Show info alert
+        rscmInfoText.textContent = `${rscmIp}:${rscmPort}`;
+        rscmInfoAlert.style.display = 'block';
+    } else {
+        rscmInfoAlert.style.display = 'none';
+        console.warn('No RSCM IP configured for rack:', rack.name);
+    }
+}
+
 function preselectCurrentLocation() {
     // Find the rack's full hierarchy
     const rack = allRacks.find(r => r.id == currentRackId);
@@ -306,6 +339,8 @@ function preselectCurrentLocation() {
             
             setTimeout(() => {
                 document.getElementById('rackSelect').value = rack.id;
+                // Update RSCM info after rack is selected
+                updateRSCMFromRack();
             }, 50);
         }, 50);
     }, 50);

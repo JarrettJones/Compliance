@@ -3616,7 +3616,8 @@ def edit_system(system_id):
     
     if request.method == 'POST':
         name = request.form['name']
-        # IP is read-only, but port can be changed (may differ in new rack)
+        # RSCM IP and port come from the selected rack
+        rscm_ip = request.form.get('rscm_ip', '').strip()
         rscm_port = request.form.get('rscm_port', 22, type=int)
         
         # Get metadata from form
@@ -3657,9 +3658,9 @@ def edit_system(system_id):
             with get_db_connection() as conn:
                 conn.execute('''
                     UPDATE systems 
-                    SET name = ?, rscm_port = ?, description = ?, u_height = ?, rack_id = ?, updated_at = CURRENT_TIMESTAMP
+                    SET name = ?, rscm_ip = ?, rscm_port = ?, description = ?, u_height = ?, rack_id = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
-                ''', (name, rscm_port, description, u_height, rack_id, system_id))
+                ''', (name, rscm_ip, rscm_port, description, u_height, rack_id, system_id))
                 conn.commit()
             
             flash(f'System "{name}" updated successfully!', 'success')
