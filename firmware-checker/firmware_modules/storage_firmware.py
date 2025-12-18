@@ -120,10 +120,9 @@ class StorageFirmwareChecker:
             # Merge PowerShell disk details with UpdateStorageFirmware output
             for device_key, device_info in storage_devices.items():
                 disk_num = device_info.get('disk_number')
-                logger.info(f"Processing device {device_key}: disk_number={disk_num}")
                 if disk_num and disk_num in disk_details:
                     ps_details = disk_details[disk_num]
-                    logger.info(f"Merging PowerShell data for Disk {disk_num}: size={ps_details.get('size_gb')}GB, model={ps_details.get('model')}")
+                    logger.debug(f"Merging PowerShell data for Disk {disk_num}: size={ps_details.get('size_gb')}GB, model={ps_details.get('model')}")
                     device_info['model'] = ps_details.get('model', device_info.get('vendor_product', ''))
                     device_info['size_gb'] = ps_details.get('size_gb', 0)
                     # Prefer PowerShell serial if available and different
@@ -132,7 +131,7 @@ class StorageFirmwareChecker:
                     device_info['friendly_name'] = ps_details.get('friendly_name', '')
                     device_info['location_path'] = ps_details.get('location_path', '')
                 else:
-                    logger.warning(f"No PowerShell data found for Disk {disk_num} (available: {list(disk_details.keys())})")
+                    logger.debug(f"No PowerShell data found for Disk {disk_num} (available: {list(disk_details.keys())})")
             
             return {
                 'status': 'success',
@@ -301,7 +300,7 @@ class StorageFirmwareChecker:
             # Parse JSON output
             if output:
                 import json
-                logger.info(f"PowerShell Get-Disk output: {output[:500]}")  # Log first 500 chars
+                logger.debug(f"PowerShell Get-Disk output: {output[:500]}")  # Log first 500 chars
                 try:
                     disks_data = json.loads(output)
                     
@@ -314,8 +313,7 @@ class StorageFirmwareChecker:
                     for disk in disks_data:
                         disk_num = str(disk.get('Number', ''))
                         size_gb = disk.get('SizeGB', 0)
-                        logger.info(f"Disk {disk_num}: Model={disk.get('Model', 'N/A')}, Size={size_gb}GB (type: {type(size_gb)}), Serial={disk.get('SerialNumber', 'N/A')}")
-                        logger.info(f"  Raw disk data: {disk}")
+                        logger.debug(f"Disk {disk_num}: Model={disk.get('Model', 'N/A')}, Size={size_gb}GB, Serial={disk.get('SerialNumber', 'N/A')}")
                         disk_details[disk_num] = {
                             'friendly_name': disk.get('FriendlyName', ''),
                             'model': disk.get('Model', ''),
