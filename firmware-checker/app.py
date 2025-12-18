@@ -4761,7 +4761,7 @@ def quick_check():
     """Quick firmware check - select system by rack hierarchy"""
     return render_template('quick_check.html')
 
-@app.route('/api/racks', methods=['POST'])
+@app.route('/api/racks/add', methods=['POST'])
 @login_required
 def api_add_rack():
     """API endpoint to add a new rack with normalized location structure"""
@@ -4965,23 +4965,45 @@ def api_rack_location_options():
         logger.error(f"Error in api_rack_location_options: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/locations', methods=['GET'])
+@login_required
+def get_locations():
+    """Get all locations"""
+    try:
+        with get_db_connection() as conn:
+            locations = conn.execute('''
+                SELECT id, name FROM locations 
+                ORDER BY name
+            ''').fetchall()
+            
+            return jsonify([{'id': loc['id'], 'name': loc['name']} for loc in locations])
+    except Exception as e:
+        logger.error(f"Error getting locations: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/buildings', methods=['GET'])
 @login_required
 def get_buildings():
-    """Get buildings for a specific location"""
+    """Get all buildings or buildings for a specific location"""
     location_id = request.args.get('location_id')
-    if not location_id:
-        return jsonify({'error': 'location_id required'}), 400
     
     try:
         with get_db_connection() as conn:
-            buildings = conn.execute('''
-                SELECT id, name FROM buildings 
-                WHERE location_id = ? 
-                ORDER BY name
-            ''', (location_id,)).fetchall()
+            if location_id:
+                # Filtered by location
+                buildings = conn.execute('''
+                    SELECT id, name, location_id FROM buildings 
+                    WHERE location_id = ? 
+                    ORDER BY name
+                ''', (location_id,)).fetchall()
+            else:
+                # All buildings
+                buildings = conn.execute('''
+                    SELECT id, name, location_id FROM buildings 
+                    ORDER BY name
+                ''').fetchall()
             
-            return jsonify([{'id': b['id'], 'name': b['name']} for b in buildings])
+            return jsonify([{'id': b['id'], 'name': b['name'], 'location_id': b['location_id']} for b in buildings])
     except Exception as e:
         logger.error(f"Error getting buildings: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
@@ -4989,22 +5011,65 @@ def get_buildings():
 @app.route('/api/rooms', methods=['GET'])
 @login_required
 def get_rooms():
-    """Get rooms for a specific building"""
+    """Get all rooms or rooms for a specific building"""
     building_id = request.args.get('building_id')
-    if not building_id:
-        return jsonify({'error': 'building_id required'}), 400
     
     try:
         with get_db_connection() as conn:
-            rooms = conn.execute('''
-                SELECT id, name FROM rooms 
-                WHERE building_id = ? 
-                ORDER BY name
-            ''', (building_id,)).fetchall()
+            if building_id:
+                # Filtered by building
+                rooms = conn.execute('''
+                    SELECT id, name, building_id FROM rooms 
+                    WHERE building_id = ? 
+                    ORDER BY name
+                ''', (building_id,)).fetchall()
+            else:
+                # All rooms
+                rooms = conn.execute('''
+                    SELECT id, name, building_id FROM rooms 
+                    ORDER BY name
+                ''').fetchall()
             
-            return jsonify([{'id': r['id'], 'name': r['name']} for r in rooms])
+            return jsonify([{'id': r['id'], 'name': r['name'], 'building_id': r['building_id']} for r in rooms])
     except Exception as e:
         logger.error(f"Error getting rooms: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/racks', methods=['GET'])
+@login_required
+def get_racks():
+    """Get all racks or racks for a specific room"""
+    room_id = request.args.get('room_id')
+    
+    try:
+        with get_db_connection() as conn:
+            if room_id:
+                # Filtered by room
+                racks = conn.execute('''
+                    SELECT id, name, room_id, rack_type, rscm_upper_ip, rscm_lower_ip, rscm_ip 
+                    FROM racks 
+                    WHERE room_id = ? 
+                    ORDER BY name
+                ''', (room_id,)).fetchall()
+            else:
+                # All racks
+                racks = conn.execute('''
+                    SELECT id, name, room_id, rack_type, rscm_upper_ip, rscm_lower_ip, rscm_ip 
+                    FROM racks 
+                    ORDER BY name
+                ''').fetchall()
+            
+            return jsonify([{
+                'id': r['id'], 
+                'name': r['name'], 
+                'room_id': r['room_id'],
+                'rack_type': r['rack_type'],
+                'rscm_upper_ip': r['rscm_upper_ip'],
+                'rscm_lower_ip': r['rscm_lower_ip'],
+                'rscm_ip': r['rscm_ip']
+            } for r in racks])
+    except Exception as e:
+        logger.error(f"Error getting racks: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/racks/<int:rack_id>/systems')
