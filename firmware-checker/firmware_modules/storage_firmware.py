@@ -140,7 +140,6 @@ class StorageFirmwareChecker:
             return {
                 'status': 'success',
                 'error': None,
-                'raw_output': raw_output,
                 'storage_devices': storage_devices
             }
             
